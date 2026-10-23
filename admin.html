@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">
+<title>Race Control · Flags</title><link rel="stylesheet" href="admin.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js"></script>
+</head><body>
+<header><a class="brand" href="./admin.html"><span class="brand-mark">RC</span> RACE CONTROL</a><span class="tag">FLAG OPERATIONS</span></header>
+<main>
+<div class="intro"><p class="eyebrow">THE SIGNAL. THE WHOLE GRID.</p><h1>Every flag.<br>One command.</h1><p class="lede">Live flag control for your race. Drivers see the active signal on their own movable screen overlay.</p></div>
+<section id="login-card" class="card"><p class="eyebrow">ADMIN ACCESS</p><h2>Sign in to race control</h2><p class="muted">Use the email and password assigned to your admin account.</p>
+<form id="login-form"><label for="email">Email address</label><input id="email" type="email" autocomplete="username" required placeholder="you@yourleague.com"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required><button id="sign-in" class="primary" disabled>Sign in <span>↗</span></button></form><p class="small muted">Only approved admins can send flags.</p></section>
+<section id="console" hidden>
+<div class="console-heading"><div><p class="eyebrow">RACE OPERATIONS</p><h2>Flag desk</h2></div><button id="sign-out" class="secondary">Sign out</button></div>
+<div class="current card"><div><p class="eyebrow">CURRENT SIGNAL</p><h3 id="active-flag">Connecting…</h3><p id="changed-at" class="muted">Waiting for race state</p></div><div><span id="connection" class="badge">Connecting</span><p class="small muted">Delivery to individual drivers is not confirmed.</p></div></div>
+<p class="muted">Select a flag to send it to every connected driver. The next selection replaces the current flag.</p><div id="flag-grid" class="flag-grid"></div>
+<div class="history-heading"><h2>Recent signals</h2><button id="refresh-history" class="secondary">Refresh history</button></div><ol id="history" class="card history"></ol>
+</section><p id="message" role="status" aria-live="polite"></p>
+</main><footer><span>RACE CONTROL / SUPABASE EDITION</span><span>Stay connected. Stay informed.</span></footer></body></html>
