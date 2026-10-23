@@ -15,13 +15,25 @@ const FLAGS = {
 let client, channel, user, state, changing=false, verified=false, checkGeneration=0;
 function message(text='') { $('message').textContent=text; }
 function buttons() { document.querySelectorAll('.flag').forEach(b => {b.disabled=changing || !verified; b.setAttribute('aria-pressed', String(b.dataset.flag===state?.flag));}); }
+function formatDuration(milliseconds) {
+  if (!Number.isFinite(milliseconds)) return '—';
+  const seconds=Math.max(0,Math.floor(milliseconds/1000));
+  return [Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60]
+    .map(value=>String(value).padStart(2,'0')).join(':');
+}
+function updateDuration(now=Date.now()) {
+  const active=state && state.flag!=='CLEAR';
+  $('duration-label').textContent=active?'LIVE FOR':'NO FLAG ACTIVE';
+  $('flag-duration').textContent=active?formatDuration(now-Date.parse(state.updated_at)):'—';
+}
 function applyState(next) {
   if (!next || !FLAGS[next.flag] || (state && next.revision < state.revision)) return;
   state=next;
+  updateDuration();
   const halo=next.flag==='CLEAR'?'#657c92':next.flag==='BLACK'?'#748197':FLAGS[next.flag][2];
   $('race-atmosphere').style.cssText=`--halo:${halo};--deep:${FLAGS[next.flag][3]}`;
   $('active-flag').textContent=next.flag==='CLEAR'?'No active flag':FLAGS[next.flag][0];
-  $('changed-at').textContent='Updated '+new Date(next.updated_at).toLocaleString();
+  $('changed-at').textContent=(next.flag==='CLEAR'?'Cleared ':'Live since ')+new Date(next.updated_at).toLocaleString();
   document.querySelector('.current').style.cssText=`--current-signal:${FLAGS[next.flag][2]};--current-edge:${FLAGS[next.flag][3]}`;buttons();
 }
 async function refreshState() {
@@ -85,4 +97,5 @@ async function start(){
     setInterval(async()=>{if(!verified)return;try{await refreshState();}catch{$('connection').textContent='Connection interrupted';}},10000);
   }catch(error){message(error.message);}
 }
+setInterval(()=>{if(verified)updateDuration();},1000);
 start();
