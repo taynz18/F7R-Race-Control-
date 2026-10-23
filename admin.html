@@ -1,18 +1,19 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">
-<title>Race Control · Flags</title><link rel="stylesheet" href="admin.css">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js"></script>
+<meta name="theme-color" content="#0c111b">
+<title>F7R Race Control · Flags</title><link rel="stylesheet" href="admin.css?v=2">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=2"></script>
 </head><body>
-<header><a class="brand" href="./admin.html"><span class="brand-mark">RC</span> RACE CONTROL</a><span class="tag">FLAG OPERATIONS</span></header>
+<header><a class="brand" href="./admin.html"><span class="brand-mark">F7R</span><span>RACE CONTROL<span class="brand-caption">Your grid. In sync.</span></span></a><span class="tag"><span class="tag-dot" aria-hidden="true"></span> FLAG OPERATIONS</span></header>
 <main>
-<div class="intro"><p class="eyebrow">THE SIGNAL. THE WHOLE GRID.</p><h1>Every flag.<br>One command.</h1><p class="lede">Live flag control for your race. Drivers see the active signal on their own movable screen overlay.</p></div>
-<section id="login-card" class="card"><p class="eyebrow">ADMIN ACCESS</p><h2>Sign in to race control</h2><p class="muted">Use the email and password assigned to your admin account.</p>
-<form id="login-form"><label for="email">Email address</label><input id="email" type="email" autocomplete="username" required placeholder="you@yourleague.com"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required><button id="sign-in" class="primary" disabled>Sign in <span>↗</span></button></form><p class="small muted">Only approved admins can send flags.</p></section>
+<div class="intro"><p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> THE SIGNAL. THE WHOLE GRID.</p><h1>Every flag.<br><span>One command.</span></h1><p class="lede">Stay in control, from lights out to the chequered flag. One clear signal for every connected driver.</p><div class="signal-strip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>Clarity at every corner.</span></div></div>
+<section id="login-card" class="card"><div class="login-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/></svg></div><p class="eyebrow">ADMIN ACCESS</p><h2>Welcome to race control.</h2><p class="muted">Sign in to take your place at the flag desk.</p>
+<form id="login-form"><label for="email">Email address</label><input id="email" type="email" autocomplete="username" required placeholder="you@yourleague.com"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required placeholder="Enter your password"><button id="sign-in" class="primary" disabled>Enter race control <span aria-hidden="true">↗</span></button></form><p class="small login-note"><span aria-hidden="true">◈</span> Reserved for approved race admins.</p></section>
 <section id="console" hidden>
-<div class="console-heading"><div><p class="eyebrow">RACE OPERATIONS</p><h2>Flag desk</h2></div><button id="sign-out" class="secondary">Sign out</button></div>
-<div class="current card"><div><p class="eyebrow">CURRENT SIGNAL</p><h3 id="active-flag">Connecting…</h3><p id="changed-at" class="muted">Waiting for race state</p></div><div><span id="connection" class="badge">Connecting</span><p class="small muted">Delivery to individual drivers is not confirmed.</p></div></div>
-<p class="muted">Select a flag to send it to every connected driver. The next selection replaces the current flag.</p><div id="flag-grid" class="flag-grid"></div>
-<div class="history-heading"><h2>Recent signals</h2><button id="refresh-history" class="secondary">Refresh history</button></div><ol id="history" class="card history"></ol>
+<div class="console-heading"><div><p class="eyebrow">RACE OPERATIONS</p><h2>Your flag desk.</h2><p class="muted">A clear call. Across the whole grid.</p></div><button id="sign-out" class="secondary">Sign out <span aria-hidden="true">↗</span></button></div>
+<div class="current card"><div class="current-copy"><p class="eyebrow">CURRENT SIGNAL</p><h3 id="active-flag">Connecting…</h3><p id="changed-at" class="muted">Waiting for race state</p></div><div class="current-status"><span id="connection" class="badge" role="status">Connecting</span><p class="small muted">Delivery to individual drivers is not confirmed.</p></div></div>
+<div class="section-heading"><div><p class="eyebrow">MAKE THE CALL</p><h2>Choose a signal</h2></div><p class="muted">Your next selection replaces the active flag.</p></div><div id="flag-grid" class="flag-grid" role="group" aria-label="Race flag controls"></div>
+<div class="history-heading"><div><p class="eyebrow">THE LATEST CALLS</p><h2>Recent signals</h2></div><button id="refresh-history" class="secondary"><span aria-hidden="true">↻</span> Refresh history</button></div><ol id="history" class="card history" aria-label="Recent flag changes"></ol>
 </section><p id="message" role="status" aria-live="polite"></p>
-</main><footer><span>RACE CONTROL / SUPABASE EDITION</span><span>Stay connected. Stay informed.</span></footer></body></html>
+</main><footer><span>F7R RACE CONTROL</span><span>Clarity. Control. Every lap.</span></footer></body></html>

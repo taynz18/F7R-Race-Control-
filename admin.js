@@ -20,7 +20,7 @@ function applyState(next) {
   state=next;
   $('active-flag').textContent=next.flag==='CLEAR'?'No active flag':FLAGS[next.flag][0];
   $('changed-at').textContent='Updated '+new Date(next.updated_at).toLocaleString();
-  document.querySelector('.current').style.borderLeftColor=FLAGS[next.flag][3];buttons();
+  document.querySelector('.current').style.cssText=`--current-signal:${FLAGS[next.flag][2]};--current-edge:${FLAGS[next.flag][3]}`;buttons();
 }
 async function refreshState() {
   const {data,error}=await client.from('flag_state').select('*').eq('id',1).single();
@@ -61,6 +61,7 @@ async function checkAccess(session) {
 }
 for(const [flag,[label,description,fill,border]] of Object.entries(FLAGS)) {
   const b=document.createElement('button');b.className='flag'+(flag==='CHEQUERED'?' chequered':'');b.dataset.flag=flag;
+  b.setAttribute('aria-label',label+'. '+description);
   b.style.cssText=`--fill:${fill};--border:${border};--text:${flag==='BLACK'?'#fff':'#111820'}`;
   const title=document.createElement('strong'),detail=document.createElement('span');title.textContent=label;detail.textContent=description;b.append(title,detail);b.onclick=()=>changeFlag(flag);$('flag-grid').append(b);
 }
