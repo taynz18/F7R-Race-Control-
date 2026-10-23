@@ -361,3 +361,8 @@ footer { border-top: 1px solid var(--line); color: #6c7e98; font-size: 9px; lett
   .flag:not(:disabled):hover, .primary:not(:disabled):hover, .secondary:hover { transform: none; }
   .flag:not(:disabled):hover::before { transform: none; }
 }
+
+.brand-logo { display: block; width: 136px; height: auto; flex-shrink: 0; }
+.download-link { color: var(--muted); text-decoration: none; transition: color .2s; }
+.download-link:hover { color: var(--accent); }
+@media (max-width: 600px) { .brand-logo { width: 96px; } .brand { gap: 10px; } }

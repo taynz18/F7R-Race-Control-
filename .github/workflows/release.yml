@@ -42,7 +42,7 @@ jobs:
       - run: python -m pip install -r requirements.txt pyinstaller==6.22.3
       - run: python -m unittest discover -s tests
       - run: node tests/test_admin.cjs
-      - run: python -m PyInstaller --onedir --windowed --add-data "config.json;." --add-data "assets;assets" --name RaceFlags driver.py
+      - run: python -m PyInstaller --onedir --windowed --icon "assets/f7r-app.ico" --add-data "config.json;." --add-data "assets;assets" --name RaceFlags driver.py
       - name: Check packaged overlay
         shell: pwsh
         run: |

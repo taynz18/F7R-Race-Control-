@@ -1,6 +1,7 @@
 """F7R Windows driver overlay and compact local controls."""
 import asyncio
 import json
+from io import BytesIO
 import os
 from pathlib import Path
 import queue
@@ -9,7 +10,7 @@ import threading
 from types import SimpleNamespace
 import tkinter as tk
 from tkinter import ttk
-from PIL import ImageTk
+from PIL import Image, ImageTk
 
 from connection import FLAGS, receive_flags, validate_config
 from overlay_ui import (COLORS, TRANSPARENT, MIN_WIDTH, MAX_WIDTH, MIN_HEIGHT, MAX_HEIGHT,
@@ -143,6 +144,13 @@ class DriverApp:
         self.size_text = tk.StringVar()
         self.status = tk.StringVar(value='Local preview · not connected' if demo else 'Connecting to race control…')
         self.config = connection_config(self.settings)
+        assets = Path(getattr(sys, '_MEIPASS', Path(__file__).parent)) / 'assets'
+        logo = Image.open(BytesIO((assets / 'f7r-logo.png').read_bytes())).convert('RGBA')
+        self.app_icon = ImageTk.PhotoImage(logo, master=root)
+        root.iconphoto(True, self.app_icon)
+        brand = logo.copy()
+        brand.thumbnail((124, 36), Image.Resampling.LANCZOS)
+        self.brand_image = ImageTk.PhotoImage(brand, master=root)
         root.title('F7R · Driver controls')
         root.configure(bg=BG)
         root.geometry('400x500')
@@ -151,7 +159,7 @@ class DriverApp:
         outer.pack(fill='both',expand=True)
         header = tk.Frame(outer,bg=BG)
         header.pack(fill='x')
-        tk.Label(header,text='F7R',bg=BG,fg=ACCENT,font=('Segoe UI',19,'bold italic')).pack(side='left')
+        tk.Label(header,image=self.brand_image,bg=BG).pack(side='left')
         tk.Label(header,text='  DRIVER OVERLAY',bg=BG,fg=MUTED,font=('Segoe UI',9,'bold')).pack(side='left',padx=8)
         tk.Label(outer,text='Make it yours.',bg=BG,fg=INK,font=('Segoe UI',20,'bold')).pack(anchor='w',pady=(14,3))
         tk.Label(outer,textvariable=self.status,bg=BG,fg=MUTED,font=('Segoe UI',9),wraplength=348).pack(anchor='w',pady=(0,18))

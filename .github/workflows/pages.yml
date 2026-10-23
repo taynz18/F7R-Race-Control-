@@ -8,6 +8,8 @@ on:
       - 'admin.css'
       - 'admin.js'
       - 'config.json'
+      - 'assets/f7r-logo.png'
+      - 'assets/f7r-app.ico'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 permissions:
@@ -28,8 +30,9 @@ jobs:
       - uses: actions/configure-pages@v5
       - name: Prepare portal
         run: |
-          mkdir public
+          mkdir -p public/assets
           cp index.html admin.html admin.css admin.js config.json public/
+          cp assets/f7r-logo.png assets/f7r-app.ico public/assets/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
