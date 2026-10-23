@@ -10,13 +10,21 @@ class Element {
 const elements=new Map();
 const get=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
 let approved=false, revision=0, calls=0;
-let saved={id:1,flag:'CLEAR',revision:0,updated_at:new Date().toISOString()};
+let saved={id:1,flag:'CLEAR',revision:0,updated_at:new Date().toISOString(),custom_message:'',countdown_ends_at:null};
 const client={
   auth:{onAuthStateChange(){},async signInWithPassword(){return {data:{session:{user:{id:'test-user'}}}};},async signOut(){return {}; }},
   from(table){const b={select(){return b},eq(){return b},order(){return b},async maybeSingle(){return {data:approved?{user_id:'test-user'}:null}},async single(){return {data:saved}},async limit(){return {data:[]}}};return b;},
   channel(){const c={on(){return c},subscribe(cb){cb('SUBSCRIBED');return c}};return c;},
   async removeChannel(){},
-  async rpc(name,body){assert.equal(name,'set_flag');calls++;saved={...saved,flag:body.requested_flag,revision:++revision};return {data:saved};}
+  async rpc(name,body){
+    if(name==='get_race_state')return {data:saved};
+    assert.ok(['set_race_signal','update_flag_message'].includes(name));
+    calls++;
+    if(name==='update_flag_message')saved={...saved,custom_message:body.requested_message,revision:++revision};
+    else saved={...saved,flag:body.requested_flag,custom_message:body.requested_message,revision:++revision,
+      updated_at:new Date().toISOString(),countdown_ends_at:body.countdown_seconds?new Date(Date.now()+body.countdown_seconds*1000).toISOString():null};
+    return {data:saved};
+  }
 };
 const context=vm.createContext({
   document:{getElementById:get,createElement:()=>new Element(),querySelector:()=>get('current'),querySelectorAll:()=>get('flag-grid').children},
@@ -43,6 +51,34 @@ async function evaluate(code){return await vm.runInContext(code,context);}
   }
   await evaluate('applyState({id:1,flag:"RED",revision:0,updated_at:new Date().toISOString()})');
   assert.equal(get('active-flag').textContent,'No active flag');
+  get('custom-message').value='<script>alert(1)</script>';
+  get('custom-message').oninput();
+  await evaluate('changeFlag("FCY",30)');
+  assert.equal(saved.flag,'FCY');
+  assert.equal(get('live-custom-message').textContent,'<script>alert(1)</script>');
+  const deadline=saved.countdown_ends_at;
+  const started=saved.updated_at;
+  get('custom-message').value='Hold position';
+  await get('update-message').onclick();
+  assert.equal(saved.custom_message,'Hold position');
+  assert.equal(saved.countdown_ends_at,deadline);
+  assert.equal(saved.updated_at,started);
+  await evaluate('updateDuration(Date.parse(state.countdown_ends_at)-10500)');
+  assert.equal(get('flag-duration').textContent,'00:00:11');
+  await evaluate('updateDuration(Date.parse(state.countdown_ends_at)+5000)');
+  assert.equal(get('flag-duration').textContent,'00:00:00');
+  assert.equal(saved.flag,'FCY'); // The browser never invents a GREEN signal.
+  assert.equal(get('duration-label').textContent,'AWAITING GREEN');
+  await get('cancel-countdown').onclick();
+  assert.equal(saved.flag,'FCY');assert.equal(saved.countdown_ends_at,null);
+  const before=calls;
+  for(const bad of ['0','-5','1.5','abc','2147483648']){
+    get('countdown-seconds').value=bad;await get('start-countdown').onclick();
+  }
+  assert.equal(calls,before);
+  get('countdown-seconds').value='90';await get('start-countdown').onclick();
+  assert.ok(saved.countdown_ends_at);
+  await evaluate('changeFlag("RED")');assert.equal(saved.countdown_ends_at,null);
   await get('sign-out').onclick();assert.equal(get('console').hidden,true);
   console.log('Admin flow checks passed: sign-in setup, unapproved account blocked, all primary flags, revision ordering, sign-out.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

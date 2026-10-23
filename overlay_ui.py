@@ -95,7 +95,7 @@ def font_bytes():
     return asset_path('RacingSansOne-Regular.ttf').read_bytes()
 
 
-def render_flag(width, height, flag, hover_close=False, handles=False, demo=False):
+def render_flag(width, height, flag, hover_close=False, handles=False, demo=False, message='', countdown=None):
     """Render clean, textured flags with an illuminated rim and colour-key-safe edges."""
     width, height = int(width), int(height)
     scale = 3
@@ -144,20 +144,61 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
     draw = ImageDraw.Draw(image)
     foreground = (243,247,255) if flag in ('BLACK','CHEQUERED','OFFLINE','CONNECTING','SETUP','CLEAR') else (16,23,32)
     text = 'NO ACTIVE FLAG' if flag == 'CLEAR' else 'CONNECTING' if flag == 'SETUP' else flag
-    font_size = max(16*scale, min(int(h*.43), int(w*.14)))
+    if flag=='FCY' and countdown is not None:
+        seconds=max(0,int(countdown))
+        timer=f'{seconds//60:02d}:{seconds%60:02d}' if seconds<3600 else f'{seconds//3600:02d}:{seconds//60%60:02d}:{seconds%60:02d}'
+        text=f'FCY   {timer}'
+    message=' '.join(str(message).split())[:120] if flag not in ('OFFLINE','CONNECTING','SETUP','CLEAR') else ''
+    font_size = max(16*scale, min(int(h*(.33 if message else .43)), int(w*.14)))
     available = w-88*scale
     while font_size > 12*scale and racing_font(font_size).getlength(text) > available:
         font_size -= scale
     font = racing_font(font_size)
     box = draw.textbbox((0,0), text, font=font)
     text_width, text_height = box[2]-box[0], box[3]-box[1]
-    center_x, center_y = w/2-4*scale, h/2
+    center_x, center_y = w/2-4*scale, h*(.34 if message else .5)
     if flag == 'CHEQUERED':
         draw.rounded_rectangle((center_x-text_width/2-14*scale, center_y-text_height/2-11*scale,
             center_x+text_width/2+14*scale, center_y+text_height/2+11*scale),
             radius=10*scale, fill='#131b27')
     draw.text((center_x-text_width/2-box[0], center_y-text_height/2-box[1]), text,
               fill=foreground, font=font)
+    if message:
+        # Fit at most three centred lines, including long names without spaces.
+        message_size=max(8*scale,min(18*scale,int(h*.15)))
+        available_message=w-42*scale
+        while True:
+            message_font=racing_font(message_size)
+            lines=['']
+            for word in message.split():
+                chunks=[word]
+                if message_font.getlength(word)>available_message:
+                    chunks=[]
+                    chunk=''
+                    for char in word:
+                        if chunk and message_font.getlength(chunk+char)>available_message:
+                            chunks.append(chunk);chunk=''
+                        chunk+=char
+                    if chunk:chunks.append(chunk)
+                for chunk in chunks:
+                    candidate=(lines[-1]+' '+chunk).strip()
+                    if lines[-1] and message_font.getlength(candidate)>available_message:lines.append(chunk)
+                    else:lines[-1]=candidate
+            if len(lines)<=3 or message_size<=7*scale:break
+            message_size-=scale
+        if len(lines)>3:
+            lines=lines[:3]
+            while lines[-1] and message_font.getlength(lines[-1]+'…')>available_message:lines[-1]=lines[-1][:-1]
+            lines[-1]+='…'
+        line_height=message_size*1.15
+        mid=h*.72
+        if flag=='CHEQUERED':
+            label_width=max(message_font.getlength(line) for line in lines)+20*scale
+            draw.rounded_rectangle((w/2-label_width/2,mid-line_height*len(lines)/2-5*scale,
+                w/2+label_width/2,mid+line_height*len(lines)/2+5*scale),radius=6*scale,fill='#131b27')
+        for i,line in enumerate(lines):
+            draw.text((w/2,mid+(i-(len(lines)-1)/2)*line_height),line,
+                anchor='mm',font=message_font,fill=foreground)
     x1,y1,x2,y2 = (v*scale for v in close_bounds(width))
     close_background = (35,44,58) if flag == 'CHEQUERED' else blend(fill, foreground, .22 if hover_close else .10)
     draw.rounded_rectangle((x1,y1,x2,y2), radius=8*scale, fill=close_background)

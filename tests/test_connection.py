@@ -44,6 +44,22 @@ class StateTests(unittest.TestCase):
         tracker.accept(row('CLEAR',4))
         self.assertTrue(tracker.accept(row('CLEAR',4)))
 
+    def test_message_countdown_and_clock_are_carried_together(self):
+        tracker=StateTracker()
+        tracker.accept(dict(row('FCY',4),custom_message='Hold position',countdown_ends_at='2026-10-24T00:00:00+00:00',server_time='2026-10-23T23:59:30+00:00'))
+        deadline=tracker.countdown_ends_at
+        self.assertEqual(tracker.message,'Hold position')
+        tracker.accept(dict(row('FCY',5),custom_message='No overtaking',countdown_ends_at='2026-10-24T00:00:00+00:00'))
+        self.assertEqual(tracker.countdown_ends_at,deadline)
+        tracker.accept(row('GREEN',6))
+        self.assertEqual(tracker.message,'')
+        self.assertIsNone(tracker.countdown_ends_at)
+
+    def test_invalid_extended_payloads_are_rejected(self):
+        for extra in [dict(custom_message='a'*121),dict(custom_message=4),dict(countdown_ends_at='bad'),dict(countdown_ends_at='2026-10-24T00:00:00Z')]:
+            with self.subTest(extra=extra),self.assertRaises(ValueError):
+                StateTracker().accept(dict(row('RED',1),**extra))
+
     def test_invalid_payloads_are_rejected(self):
         for data in [None, {}, row('PURPLE'), dict(row(),id=2), row(revision=-1), row(revision=True)]:
             with self.subTest(data=data), self.assertRaises(ValueError):
@@ -63,6 +79,9 @@ class FakeClient:
         return self
     async def subscribe(self, callback): callback(RealtimeSubscribeStates.SUBSCRIBED,None)
     def table(self, name): return self
+    def rpc(self, name):
+        assert name == 'get_race_state'
+        return self
     def select(self, columns): return self
     def eq(self, column, value): return self
     def single(self): return self

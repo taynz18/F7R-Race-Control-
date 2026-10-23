@@ -7,6 +7,8 @@ from pathlib import Path
 import queue
 import sys
 import threading
+import time
+import math
 from types import SimpleNamespace
 import tkinter as tk
 from tkinter import ttk
@@ -128,6 +130,8 @@ class DriverApp:
         self.worker, self.gesture, self.draw_job, self.save_job = None, None, None, None
         self.hover_close, self.show_handles, self.closed = False, False, False
         self.flag = 'YELLOW' if demo else 'CONNECTING'
+        self.custom_message, self.countdown_ends_at, self.clock_offset = '', None, 0.0
+        self.countdown_display = None
         self.settings_file = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'RaceFlags' / 'settings.json'
         try:
             self.settings = json.loads(self.settings_file.read_text(encoding='utf-8'))
@@ -349,7 +353,8 @@ class DriverApp:
         if self.flag=='CLEAR' and self.hide_clear.get():
             self.last_render=None
             return
-        self.last_render=render_flag(self.width,self.height,self.flag,self.hover_close,self.show_handles,self.demo)
+        self.last_render=render_flag(self.width,self.height,self.flag,self.hover_close,self.show_handles,self.demo,
+            message=self.custom_message,countdown=self.countdown_display)
         self.flag_image=ImageTk.PhotoImage(self.last_render,master=self.overlay)
         self.canvas.create_image(0,0,image=self.flag_image,anchor='nw')
 
@@ -378,9 +383,16 @@ class DriverApp:
         while not self.events.empty():
             event=self.events.get()
             self.flag=event['flag']
+            self.custom_message=event.get('custom_message','')
+            self.countdown_ends_at=event.get('countdown_ends_at')
+            self.clock_offset=event.get('clock_offset',self.clock_offset)
             text='Connection lost · reconnecting' if self.flag=='OFFLINE' else 'Connected to race control'
             if event['connection']=='Polling fallback': text='Connected · checking for updates'
             self.status.set(text)
+            changed=True
+        remaining=max(0,math.ceil(self.countdown_ends_at-time.time()-self.clock_offset)) if self.flag=='FCY' and self.countdown_ends_at is not None else None
+        if remaining!=self.countdown_display:
+            self.countdown_display=remaining
             changed=True
         if changed: self.request_draw()
         self.root.after(100,self.tick)
@@ -400,6 +412,19 @@ def self_test(root, app):
         root.update()
         assert app.canvas.find_all()
         assert app.last_render.getpixel((0,0))==(1,2,3)
+    app.flag='FCY'
+    app.custom_message='Hold position. No overtaking.'
+    app.countdown_ends_at=time.time()-1
+    app.tick()
+    root.update()
+    assert app.flag=='FCY' and app.countdown_display==0
+    assert app.last_render is not None
+    app.events.put({'flag':'GREEN','connection':'Live','custom_message':'Track clear'})
+    app.tick()
+    root.update()
+    assert app.flag=='GREEN' and app.countdown_display is None
+    assert app.custom_message=='Track clear'
+    app.custom_message=''
     app.flag='CLEAR'
     app.hide_clear.set(True)
     app.draw()

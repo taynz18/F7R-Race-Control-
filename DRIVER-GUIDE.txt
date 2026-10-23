@@ -24,3 +24,11 @@ An OFFLINE panel means the current race signal cannot be confirmed.
 
 The Racing Sans One typeface is bundled under the SIL Open Font License.
 Its license and font information are included in _internal/assets.
+
+LIVE MESSAGES AND FCY COUNTDOWN
+Race control can show a short message below any active flag.
+During a timed FCY, the remaining time appears beside FCY. All drivers use
+one server deadline. At expiry the server sends GREEN automatically.
+If the connection is lost, the app shows OFFLINE; it never assumes GREEN.
+At 00:00 it waits for the confirmed server signal, so a later RED always wins.
+The current Windows download is required to see messages and countdowns.

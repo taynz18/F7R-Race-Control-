@@ -1,6 +1,8 @@
 """Read-only Supabase transport. No admin credentials are used by drivers."""
 import asyncio
 import re
+import time
+from datetime import datetime
 from supabase import acreate_client, AsyncClientOptions
 
 FLAGS = {'CLEAR', 'YELLOW', 'SAFETY CAR', 'FCY', 'RED', 'GREEN', 'BLUE',
@@ -22,6 +24,9 @@ class StateTracker:
     def __init__(self):
         self.revision = -1
         self.flag = None
+        self.message = ''
+        self.countdown_ends_at = None
+        self.clock_offset = 0.0
 
     def accept(self, row):
         if not isinstance(row, dict) or row.get('id') != 1 or row.get('flag') not in FLAGS:
@@ -31,6 +36,22 @@ class StateTracker:
             raise ValueError('Invalid state revision')
         if revision < self.revision:
             return False
+        message=row.get('custom_message','')
+        if not isinstance(message,str) or len(message)>120:
+            raise ValueError('Invalid custom message')
+        end=row.get('countdown_ends_at')
+        if end is not None:
+            try:
+                end=datetime.fromisoformat(end.replace('Z','+00:00')).timestamp()
+            except (ValueError,TypeError,AttributeError):
+                raise ValueError('Invalid countdown deadline')
+            if row['flag']!='FCY':
+                raise ValueError('Countdown is only valid for FCY')
+        server=row.get('server_time')
+        if server:
+            self.clock_offset=datetime.fromisoformat(server.replace('Z','+00:00')).timestamp()-time.time()
+        self.message=' '.join(message.split())
+        self.countdown_ends_at=end
         self.revision, self.flag = revision, row['flag']
         return True
 
@@ -48,7 +69,7 @@ async def receive_flags(config, emit, stop):
         try:
             row = payload.get('data', {}).get('record')
             if tracker.accept(row):
-                emit({'flag': tracker.flag, 'connection': 'Live' if live else 'Reconnecting'})
+                emit(dict(flag=tracker.flag,custom_message=tracker.message,countdown_ends_at=tracker.countdown_ends_at,clock_offset=tracker.clock_offset,connection='Live' if live else 'Reconnecting'))
         except (ValueError, TypeError):
             wake.set()
 
@@ -68,9 +89,9 @@ async def receive_flags(config, emit, stop):
         while not stop.is_set():
             wake.clear()
             try:
-                response = await client.table('flag_state').select('*').eq('id', 1).single().execute()
+                response = await client.rpc('get_race_state').execute()
                 tracker.accept(response.data)
-                emit({'flag': tracker.flag, 'connection': 'Live' if live else 'Polling fallback'})
+                emit(dict(flag=tracker.flag,custom_message=tracker.message,countdown_ends_at=tracker.countdown_ends_at,clock_offset=tracker.clock_offset,connection='Live' if live else 'Polling fallback'))
             except Exception:
                 emit({'flag': 'OFFLINE', 'connection': 'Offline — signal unavailable'})
             if stop.is_set():

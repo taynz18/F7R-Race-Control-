@@ -107,3 +107,28 @@ Supabase documentation: [Project setup and Realtime](https://supabase.com/docs/g
 
 
 
+
+## Live messages and automatic FCY restart
+
+Existing projects: run `supabase/upgrade-live-messages.sql` once in the Supabase SQL Editor.
+New projects: run `supabase/setup.sql`, then the same upgrade, then approve your admin.
+The upgrade is transactional and preserves the current flag and history.
+
+In the admin flag desk, type up to 120 characters in Flag message. Choose a flag
+to send it with that message, or click Update live message to change the current
+message without resetting the live timer or FCY deadline. Blank removes the message.
+
+For a timed restart enter a positive whole number of seconds and click Start FCY
+countdown. The server stores a single deadline and a Cron job checks it every
+second. At expiry it atomically replaces FCY with GREEN, clears the message,
+and records an Automatic restart in history. Delivery can follow by up to one
+scheduler tick plus network delay; clients wait for the confirmed GREEN signal.
+Closing the admin browser does not cancel the countdown. Choosing any other
+flag replaces the deadline; Cancel timer keeps FCY active without a countdown.
+Concurrent/stale admin edits are rejected rather than overwriting a newer signal.
+Drivers use server clock synchronization and show OFFLINE on lost connections.
+
+Drivers must download the current Windows release for messages/countdowns.
+Older driver versions still receive flag changes, including automatic GREEN.
+Run `supabase/test-live-messages.sql` for rollback-only verification of messages,
+automatic GREEN, cancellation, validation and access controls.

@@ -54,6 +54,16 @@ class ArtworkTests(unittest.TestCase):
     def test_bundled_racing_font_is_loaded(self):
         self.assertIn(racing_font(24).getname()[0], ('Bahnschrift', 'Racing Sans One'))
 
+    def test_messages_and_countdowns_render_without_losing_transparent_corners(self):
+        for flag in COLORS:
+            for width,height in [(240,90),(600,180)]:
+                image=render_flag(width,height,flag,message='Hold position. No overtaking. '*4,countdown=10 if flag=='FCY' else None)
+                self.assertEqual(image.size,(width,height))
+                self.assertEqual(image.getpixel((0,0)),(1,2,3))
+        first=render_flag(400,140,'FCY',countdown=10)
+        second=render_flag(400,140,'FCY',countdown=9)
+        self.assertNotEqual(first.tobytes(),second.tobytes())
+
     def test_minimum_and_maximum_panels_render(self):
         for width,height in [(240,90),(1200,480),(240,480),(1200,90)]:
             with self.subTest(size=(width,height)):
