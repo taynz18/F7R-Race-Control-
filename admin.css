@@ -276,7 +276,7 @@ body:has(#console:not([hidden])) .intro { display: none; }
   height: 106px;
   margin: 0;
   border-radius: 0 18px 0 12px;
-  background: linear-gradient(105deg, #0007, #fff3 21%, #0003 40%, #fff5 62%, #0002 80%, #fff2),
+  background: var(--fabric-weave), linear-gradient(105deg, #0007, #fff3 21%, #0003 40%, #fff5 62%, #0002 80%, #fff2),
     linear-gradient(155deg, var(--fill), var(--border));
   clip-path: polygon(0 0,100% 0,100% 87%,88% 92%,76% 88%,62% 76%,49% 70%,36% 73%,23% 65%,12% 46%,4% 22%);
   box-shadow: inset 0 3px 0 #ffffff45;
@@ -288,12 +288,12 @@ body:has(#console:not([hidden])) .intro { display: none; }
 .flag strong { display: block; margin: 0 0 5px; font: 600 17px/1.25 Inter, Arial, sans-serif; letter-spacing: -.45px; }
 .flag span { color: #93a2b8; font-size: 10px; line-height: 1.4; letter-spacing: .1px; }
 .flag[data-flag='BLACK'] { --glow: #a5b2c8; }
-.flag[data-flag='BLACK']::before { background: linear-gradient(105deg,#07090e,#586478 22%,#141a25 42%,#3e495c 65%,#080c13 88%); }
-.flag[data-flag='CLEAR']::before { width: 65%; opacity: .28; background: linear-gradient(105deg,#718499,#d2deed 35%,#576d84 65%,#a0b2c8); }
+.flag[data-flag='BLACK']::before { background: var(--fabric-weave), linear-gradient(105deg,#07090e,#586478 22%,#141a25 42%,#3e495c 65%,#080c13 88%); }
+.flag[data-flag='CLEAR']::before { width: 65%; opacity: .28; background: var(--fabric-weave), linear-gradient(105deg,#718499,#d2deed 35%,#576d84 65%,#a0b2c8); }
 .flag[data-flag='SAFETY CAR']::before, .flag[data-flag='FCY']::before { display: flex; align-items: flex-start; justify-content: center; padding: 14px 0 0 20px; color: #352800; font: italic 800 27px/1 'Barlow Condensed',sans-serif; letter-spacing: 1px; text-shadow: 0 1px 0 #ffffff30; }
 .flag[data-flag='SAFETY CAR']::before { content: 'SC'; }
 .flag[data-flag='FCY']::before { content: 'FCY'; }
-.chequered::before { background: linear-gradient(105deg,#0005,#fff5 22%,#0005 43%,#fff4 64%,#0003 86%), repeating-conic-gradient(#eef3fa 0% 25%,#202938 0% 50%) 0 0 / 26px 26px; }
+.chequered::before { background: var(--fabric-weave), linear-gradient(105deg,#0005,#fff5 22%,#0005 43%,#fff4 64%,#0003 86%), repeating-conic-gradient(#eef3fa 0% 25%,#202938 0% 50%) 0 0 / 26px 26px; }
 .flag[aria-pressed='true'] { border-color: color-mix(in srgb, var(--glow) 70%, #53627a); box-shadow: inset 0 0 30px color-mix(in srgb, var(--glow) 6%, transparent), 0 0 0 3px color-mix(in srgb, var(--glow) 6%, transparent); }
 .flag[aria-pressed='true']::after { opacity: 1; visibility: visible; }
 .flag:focus-visible { outline-color: var(--glow); }
@@ -394,3 +394,18 @@ header, main, footer { position: relative; z-index: 1; }
 .flag[aria-pressed='true'] { border-width: 3px; padding-left: 19px; padding-right: 19px; }
 @media (max-width: 1050px) { .flag[aria-pressed='true'] { padding-left: 16px; padding-right: 16px; } }
 @media (max-width: 520px) { .flag[aria-pressed='true'] { padding-left: 17px; padding-right: 17px; } }
+
+/* Static, tiled grain and fine crosswoven threads give the desk a tactile finish. */
+:root {
+  --fabric-weave: repeating-linear-gradient(0deg,#fff2 0px,#fff2 .6px,#00000014 .6px,#00000014 1.2px,transparent 1.2px,transparent 3px),
+    repeating-linear-gradient(90deg,#ffffff17 0px,#ffffff17 .6px,#00000017 .6px,#00000017 1.2px,transparent 1.2px,transparent 3px);
+}
+#race-atmosphere::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22180%22%20height%3D%22180%22%20viewBox%3D%220%200%20180%20180%22%3E%3Cfilter%20id%3D%22grain%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%22.82%22%20numOctaves%3D%223%22%20stitchTiles%3D%22stitch%22%2F%3E%3CfeColorMatrix%20type%3D%22saturate%22%20values%3D%220%22%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20opacity%3D%22.65%22%20filter%3D%22url%28%23grain%29%22%2F%3E%3C%2Fsvg%3E");
+  background-size: 180px 180px;
+  opacity: .16;
+  mix-blend-mode: soft-light;
+}
