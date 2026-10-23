@@ -127,9 +127,9 @@ The source bundle has no prebuilt executable. A successful GitHub build creates 
 ## 9. Test it before sharing with drivers
 
 1. Extract **RaceFlags-Windows.zip**. Open its **RaceFlags** folder and run **RaceFlags.exe**. Keep the `_internal` folder alongside it.
-2. The app should connect using the configuration included in the build. If prompted, enter the same project URL and publishable key.
-3. Keep the driver settings window open or minimise it. Select **Position / preview mode**, drag the overlay to your preferred location, and adjust its size.
-4. Enable **Transparent when no flag is active**, then turn off preview mode.
+2. The app connects automatically using the configuration included in the build.
+3. Keep the driver controls open or minimise them. Drag the centre of the overlay to move it, and drag any edge or corner to resize it. The **Size** slider is also available.
+4. Enable **Transparent mode** to hide the overlay while no flag is active. Switch it off whenever you want to position a flag while the track is clear.
 5. In the browser admin portal, select **Yellow**, **Safety Car**, **FCY**, **Red**, then **Green**. Verify each appears with its matching darker border.
 6. Select **Clear flags**. The overlay should disappear while the settings window remains accessible.
 7. Restart a driver while a flag is active and confirm it receives the saved flag. Briefly disconnect its internet and check that an OFFLINE panel appears, then reconnect and confirm recovery.

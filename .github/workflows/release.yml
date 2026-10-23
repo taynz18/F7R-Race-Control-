@@ -11,6 +11,9 @@ on:
     tags: ['v*']
     paths:
       - 'driver.py'
+      - 'overlay_ui.py'
+      - 'assets/**'
+      - 'DRIVER-GUIDE.txt'
       - 'connection.py'
       - 'requirements.txt'
       - 'config.json'
@@ -39,12 +42,14 @@ jobs:
       - run: python -m pip install -r requirements.txt pyinstaller==6.22.3
       - run: python -m unittest discover -s tests
       - run: node tests/test_admin.cjs
-      - run: python -m PyInstaller --onedir --windowed --add-data "config.json;." --name RaceFlags driver.py
+      - run: python -m PyInstaller --onedir --windowed --add-data "config.json;." --add-data "assets;assets" --name RaceFlags driver.py
       - name: Check packaged overlay
         shell: pwsh
         run: |
           $result = Start-Process -FilePath dist/RaceFlags/RaceFlags.exe -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
           if ($result.ExitCode -ne 0) { throw 'Packaged overlay self-test failed' }
+      - name: Add driver instructions
+        run: Copy-Item DRIVER-GUIDE.txt dist/RaceFlags/READ-ME.txt
       - run: Compress-Archive -Path dist/RaceFlags -DestinationPath dist/RaceFlags-Windows.zip
       - name: Publish executable
         env:

@@ -46,25 +46,28 @@ Open http://localhost:8080/admin.html. Sign in with the approved admin account. 
 
 ## Driver download
 
-After a successful GitHub release build, download and extract `RaceFlags-Windows.zip`, then run `RaceFlags/RaceFlags.exe` on Windows 10/11 x64. Keep the accompanying `_internal` folder beside the executable. On first launch, enter your league's Supabase project URL and publishable key, then click **Connect to race control**. This source bundle has no prebuilt Windows executable. A GitHub release built after you edit `config.json` will connect to your league automatically.
+Download **RaceFlags-Windows.zip** from the latest GitHub Release, extract it, and run **RaceFlags/RaceFlags.exe** on Windows 10/11 x64. Keep the accompanying `_internal` folder beside it. Race control connects automatically using the configuration included in the build.
 
-Keep the settings window open or minimise it while driving. Close it to exit the overlay.
+The compact controls have a Size slider, a Transparent mode switch and a Close Race Flags button. Minimise the controls while driving.
 
-- Drag the visible overlay anywhere, including onto another monitor. Its position and size are saved.
-- Use the size slider to resize the flag.
-- Enable **Position / preview mode** to reveal a positioning panel while no flag is active.
-- Enable **Transparent when no flag is active** to hide the overlay after Clear flags.
-- Use **Bring overlay back to this screen** if a saved position is on a disconnected monitor.
-- The settings window reports connection status. An OFFLINE panel replaces the signal if state cannot be read. Normal health checks run every five seconds, with a five-second request timeout. A connection loss can therefore take roughly ten seconds to show.
-- Live changes arrive over Supabase Realtime. If WebSockets are unavailable, a two-second polling fallback reads the saved state. Reconnection reloads the current flag.
+- Drag the centre of a flag to move it.
+- Drag any edge or corner to resize it. Width and height can be adjusted separately.
+- The Size slider scales the flag while keeping its current proportions.
+- Transparent mode hides the overlay when race control clears the flag. Switch it off to show a positioning panel while no flag is active.
+- The X on the flag and the Close Race Flags button both exit the entire local app.
+- Position, width, height and transparent mode are remembered. A position on a disconnected monitor is recovered automatically.
 
-Supported signals: Yellow, Safety Car, FCY (Full Course Yellow), Red, Green, Blue, White, Black, Chequered and Clear. Each coloured panel has a darker matching border; Chequered uses an actual black/white pattern. One shared race session is supported per Supabase project. All flags, including Black and Blue, go to all drivers.
+Flags have smooth rounded corners, matching darker borders, a subtle colour gradient and a bundled Racing Sans One typeface. The font's SIL Open Font License and font information are included with the app.
 
-The app works as an always-on-top Windows overlay. Use windowed or borderless-windowed games; exclusive fullscreen may cover it. Active flags are draggable and can intercept clicks. The app has no delivery acknowledgment, simulator integration or individual-driver targeting. Validate it with your race group before using it during an event.
+Supported signals: Yellow, Safety Car, FCY (Full Course Yellow), Red, Green, Blue, White, Black, Chequered and Clear. This version sends one shared signal to all drivers.
 
-Settings are stored under `%LOCALAPPDATA%/RaceFlags/settings.json`. They contain the public connection details and overlay preferences, never an admin password. Restart the app to change projects after connecting.
+An OFFLINE panel replaces the signal when race state cannot be read. Live changes arrive over Supabase Realtime; polling is used as a fallback when needed. Reconnection reloads the saved flag. Connection-loss detection can take roughly ten seconds.
 
-For a local visual demo, run `RaceFlags.exe --demo`. Demo mode displays a LOCAL DEMO label and does not connect to a race.
+Use a windowed or borderless-windowed game; exclusive fullscreen can cover desktop overlays. Active flags can intercept clicks. Delivery to individual drivers is not confirmed. Validate the app with your race group.
+
+Preferences live under `%LOCALAPPDATA%/RaceFlags/settings.json`. Existing size and position preferences are migrated. No admin password is stored by the driver app.
+
+For a local visual demo, run `RaceFlags.exe --demo`. Demo mode displays a LOCAL PREVIEW label and never connects to a race. A source bundle contains no prebuilt executable; use the latest release download above.
 
 ## Publish through GitHub
 
@@ -89,7 +92,7 @@ python -m pip install -r requirements.txt
 python driver.py
 python -m unittest discover -s tests -v
 python -m pip install pyinstaller==6.22.3
-python -m PyInstaller --onedir --windowed --add-data "config.json;." --name RaceFlags driver.py
+python -m PyInstaller --onedir --windowed --add-data "config.json;." --add-data "assets;assets" --name RaceFlags driver.py
 ```
 
 The manual build appears in `dist`. Use the repository's release workflow if your local Python lacks Tcl/Tk files.

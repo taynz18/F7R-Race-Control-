@@ -1,0 +1,26 @@
+F7R RACE FLAGS
+
+GET STARTED
+Extract the whole ZIP, then open RaceFlags.exe. Keep the _internal folder beside it.
+The app connects to race control automatically.
+
+POSITION AND SIZE
+Drag the centre of the flag to move it.
+Drag any edge or corner to resize it.
+The Size slider scales the flag while keeping its current proportions.
+Your position, width, height and transparent-mode preference are remembered.
+
+TRANSPARENT MODE
+When enabled, the overlay disappears after race control clears the flag.
+Switch it off to show a positioning panel while no flag is active.
+Active flags and connection warnings still appear.
+
+CLOSE
+The X on the flag and the Close Race Flags button both exit the entire local app.
+Minimise the controls window if you want to keep receiving flags while driving.
+
+Use a windowed or borderless-windowed game. Exclusive fullscreen may cover desktop overlays.
+An OFFLINE panel means the current race signal cannot be confirmed.
+
+The Racing Sans One typeface is bundled under the SIL Open Font License.
+Its license and font information are included in _internal/assets.
