@@ -255,9 +255,9 @@ body:has(#console:not([hidden])) .intro { display: none; }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  min-height: 162px;
-  padding: 23px 22px 20px;
-  border: 1px solid color-mix(in srgb, var(--glow) 21%, #263143);
+  min-height: 190px;
+  padding: 122px 20px 20px;
+  border: 2px solid color-mix(in srgb, var(--glow) 42%, #263143);
   border-radius: 20px;
   background: linear-gradient(145deg, color-mix(in srgb, var(--glow) 8%, #192231), #131c29 85%);
   box-shadow: inset 0 1px 0 #ffffff04, 0 4px 12px #00000012;
@@ -266,25 +266,34 @@ body:has(#console:not([hidden])) .intro { display: none; }
   isolation: isolate;
   transition: transform .22s cubic-bezier(.2,.7,.3,1), border-color .22s, box-shadow .22s, background .22s;
 }
+/* Folded fabric falls across the top of each signal card. */
 .flag::before {
   content: '';
-  width: 30px;
-  height: 27px;
-  margin-bottom: 17px;
-  background: var(--fill);
-  clip-path: polygon(0 0, 100% 12%, 100% 75%, 7% 64%, 7% 100%, 0 100%);
-  transition: filter .22s, transform .22s;
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 77%;
+  height: 106px;
+  margin: 0;
+  border-radius: 0 18px 0 12px;
+  background: linear-gradient(105deg, #0007, #fff3 21%, #0003 40%, #fff5 62%, #0002 80%, #fff2),
+    linear-gradient(155deg, var(--fill), var(--border));
+  clip-path: polygon(0 0,100% 0,100% 87%,88% 92%,76% 88%,62% 76%,49% 70%,36% 73%,23% 65%,12% 46%,4% 22%);
+  box-shadow: inset 0 3px 0 #ffffff45;
+  transform-origin: top right;
+  transition: filter .3s, transform .3s;
+  pointer-events: none;
 }
-.flag::after { content: 'ACTIVE'; position: absolute; right: 15px; top: 16px; border: 1px solid color-mix(in srgb, var(--glow) 25%, transparent); border-radius: 99px; padding: 3px 7px; background: color-mix(in srgb, var(--glow) 10%, #121c29); color: var(--glow); font-size: 7px; font-weight: 700; letter-spacing: 1px; opacity: 0; visibility: hidden; transition: opacity .2s; }
+.flag::after { content: 'ACTIVE'; position: absolute; right: 12px; top: 100px; border: 1px solid color-mix(in srgb, var(--glow) 25%, transparent); border-radius: 99px; padding: 3px 7px; background: color-mix(in srgb, var(--glow) 10%, #121c29); color: var(--glow); font-size: 7px; font-weight: 700; letter-spacing: 1px; opacity: 0; visibility: hidden; transition: opacity .2s; }
 .flag strong { display: block; margin: 0 0 5px; font: 600 17px/1.25 Inter, Arial, sans-serif; letter-spacing: -.45px; }
 .flag span { color: #93a2b8; font-size: 10px; line-height: 1.4; letter-spacing: .1px; }
 .flag[data-flag='BLACK'] { --glow: #a5b2c8; }
-.flag[data-flag='BLACK']::before { background: linear-gradient(130deg, #768398, #111925 55%); }
-.flag[data-flag='CLEAR']::before { width: 27px; clip-path: none; border: 1.5px solid #a9b8ca; border-radius: 50%; background: linear-gradient(45deg, transparent 47%, #a9b8ca 48%, #a9b8ca 52%, transparent 53%); }
-.flag[data-flag='SAFETY CAR']::before, .flag[data-flag='FCY']::before { display: grid; place-items: center; width: 34px; clip-path: none; border-radius: 7px; background: #ffda3615; border: 1px solid #ffda3650; color: #ffda36; font-size: 10px; font-weight: 800; }
+.flag[data-flag='BLACK']::before { background: linear-gradient(105deg,#07090e,#586478 22%,#141a25 42%,#3e495c 65%,#080c13 88%); }
+.flag[data-flag='CLEAR']::before { width: 65%; opacity: .28; background: linear-gradient(105deg,#718499,#d2deed 35%,#576d84 65%,#a0b2c8); }
+.flag[data-flag='SAFETY CAR']::before, .flag[data-flag='FCY']::before { display: flex; align-items: flex-start; justify-content: center; padding: 14px 0 0 20px; color: #352800; font: italic 800 27px/1 'Barlow Condensed',sans-serif; letter-spacing: 1px; text-shadow: 0 1px 0 #ffffff30; }
 .flag[data-flag='SAFETY CAR']::before { content: 'SC'; }
-.flag[data-flag='FCY']::before { content: 'FCY'; font-size: 8px; }
-.chequered::before { background: repeating-conic-gradient(#eef3fa 0% 25%, #526078 0% 50%) 0 0 / 10px 10px; }
+.flag[data-flag='FCY']::before { content: 'FCY'; }
+.chequered::before { background: linear-gradient(105deg,#0005,#fff5 22%,#0005 43%,#fff4 64%,#0003 86%), repeating-conic-gradient(#eef3fa 0% 25%,#202938 0% 50%) 0 0 / 26px 26px; }
 .flag[aria-pressed='true'] { border-color: color-mix(in srgb, var(--glow) 70%, #53627a); box-shadow: inset 0 0 30px color-mix(in srgb, var(--glow) 6%, transparent), 0 0 0 3px color-mix(in srgb, var(--glow) 6%, transparent); }
 .flag[aria-pressed='true']::after { opacity: 1; visibility: visible; }
 .flag:focus-visible { outline-color: var(--glow); }
@@ -298,7 +307,7 @@ body:has(#console:not([hidden])) .intro { display: none; }
       0 0 24px color-mix(in srgb, var(--glow) 7%, transparent),
       inset 0 1px 0 color-mix(in srgb, var(--glow) 17%, transparent);
   }
-  .flag:not(:disabled):hover::before { filter: brightness(1.15); transform: rotate(-5deg); }
+  .flag:not(:disabled):hover::before { filter: brightness(1.15); transform: translateY(3px) rotate(2deg); }
 }
 .history-heading { margin-bottom: 18px; }
 .history { list-style: none; margin: 0; padding: 5px 26px; border-radius: 20px; background: linear-gradient(145deg, #182130a6, #111a27); box-shadow: inset 0 1px 0 #ffffff03; }
@@ -317,7 +326,7 @@ footer { border-top: 1px solid var(--line); color: #6c7e98; font-size: 9px; lett
   header, footer { padding-left: 32px; padding-right: 32px; }
   h1 { font-size: 53px; letter-spacing: -2.6px; }
   #login-card { padding-left: 28px; padding-right: 28px; }
-  .flag { padding: 21px 17px; }
+  .flag { padding: 122px 17px 20px; }
   .flag strong { font-size: 15px; }
 }
 @media (max-width: 800px) {
@@ -343,7 +352,7 @@ footer { border-top: 1px solid var(--line); color: #6c7e98; font-size: 9px; lett
   #login-card { border-radius: 23px; padding: 27px 24px 22px; }
   #login-card h2 { font-size: 21px; }
   .flag-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .flag { min-height: 150px; padding: 20px 18px; border-radius: 17px; }
+  .flag { min-height: 184px; padding: 116px 18px 18px; border-radius: 17px; }
   .current { align-items: start; flex-direction: column; border-radius: 22px; }
   .current-status { max-width: none; text-align: left; }
   .current-status .small { margin-top: 10px; }
@@ -366,3 +375,22 @@ footer { border-top: 1px solid var(--line); color: #6c7e98; font-size: 9px; lett
 .download-link { color: var(--muted); text-decoration: none; transition: color .2s; }
 .download-link:hover { color: var(--accent); }
 @media (max-width: 600px) { .brand-logo { width: 96px; } .brand { gap: 10px; } }
+
+@property --halo { syntax: '<color>'; inherits: false; initial-value: #657c92; }
+@property --deep { syntax: '<color>'; inherits: false; initial-value: #233b50; }
+#race-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 90% 4%, color-mix(in srgb,var(--halo) 28%,transparent),transparent 62%),
+    radial-gradient(ellipse at 3% 67%,color-mix(in srgb,var(--deep) 34%,transparent),transparent 65%),
+    linear-gradient(135deg,transparent 35%,color-mix(in srgb,var(--halo) 6%,transparent));
+  transition: --halo .85s ease, --deep .85s ease;
+}
+header, main, footer { position: relative; z-index: 1; }
+.flag { overflow: hidden; }
+.flag strong, .flag > span { position: relative; z-index: 1; }
+.flag[aria-pressed='true'] { border-width: 3px; padding-left: 19px; padding-right: 19px; }
+@media (max-width: 1050px) { .flag[aria-pressed='true'] { padding-left: 16px; padding-right: 16px; } }
+@media (max-width: 520px) { .flag[aria-pressed='true'] { padding-left: 17px; padding-right: 17px; } }

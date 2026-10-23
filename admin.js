@@ -18,6 +18,8 @@ function buttons() { document.querySelectorAll('.flag').forEach(b => {b.disabled
 function applyState(next) {
   if (!next || !FLAGS[next.flag] || (state && next.revision < state.revision)) return;
   state=next;
+  const halo=next.flag==='CLEAR'?'#657c92':next.flag==='BLACK'?'#748197':FLAGS[next.flag][2];
+  $('race-atmosphere').style.cssText=`--halo:${halo};--deep:${FLAGS[next.flag][3]}`;
   $('active-flag').textContent=next.flag==='CLEAR'?'No active flag':FLAGS[next.flag][0];
   $('changed-at').textContent='Updated '+new Date(next.updated_at).toLocaleString();
   document.querySelector('.current').style.cssText=`--current-signal:${FLAGS[next.flag][2]};--current-edge:${FLAGS[next.flag][3]}`;buttons();
@@ -48,7 +50,7 @@ async function checkAccess(session) {
   const generation=++checkGeneration;user=session?.user;verified=false;buttons();
   $('console').hidden=true;$('login-card').hidden=false;
   if(channel){await client.removeChannel(channel);channel=null;}
-  if(generation!==checkGeneration || !user)return;
+  if(generation!==checkGeneration || !user){if(!user)$('race-atmosphere').style.cssText='';return;}
   const {data,error}=await client.from('flag_admins').select('user_id').eq('user_id',user.id).maybeSingle();
   if(generation!==checkGeneration)return;
   if(error || !data){message(error?'Cannot verify admin access. Check your connection.':'This account has not been approved as a race admin. Ask the project owner to add it to flag_admins.');return;}
