@@ -3,6 +3,7 @@ from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 import sys
+import os
 from PIL import Image, ImageDraw, ImageFont
 
 TRANSPARENT = '#010203'
@@ -75,29 +76,40 @@ def visible_on_monitors(rect, monitors):
 
 @lru_cache(maxsize=96)
 def racing_font(size):
-    return ImageFont.truetype(BytesIO(font_bytes()), size)
+    font = ImageFont.truetype(BytesIO(font_bytes()), size)
+    # Use Windows' technical sans in a slightly condensed, confident weight.
+    try:
+        axes = font.get_variation_axes()
+        font.set_variation_by_axes([650 if axis['name']==b'Weight' else
+            85 if axis['name']==b'Width' else axis['default'] for axis in axes])
+    except (OSError, AttributeError):
+        pass
+    return font
 
 
 @lru_cache(maxsize=1)
 def font_bytes():
+    system_font = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts' / 'bahnschrift.ttf'
+    if system_font.is_file():
+        return system_font.read_bytes()
     return asset_path('RacingSansOne-Regular.ttf').read_bytes()
 
 
 def render_flag(width, height, flag, hover_close=False, handles=False, demo=False):
-    """Render at 2x resolution for smooth text and genuinely rounded corners."""
+    """Render clean, textured flags with an illuminated rim and colour-key-safe edges."""
     width, height = int(width), int(height)
-    scale = 2
+    scale = 3
     w, h = width*scale, height*scale
     fill_hex, border_hex = COLORS.get(flag, ('#263447', '#111925'))
     fill, border = rgb(fill_hex), rgb(border_hex)
-    image = Image.new('RGB', (w, h), rgb(TRANSPARENT))
+    image = Image.new('RGBA', (w, h), (0,0,0,0))
     draw = ImageDraw.Draw(image)
-    radius = min(27*scale, h//4)
+    radius = min(16*scale, h//5)
     inset = max(6, min(10, int(width*.019)))*scale
     draw.rounded_rectangle((2, 2, w-3, h-3), radius=radius, fill=border)
     mask = Image.new('L', (w, h), 0)
     ImageDraw.Draw(mask).rounded_rectangle((inset, inset, w-inset-1, h-inset-1),
-        radius=max(1, radius-inset//2), fill=255)
+        radius=max(1, radius-inset), fill=255)
     panel = Image.new('RGB', (w, h))
     panel_draw = ImageDraw.Draw(panel)
     top, bottom = blend(fill, (255,255,255), .11), blend(fill, (0,0,0), .09)
@@ -109,11 +121,30 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
             for col, x in enumerate(range(0, w, cell)):
                 panel_draw.rectangle((x,y,x+cell-1,y+cell-1),
                     fill='#edf1f5' if (row+col)%2 == 0 else '#222b38')
+    # Fine deterministic threads remain stable while dragging and resizing.
+    threads = Image.new('RGB',(w,h))
+    thread_draw = ImageDraw.Draw(threads)
+    for y in range(h):
+        thread_draw.line((0,y,w,y),fill=(141,141,141) if y%(3*scale)<scale else (121,121,121))
+    for x in range(0,w,3*scale):
+        thread_draw.line((x,0,x,h),fill=(145,145,145),width=scale)
+    from PIL import ImageChops
+    panel = ImageChops.soft_light(panel, threads)
     image.paste(panel, (0,0), mask)
+    # Glow stays inside the silhouette so transparent mode has no dark halo.
+    rim = ImageDraw.Draw(image)
+    glow = blend(fill, (255,255,255), .3 if flag!='BLACK' else .48)
+    for offset in range(7*scale,scale-1,-1):
+        strength = .08 + .48*(1-offset/(7*scale))
+        rim.rounded_rectangle((offset,offset,w-offset-1,h-offset-1),
+            radius=max(scale,radius-offset),outline=blend(border,glow,strength),width=scale)
+    rim.rounded_rectangle((2*scale,2*scale,w-2*scale-1,h-2*scale-1),
+        radius=radius-2*scale,outline=glow,width=scale)
+
     draw = ImageDraw.Draw(image)
     foreground = (243,247,255) if flag in ('BLACK','CHEQUERED','OFFLINE','CONNECTING','SETUP','CLEAR') else (16,23,32)
     text = 'NO ACTIVE FLAG' if flag == 'CLEAR' else 'CONNECTING' if flag == 'SETUP' else flag
-    font_size = max(16*scale, min(int(h*.45), int(w*.14)))
+    font_size = max(16*scale, min(int(h*.43), int(w*.14)))
     available = w-88*scale
     while font_size > 12*scale and racing_font(font_size).getlength(text) > available:
         font_size -= scale
@@ -142,4 +173,10 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
     if demo:
         tiny = racing_font(8*scale)
         draw.text((w/2,h-13*scale), 'LOCAL PREVIEW', font=tiny, anchor='mm', fill=foreground)
-    return image.resize((width,height), Image.Resampling.LANCZOS)
+    artwork = image.resize((width,height), Image.Resampling.LANCZOS)
+    # Tk uses a colour key rather than per-pixel alpha. Discard partial outside
+    # pixels instead of blending them with the key and leaving a dark fringe.
+    silhouette = artwork.getchannel('A').point(lambda value: 255 if value>=128 else 0)
+    result = Image.new('RGB',(width,height),rgb(TRANSPARENT))
+    result.paste(artwork.convert('RGB'),(0,0),silhouette)
+    return result
