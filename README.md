@@ -1,8 +1,14 @@
-# Race Flags · Supabase edition
+# F7R Race Control
+
+**[Download the Windows driver app](https://github.com/taynz18/F7R-Race-Control-/releases/latest/download/RaceFlags-Windows.zip)** · **[Open the admin portal](https://taynz18.github.io/F7R-Race-Control-/)**
+
+Drivers: download the ZIP, select **Extract All**, open the **RaceFlags** folder and run **RaceFlags.exe**. Keep the `_internal` folder alongside it. The connection to race control is included.
+
+The website and Windows downloads now update automatically when their relevant files change on the main branch.
 
 **Start with [START-HERE.md](START-HERE.md)** for the complete setup using the Supabase and GitHub websites, including the three numbered SQL queries and the driver build button.
 
-The supplied `config.json` is configured for project `uyiafrzsyzrtnuxxjkye`. A read-only live check confirmed the current flag can be fetched and the driver can subscribe to Realtime. Public access to admin membership and history was denied as intended. Admin sign-in, changing flags and the packaged Windows release still need verification.
+The supplied `config.json` is configured for project `uyiafrzsyzrtnuxxjkye`. A read-only live check confirmed the current flag can be fetched and the driver can subscribe to Realtime. Public access to admin membership and history was denied as intended. The first GitHub Windows release passed the source tests and packaged overlay self-test. Admin sign-in and changing flags across devices still need testing with your admin account.
 
 A Windows driver overlay and a browser admin portal. Supabase provides email/password sign-in, persistent flag state and Realtime delivery. GitHub distributes the driver download and can host the static admin portal on GitHub Pages. No separate Python server is needed.
 
@@ -90,7 +96,7 @@ The manual build appears in `dist`. Use the repository's release workflow if you
 
 ## Verification and limits
 
-Automated tests cover configuration validation, rejecting secret keys, revision ordering, offline state, read-only transport and compatibility with the installed Supabase Python SDK. A packaged Windows launch could not be verified in this workspace, so no executable is included. The source driver UI smoke check covers all flags, matching borders, transparent clear, preview, resizing and saved settings. SQL files have been parsed for syntax. Live public reads and a Realtime subscription were verified against the configured project, along with anonymous access being denied for admin membership and history. Admin sign-in, write permissions and delivery across devices still need checking; no project or admin account was created by this download.
+Automated tests cover configuration validation, rejecting secret keys, revision ordering, offline state, read-only transport and compatibility with the installed Supabase Python SDK. The GitHub Windows build passed its packaged overlay self-test. This source bundle contains no executable; use the release download above. The source driver UI smoke check covers all flags, matching borders, transparent clear, preview, resizing and saved settings. SQL files have been parsed for syntax. Live public reads and a Realtime subscription were verified against the configured project, along with anonymous access being denied for admin membership and history. Admin sign-in, write permissions and delivery across devices still need checking; no project or admin account was created by this download.
 
 After connecting your project, sign in, send Yellow, Safety Car, FCY, Red and Green, then clear flags. Verify a second driver joining late sees the saved flag. Disconnect and reconnect a driver to check the offline indicator and recovery. Run `03-check-access.sql` before sharing the download.
 
