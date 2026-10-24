@@ -11,3 +11,5 @@
 
 /* Reference-shaped top view: swept wings, narrow nose, curved sidepods. */
 .car-sidepod{fill:url(#car-sidepod-metal);stroke:#78869d;stroke-width:1.2}.car-sidepod-accent{fill:none;stroke:var(--team-color,#e32640);stroke-width:3;opacity:.8}.car-flap{fill:none;stroke:#101827;stroke-width:1.6;opacity:.55}.car-endplate{fill:#283448;stroke:#a5b1c3;stroke-width:1}.car-seat{fill:#515f76;stroke:#8996ac;stroke-width:1}.car-tyre-detail{fill:none;stroke:#8490a5;stroke-width:1;opacity:.28}.car-diagram{max-height:465px}@media(min-width:701px) and (max-width:1150px){.car-diagram{max-height:485px;width:280px}}
+
+.driver-name-line{display:flex;align-items:center;gap:7px}.penalty-badge{display:inline-block;color:#ff596b!important;font-size:11px;font-weight:700;line-height:1.3;margin-left:5px;white-space:nowrap}.driver-name-line .penalty-badge{margin-left:0}.team-row.damage-minor{outline:2px solid #f4bd43;outline-offset:-2px}.team-row.damage-major{outline:2px solid #ef4358;outline-offset:-2px}.team-row.damage-minor:focus-visible,.team-row.damage-major:focus-visible{outline-width:3px;outline-offset:-3px}.detail .driver h2 .penalty-badge{font-size:14px;vertical-align:middle}
