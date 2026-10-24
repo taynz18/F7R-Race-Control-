@@ -1,3 +1,9 @@
+# Guest viewing update
+
+Continue as guest opens live telemetry without an account. Guest access uses the public read-only API; it does not create anonymous Auth users. Only live races and their snapshots are visible to guests. Finished archives require sign-in. Membership, publishing, race changes and flag controls stay restricted. The live database upgrade dashboard-08-guest-viewing.sql has already been applied. dashboard-09-test-guest-viewing.sql verifies read-only access inside a rollback-only transaction.
+
+---
+
 # Driver sign-up update
 
 Drivers now create their own accounts from the home page and view telemetry without membership approval. Only approved admins/publishers can create races or send telemetry, and only flag_admins can send flags. The receiver account is formula7racing@gmail.com. Public sign-up is enabled in Supabase; anonymous sign-in remains disabled. An initial F7R Live Race is assigned to that receiver. The SQL upgrade is dashboard-06-open-driver-signup.sql; it has been applied to the live project. Earlier membership-approval instructions below apply to privileged receiver/admin roles, not ordinary viewers.

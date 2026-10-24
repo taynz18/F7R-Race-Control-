@@ -26,11 +26,8 @@ end $$;
 reset role;
 set local role anon;
 do $$ begin
- begin
-  perform 1 from public.f7r_snapshots;
-  raise exception 'FAIL: anonymous can read telemetry';
- exception when insufficient_privilege then null; end;
+ if not exists(select 1 from public.f7r_snapshots where session_id=current_setting('f7r.test.race')::uuid) then raise exception 'FAIL: guest cannot read live telemetry'; end if;
 end $$;
 reset role;
-select 'PASS: signed-in viewer read access; race, telemetry, role and flag writes denied; anonymous read denied. Test rows roll back.' as result;
+select 'PASS: signed-in viewer read access; race, telemetry, role and flag writes denied; guest live read allowed. Test rows roll back.' as result;
 rollback;

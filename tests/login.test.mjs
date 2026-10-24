@@ -29,3 +29,8 @@ test('signup without a session asks for email confirmation',async()=>{
  const {el,signups}=await setup({signupSession:false});await el('sign-out').onclick();el('signup-toggle').onclick();el('signup-name').value='New Driver';el('password').value='mock-password-123';await el('login-form').onsubmit({preventDefault(){}});
  assert.equal(signups.length,1);assert.match(el('auth-message').textContent,/Check your email/);assert.equal(el('dashboard').hidden,true);
 });
+
+test('guest opens live viewing without creating or logging in to an account',async()=>{
+ const {el,flags,signups}=await setup();await el('sign-out').onclick();await el('guest').onclick();
+ assert.equal(el('dashboard').hidden,false);assert.equal(el('sign-out').textContent,'Exit guest');assert.equal(flags.at(-1),false);assert.equal(signups.length,0);
+});

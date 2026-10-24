@@ -28,6 +28,18 @@ function setSignupMode(next){
  authMessage(next?'Create an account to view race telemetry. Admin approval is only required for race controls.':'Ready to sign in.');
 }
 $('signup-toggle').onclick=()=>setSignupMode(!signingUp);
+$('guest').onclick=async()=>{
+ if(!client)return;$('guest').disabled=true;
+ try{
+   await signOut();const g=++generation;
+   member={display_name:'Guest',role:'guest',approved:false,guest:true};demo=false;
+   $('login').hidden=true;$('dashboard').hidden=false;$('sign-out').textContent='Exit guest';
+   $('welcome').textContent='Guest viewing · live race data. Sign in as an approved admin to use race controls.';
+   await startFlags(client,false,null);if(g!==generation){await stopFlags();return}
+   await refreshRaces();
+ }catch(e){await signOut();authMessage('Could not open guest viewing. '+e.message)}
+ finally{$('guest').disabled=!client}
+};
 function authMessage(text){$('auth-message').textContent=text}
 function resetView(){snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
 async function detach(){const old=channel;channel=null;if(old&&client)await client.removeChannel(old)}
@@ -132,7 +144,7 @@ function demoDrivers(){
 $('demo').onclick=async()=>{++generation;await stopFlags();$('flags').hidden=true;await detach();demo=true;member=null;races=[{id:'demo',title:'British Grand Prix · design demo',status:'live',game_format:2026}];$('race-select').replaceChildren(new Option('Design demo','demo'));$('login').hidden=true;$('dashboard').hidden=false;$('sign-out').textContent='Exit demo';$('welcome').textContent='Fictional data for exploring the dashboard.';await chooseRace('demo')};
 setInterval(async()=>{status();if(demo&&snapshot){snapshot.received_at=new Date().toISOString();snapshot.data.drivers.forEach(d=>d.ers_percent=Math.max(5,Math.min(100,d.ers_percent+Math.floor(Math.random()*7)-3)));render()}},1000);
 setInterval(async()=>{if(polling||demo||!member||member.telemetryUnavailable)return;polling=true;try{await readSnapshot();if(race){const g=generation;const {data,error}=await client.from('f7r_sessions').select('status,driver_names').eq('id',race.id).maybeSingle();if(g!==generation)return;if(error||!data){await signOut();authMessage('Access ended or the race is unavailable.');return}Object.assign(race,data);render()}}finally{polling=false}},5000);
-async function start(){try{const response=await fetch('./config.json',{cache:'no-store'});if(!response.ok)throw Error('Missing config.json');const c=await response.json();if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(c.supabase_url)||!c.supabase_publishable_key?.startsWith('sb_publishable_'))throw Error('Set the Supabase project URL and publishable key in config.json.');if(!window.supabase)throw Error('Sign-in library did not load. Check your internet connection.');client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:{persistSession:false,autoRefreshToken:true,detectSessionInUrl:false}});client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'&&member)setTimeout(signOut,0)});$('sign-in').disabled=false;authMessage('Ready to sign in.')}catch(e){authMessage(e.message)}}start();
+async function start(){try{const response=await fetch('./config.json',{cache:'no-store'});if(!response.ok)throw Error('Missing config.json');const c=await response.json();if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(c.supabase_url)||!c.supabase_publishable_key?.startsWith('sb_publishable_'))throw Error('Set the Supabase project URL and publishable key in config.json.');if(!window.supabase)throw Error('Sign-in library did not load. Check your internet connection.');client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:{persistSession:false,autoRefreshToken:true,detectSessionInUrl:false}});client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'&&member&&!member.guest)setTimeout(signOut,0)});$('sign-in').disabled=false;$('guest').disabled=false;authMessage('Ready to sign in or continue as guest.')}catch(e){authMessage(e.message)}}start();
 
 async function showFlags(){
  if(demo)await signOut();
