@@ -1,5 +1,5 @@
 import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot} from './model.js';
-import {teamFor} from './teams.js';
+import {teamFor} from './teams.js?v=0.3.1';
 import {startFlags,stopFlags} from './flag-view.js';
 const $=id=>document.getElementById(id);
 let client=null,member=null,races=[],race=null,snapshot=null,channel=null,selected=null,demo=false,generation=0,polling=false,refreshing=false,transport='Not connected';
