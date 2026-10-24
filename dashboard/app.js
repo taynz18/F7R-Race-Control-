@@ -1,5 +1,5 @@
 import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot} from './model.js';
-import {renderCar} from './car-view.js?v=0.4.0';
+import {renderCar} from './car-view.js?v=0.4.1';
 import {teamFor} from './teams.js?v=0.3.1';
 import {startFlags,stopFlags} from './flag-view.js';
 const $=id=>document.getElementById(id);
