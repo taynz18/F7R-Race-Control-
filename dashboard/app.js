@@ -38,7 +38,8 @@ function render(){
     copy.append(nameLine,safeNode('small',team.name+' · #'+(d.race_number??'—'),'team-name'),safeNode('small',({1:'PC · Steam',3:'PlayStation',4:'Xbox',6:'PC · EA'}[d.platform]||'Platform unknown'),'platform-label'));
     wrap.append(teamMark(team),copy);identity.append(wrap);
     const tyreCell=safeNode('td',undefined,'compound-cell');tyreCell.append(compoundBadge(d.compound),safeNode('span',reading(d.tyre_age,'L'),'tyre-age'));
-    tr.append(safeNode('td',d.position||'—'),identity,safeNode('td',d.lap??'—'),safeNode('td',d.position===1?'LEADER':reading(typeof d.gap_ms==='number'?d.gap_ms/1000:null,'s',3)),safeNode('td',lapTime(d.last_lap_ms)),tyreCell,safeNode('td',energy(d)+(d.deploy_mode===3?' · BOOST':'')),safeNode('td',d.telemetry_public?reading(d.fuel_kg,' kg',1):'Private'));
+    const energyCell=safeNode('td',undefined,'energy-cell');energyCell.append(safeNode('span',energy(d)));if(d.telemetry_public===true&&d.status_stale!==true&&d.deploy_mode===3){const boost=safeNode('span','BOOST','boost-active');boost.setAttribute('aria-label','Boost deployment active');energyCell.append(boost)}
+    tr.append(safeNode('td',d.position||'—'),identity,safeNode('td',d.lap??'—'),safeNode('td',d.position===1?'LEADER':reading(typeof d.gap_ms==='number'?d.gap_ms/1000:null,'s',3)),safeNode('td',lapTime(d.last_lap_ms)),tyreCell,energyCell,safeNode('td',d.telemetry_public?reading(d.fuel_kg,' kg',1):'Private'));
     const choose=()=>{selected=d.slot;render()};tr.onclick=choose;tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose()}};
     $('rows').append(tr);
   }
