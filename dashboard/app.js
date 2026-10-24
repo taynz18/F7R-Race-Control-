@@ -12,6 +12,12 @@ function teamMark(team,extra=''){
  else{wrap.append(safeNode('span',team.key==='unknown'?'?':team.name==='Red Bull Racing'?'RBR':team.name.slice(0,3).toUpperCase(),'team-monogram'));wrap.setAttribute('aria-label',team.name)}
  return wrap;
 }
+function compoundBadge(code){
+ const types={16:['S','Soft','#ff4d62'],17:['M','Medium','#ffda55'],18:['H','Hard','#f3f5fa'],7:['I','Intermediate','#6cdd99'],8:['W','Wet','#62adff']};
+ const [letter,label,color]=types[code]||['—','Unknown','#8d99ad'];
+ const icon=safeNode('span',undefined,'compound-icon');icon.style.setProperty('--compound-color',color);icon.setAttribute('role','img');icon.setAttribute('aria-label',label+' tyre');icon.title=label+' tyre';
+ const background=safeNode('img');background.src='./assets/tyres/tyre.bg.png';background.alt='';background.width=36;background.height=36;const ring=safeNode('span',undefined,'compound-ring'),text=safeNode('b',letter,'compound-letter');text.setAttribute('aria-hidden','true');icon.append(background,ring,text);return icon;
+}
 function authMessage(text){$('auth-message').textContent=text}
 function resetView(){snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
 async function detach(){const old=channel;channel=null;if(old&&client)await client.removeChannel(old)}
@@ -31,7 +37,8 @@ function render(){
     const nameLine=safeNode('span',undefined,'driver-name-line');nameLine.append(safeNode('b',driverName(d,race)));const penalty=penaltyLabel(d.penalties);if(penalty){const badge=safeNode('span',penalty,'penalty-badge');badge.setAttribute('aria-label',d.penalties+' second time penalty');nameLine.append(badge)}
     copy.append(nameLine,safeNode('small',team.name+' · #'+(d.race_number??'—'),'team-name'),safeNode('small',({1:'PC · Steam',3:'PlayStation',4:'Xbox',6:'PC · EA'}[d.platform]||'Platform unknown'),'platform-label'));
     wrap.append(teamMark(team),copy);identity.append(wrap);
-    tr.append(safeNode('td',d.position||'—'),identity,safeNode('td',d.lap??'—'),safeNode('td',d.position===1?'LEADER':reading(typeof d.gap_ms==='number'?d.gap_ms/1000:null,'s',3)),safeNode('td',lapTime(d.last_lap_ms)),safeNode('td',({16:'S',17:'M',18:'H',7:'I',8:'W'}[d.compound]||'—')+' · '+reading(d.tyre_age,'L')),safeNode('td',energy(d)+(d.deploy_mode===3?' · BOOST':'')),safeNode('td',d.telemetry_public?reading(d.fuel_kg,' kg',1):'Private'));
+    const tyreCell=safeNode('td',undefined,'compound-cell');tyreCell.append(compoundBadge(d.compound),safeNode('span',reading(d.tyre_age,'L'),'tyre-age'));
+    tr.append(safeNode('td',d.position||'—'),identity,safeNode('td',d.lap??'—'),safeNode('td',d.position===1?'LEADER':reading(typeof d.gap_ms==='number'?d.gap_ms/1000:null,'s',3)),safeNode('td',lapTime(d.last_lap_ms)),tyreCell,safeNode('td',energy(d)+(d.deploy_mode===3?' · BOOST':'')),safeNode('td',d.telemetry_public?reading(d.fuel_kg,' kg',1):'Private'));
     const choose=()=>{selected=d.slot;render()};tr.onclick=choose;tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose()}};
     $('rows').append(tr);
   }
@@ -41,6 +48,7 @@ function render(){
   const team=teamFor(d.team_id),head=safeNode('div',undefined,'driver');
   head.append(teamMark(team,'detail-team-mark'));const h=safeNode('div'),heading=safeNode('h2',driverName(d,race));const penalty=penaltyLabel(d.penalties);if(penalty){const badge=safeNode('span',penalty,'penalty-badge');badge.setAttribute('aria-label',d.penalties+' second time penalty');heading.append(badge)}h.append(heading,safeNode('p',team.name+' · Car #'+(d.race_number??'—'),'team-name'));head.append(h);detail.append(head);
   const context=safeNode('div',undefined,'driver-context');context.append(safeNode('span','P'+(d.position||'—')),safeNode('span',d.pit_status?'In pit lane':'On track'));detail.append(context);
+  const compoundInfo=safeNode('div',undefined,'detail-compound');compoundInfo.append(compoundBadge(d.compound),safeNode('span','Tyre age · '+reading(d.tyre_age,' laps')));detail.append(compoundInfo);
   detail.append(renderCar(d));
   const metric=(name,value)=>{const n=safeNode('div',undefined,'metric');n.append(safeNode('span',name),safeNode('b',value));detail.append(n)};
   metric('Last lap',lapTime(d.last_lap_ms));metric('Speed',reading(d.speed_kph,' km/h'));metric('Sector 1',lapTime(d.sector1_ms));metric('Sector 2',lapTime(d.sector2_ms));metric('Penalties',reading(d.penalties,'s'));
