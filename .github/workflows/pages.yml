@@ -1,9 +1,12 @@
-name: Publish admin portal
+name: Publish F7R Race Control
 on:
   push:
     branches: [main]
     paths:
       - 'index.html'
+      - 'dashboard/**'
+      - 'tests/*.test.mjs'
+      - 'package.json'
       - 'admin.html'
       - 'admin.css'
       - 'admin.js'
@@ -27,10 +30,16 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check dashboard and flag desk
+        run: npm test
       - uses: actions/configure-pages@v5
       - name: Prepare portal
         run: |
           mkdir -p public/assets
+          cp -R dashboard public/dashboard
           cp index.html admin.html admin.css admin.js config.json public/
           cp assets/f7r-logo.png assets/f7r-app.ico public/assets/
       - uses: actions/upload-pages-artifact@v3
@@ -39,3 +48,4 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+

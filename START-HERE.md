@@ -1,3 +1,9 @@
+## Combined dashboard update
+
+For the new combined driver telemetry and admin flag app, follow [F7R-DASHBOARD-SETUP.md](F7R-DASHBOARD-SETUP.md). Existing projects should use the dashboard-prefixed SQL files, not repeat fresh-project flag setup. The instructions below describe the original flag system.
+
+---
+
 # Race Flags — setup walkthrough
 
 Your project URL and publishable key are already filled in for `uyiafrzsyzrtnuxxjkye`. The public flag read and Realtime subscription have been checked successfully. You can skip copying keys in step 5. Admin sign-in and a flag change still need testing with your admin account; keep its password private.
@@ -147,3 +153,4 @@ Use windowed or borderless-windowed games. Exclusive fullscreen can cover deskto
 Local source tests have passed. Live database permissions/sign-in and the packaged Windows release still need checking with your project and GitHub build.
 
 Official references: [Supabase project setup](https://supabase.com/docs/guides/getting-started/tutorials/with-react), [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys), [GitHub Pages setup](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site).
+

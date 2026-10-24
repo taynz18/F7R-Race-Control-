@@ -6,3 +6,9 @@ build/
 .venv/
 .env
 downloads/
+
+node_modules/
+.env
+.env.*
+*.log
+

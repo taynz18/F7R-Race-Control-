@@ -1,3 +1,11 @@
+# F7R Race Control — combined dashboard
+
+**Start here: [Combined dashboard setup](F7R-DASHBOARD-SETUP.md).**
+
+The home page now combines driver telemetry and live flag viewing. Approved race admins get flag controls within the same login. The existing Windows overlay and standalone admin desk are preserved. Telemetry needs the numbered dashboard SQL files and a game receiver; they are prepared for you to set up.
+
+---
+
 # F7R Race Control
 
 **[Download the Windows driver app](https://github.com/taynz18/F7R-Race-Control-/releases/latest/download/RaceFlags-Windows.zip)** · **[Open the admin portal](https://taynz18.github.io/F7R-Race-Control-/)**
@@ -132,3 +140,4 @@ Drivers must download the current Windows release for messages/countdowns.
 Older driver versions still receive flag changes, including automatic GREEN.
 Run `supabase/test-live-messages.sql` for rollback-only verification of messages,
 automatic GREEN, cancellation, validation and access controls.
+
