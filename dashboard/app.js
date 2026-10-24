@@ -1,4 +1,5 @@
 import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot} from './model.js';
+import {renderCar} from './car-view.js?v=0.4.0';
 import {teamFor} from './teams.js?v=0.3.1';
 import {startFlags,stopFlags} from './flag-view.js';
 const $=id=>document.getElementById(id);
@@ -38,6 +39,7 @@ function render(){
   const team=teamFor(d.team_id),head=safeNode('div',undefined,'driver');
   head.append(teamMark(team,'detail-team-mark'));const h=safeNode('div');h.append(safeNode('h2',driverName(d,race)),safeNode('p',team.name+' · Car #'+(d.race_number??'—'),'team-name'));head.append(h);detail.append(head);
   const context=safeNode('div',undefined,'driver-context');context.append(safeNode('span','P'+(d.position||'—')),safeNode('span',d.pit_status?'In pit lane':'On track'));detail.append(context);
+  detail.append(renderCar(d));
   const metric=(name,value)=>{const n=safeNode('div',undefined,'metric');n.append(safeNode('span',name),safeNode('b',value));detail.append(n)};
   metric('Last lap',lapTime(d.last_lap_ms));metric('Speed',reading(d.speed_kph,' km/h'));metric('Sector 1',lapTime(d.sector1_ms));metric('Sector 2',lapTime(d.sector2_ms));metric('Penalties',reading(d.penalties,'s'));
   detail.append(safeNode('div','Tyre wear · percentage used','sectiontitle'));const wheels=safeNode('div',undefined,'wheels');
@@ -93,7 +95,7 @@ $('sign-out').onclick=signOut;$('search').oninput=render;$('refresh').onclick=re
 $('setup-tab').onclick=()=>{$('flags').hidden=true;$('flags-tab').classList.remove('active');$('login').hidden=true;$('dashboard').hidden=true;$('connection').hidden=false;$('setup-tab').classList.add('active');$('live-tab').classList.remove('active')};
 function showLive(){$('flags').hidden=true;$('flags-tab').classList.remove('active');$('connection').hidden=true;$('dashboard').hidden=!(member||demo);$('login').hidden=!!(member||demo);$('setup-tab').classList.remove('active');$('live-tab').classList.add('active')}
 $('live-tab').onclick=showLive;$('back').onclick=showLive;
-function demoDrivers(){return ['Apex','Vortex','Phoenix','Storm','Nova','Ghost','Falcon','Blaze','Echo','Drift'].map((n,i)=>({slot:i,name:'F7R '+n,team_id:[484,477,476,480,481,479,485,482,483,486][i],race_number:10+i,platform:[1,3,4][i%3],position:i+1,lap:18,last_lap_ms:87182+i*73,sector1_ms:28000,sector2_ms:30000,gap_ms:i*1742,compound:[17,16,18][i%3],tyre_age:5+i,ers_percent:86-i*6,deploy_mode:i===2?3:1,fuel_kg:21.4+i*.3,fuel_laps:8.3,wear:[18+i,20+i,21+i,23+i],damage:{front_left:0,front_right:0,rear:0,floor:0,engine:0},telemetry_public:true,penalties:0,speed_kph:285, pit_status:0}))}
+function demoDrivers(){return ['Apex','Vortex','Phoenix','Storm','Nova','Ghost','Falcon','Blaze','Echo','Drift'].map((n,i)=>({slot:i,name:'F7R '+n,team_id:[484,477,476,480,481,479,485,482,483,486][i],race_number:10+i,platform:[1,3,4][i%3],position:i+1,lap:18,last_lap_ms:87182+i*73,sector1_ms:28000,sector2_ms:30000,gap_ms:i*1742,compound:[17,16,18][i%3],tyre_age:5+i,ers_percent:86-i*6,deploy_mode:i===2?3:1,fuel_kg:21.4+i*.3,fuel_laps:8.3,wear:[18+i,20+i,21+i,23+i],damage:{front_left:i===0?12:0,front_right:i===1?42:0,rear:0,floor:i===3?8:0,engine:0},telemetry_public:true,penalties:0,speed_kph:285, pit_status:0}))}
 $('demo').onclick=async()=>{++generation;await stopFlags();$('flags').hidden=true;await detach();demo=true;member=null;races=[{id:'demo',title:'British Grand Prix · design demo',status:'live',game_format:2026}];$('race-select').replaceChildren(new Option('Design demo','demo'));$('login').hidden=true;$('dashboard').hidden=false;$('sign-out').textContent='Exit demo';$('welcome').textContent='Fictional data for exploring the dashboard.';await chooseRace('demo')};
 setInterval(async()=>{status();if(demo&&snapshot){snapshot.received_at=new Date().toISOString();snapshot.data.drivers.forEach(d=>d.ers_percent=Math.max(5,Math.min(100,d.ers_percent+Math.floor(Math.random()*7)-3)));render()}},1000);
 setInterval(async()=>{if(polling||demo||!member||member.telemetryUnavailable)return;polling=true;try{await readSnapshot();if(race){const g=generation;const {data,error}=await client.from('f7r_sessions').select('status,driver_names').eq('id',race.id).maybeSingle();if(g!==generation)return;if(error||!data){await signOut();authMessage('Access ended or the race is unavailable.');return}Object.assign(race,data);render()}}finally{polling=false}},5000);
