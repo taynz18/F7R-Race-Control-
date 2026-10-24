@@ -1,3 +1,9 @@
+# Driver sign-up update
+
+Drivers now create their own accounts from the home page and view telemetry without membership approval. Only approved admins/publishers can create races or send telemetry, and only flag_admins can send flags. The receiver account is formula7racing@gmail.com. Public sign-up is enabled in Supabase; anonymous sign-in remains disabled. An initial F7R Live Race is assigned to that receiver. The SQL upgrade is dashboard-06-open-driver-signup.sql; it has been applied to the live project. Earlier membership-approval instructions below apply to privileged receiver/admin roles, not ordinary viewers.
+
+---
+
 # Combined F7R Race Control
 The repository now contains one browser app for driver telemetry and live flags,
 with admin-only flag controls. Your Windows flag overlay and the standalone
@@ -71,7 +77,7 @@ PowerShell:
 
     $env:F7R_SESSION_ID = 'RACE_UUID_FROM_DASHBOARD_QUERY_03'
     $env:F7R_GAME_IP = '192.168.1.50'
-    $env:F7R_RECEIVER_EMAIL = 'receiver-account@example.com'
+    $env:F7R_RECEIVER_EMAIL = 'formula7racing@gmail.com'
     $credential = Get-Credential -UserName $env:F7R_RECEIVER_EMAIL -Message 'F7R receiver login'
     $env:F7R_RECEIVER_PASSWORD = $credential.GetNetworkCredential().Password
     try { npm run receiver } finally { Remove-Item Env:F7R_RECEIVER_PASSWORD -ErrorAction SilentlyContinue }

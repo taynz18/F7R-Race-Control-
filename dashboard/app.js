@@ -3,6 +3,7 @@ import {renderCar} from './car-view.js?v=0.4.1';
 import {teamFor} from './teams.js?v=0.3.1';
 import {startFlags,stopFlags} from './flag-view.js';
 const $=id=>document.getElementById(id);
+let signingUp=false;
 let client=null,member=null,races=[],race=null,snapshot=null,channel=null,selected=null,demo=false,generation=0,polling=false,refreshing=false,transport='Not connected';
 const safeNode=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n};
 function setTeamColors(node,team){node.style.setProperty('--team-color',team.color);node.style.setProperty('--team-accent',team.accent);node.style.setProperty('--team-wash',team.color+'20');node.style.setProperty('--team-wash-strong',team.color+'38')}
@@ -18,6 +19,15 @@ function compoundBadge(code){
  const icon=safeNode('span',undefined,'compound-icon');icon.style.setProperty('--compound-color',color);icon.setAttribute('role','img');icon.setAttribute('aria-label',label+' tyre');icon.title=label+' tyre';
  const background=safeNode('img');background.src='./assets/tyres/tyre.bg.png';background.alt='';background.width=36;background.height=36;const ring=safeNode('span',undefined,'compound-ring'),text=safeNode('b',letter,'compound-letter');text.setAttribute('aria-hidden','true');icon.append(background,ring,text);return icon;
 }
+function setSignupMode(next){
+ signingUp=next;$('signup-name-label').hidden=!next;$('signup-name').required=next;
+ $('password').autocomplete=next?'new-password':'current-password';
+ $('auth-title').textContent=next?'Create driver account':'Driver sign in';
+ $('sign-in').textContent=next?'Create account':'Sign in';
+ $('signup-toggle').textContent=next?'Already have an account? Sign in':'Create a driver account';
+ authMessage(next?'Create an account to view race telemetry. Admin approval is only required for race controls.':'Ready to sign in.');
+}
+$('signup-toggle').onclick=()=>setSignupMode(!signingUp);
 function authMessage(text){$('auth-message').textContent=text}
 function resetView(){snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
 async function detach(){const old=channel;channel=null;if(old&&client)await client.removeChannel(old)}
@@ -81,19 +91,27 @@ async function signOut(){
   if(client){const {error}=await client.auth.signOut({scope:'local'});if(error)authMessage('Signed out of this view; session cleanup failed. Reload before signing in again.');else authMessage('Signed out.')}
 }
 $('login-form').onsubmit=async e=>{
-  e.preventDefault();if(!client)return;const g=++generation;$('sign-in').disabled=true;authMessage('Signing in…');
-  try{const {data,error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});$('password').value='';if(error)throw error;if(g!==generation)return;
+  e.preventDefault();if(!client)return;const g=++generation,createAccount=signingUp;$('sign-in').disabled=true;authMessage(createAccount?'Creating your account…':'Signing in…');
+  try{
+    let response;
+    if(createAccount){
+      const displayName=$('signup-name').value.trim();
+      if(!displayName||displayName.length>64)throw Error('Enter your driver name, up to 64 characters.');
+      if($('password').value.length<8)throw Error('Choose a password with at least 8 characters.');
+      response=await client.auth.signUp({email:$('email').value.trim(),password:$('password').value,options:{data:{display_name:displayName}}});
+    }else response=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+    $('password').value='';const {data,error}=response;if(error)throw error;if(g!==generation)return;
+    if(createAccount&&!data.session){setSignupMode(false);authMessage('Check your email for a confirmation link, then return here to sign in. If you already have an account, sign in with it.');return}
+
     // The existing flag_admins table, never dashboard role or user metadata, controls flag access.
     const adminAccess=await client.from('flag_admins').select('user_id').eq('user_id',data.user.id).maybeSingle();
     if(g!==generation)return;
     const isFlagAdmin=!adminAccess.error&&!!adminAccess.data;
     const access=await client.from('f7r_members').select('display_name,role,approved').eq('user_id',data.user.id).maybeSingle();
     if(g!==generation)return;
-    if(!access.data?.approved&&!isFlagAdmin){
-      await client.auth.signOut({scope:'local'});
-      throw Error(access.error?'Telemetry setup is not ready. Ask your F7R admin to run the dashboard setup query.':'Your account is awaiting F7R approval.');
-    }
-    member=access.data?.approved?access.data:{display_name:'Race admin',role:'admin',approved:true};
+    // Account metadata is used only for display, never to authorize admin/publisher access.
+    const displayName=typeof data.user.user_metadata?.display_name==='string'?data.user.user_metadata.display_name.slice(0,64):'Driver';
+    member=access.data?.approved?access.data:{display_name:isFlagAdmin?'Race admin':displayName,role:isFlagAdmin?'admin':'driver',approved:isFlagAdmin};
     member.telemetryUnavailable=!!access.error;demo=false;$('sign-out').textContent='Sign out';
     $('login').hidden=true;$('dashboard').hidden=false;$('welcome').textContent='Welcome, '+member.display_name+'. Choose telemetry or flags.';
     await startFlags(client,isFlagAdmin,data.user.id);

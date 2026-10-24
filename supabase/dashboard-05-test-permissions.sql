@@ -53,8 +53,9 @@ do $$ begin
 end $$;
 select set_config('request.jwt.claim.sub',current_setting('f7r.test.stranger'),true);
 do $$ begin
-  if exists(select 1 from public.f7r_sessions) or exists(select 1 from public.f7r_snapshots) then
-    raise exception 'FAIL: unapproved account can see race data';
+  if not exists(select 1 from public.f7r_sessions where id=current_setting('f7r.test.race')::uuid)
+    or not exists(select 1 from public.f7r_snapshots where session_id=current_setting('f7r.test.race')::uuid) then
+    raise exception 'FAIL: signed-in viewer cannot see race data';
   end if;
 end $$;
 reset role;
@@ -67,6 +68,6 @@ do $$ begin
   end;
 end $$;
 reset role;
-select 'PASS: publisher write, approved viewer read, viewer write denial, membership protection, unapproved and anonymous denial. All test data rolls back.' as result;
+select 'PASS: publisher write, approved viewer read, viewer write denial, membership protection, self-service viewer read and anonymous denial. All test data rolls back.' as result;
 rollback;
 
