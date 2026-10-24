@@ -11,6 +11,7 @@ on:
       - 'admin.css'
       - 'admin.js'
       - 'config.json'
+      - 'assets/teams/**'
       - 'assets/f7r-logo.png'
       - 'assets/f7r-app.ico'
       - '.github/workflows/pages.yml'
@@ -40,6 +41,7 @@ jobs:
         run: |
           mkdir -p public/assets
           cp -R dashboard public/dashboard
+          cp -R assets/teams public/assets/teams
           cp index.html admin.html admin.css admin.js config.json public/
           cp assets/f7r-logo.png assets/f7r-app.ico public/assets/
       - uses: actions/upload-pages-artifact@v3

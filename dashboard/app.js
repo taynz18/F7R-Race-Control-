@@ -1,8 +1,16 @@
 import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot} from './model.js';
+import {teamFor} from './teams.js';
 import {startFlags,stopFlags} from './flag-view.js';
 const $=id=>document.getElementById(id);
 let client=null,member=null,races=[],race=null,snapshot=null,channel=null,selected=null,demo=false,generation=0,polling=false,refreshing=false,transport='Not connected';
 const safeNode=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n};
+function setTeamColors(node,team){node.style.setProperty('--team-color',team.color);node.style.setProperty('--team-accent',team.accent);node.style.setProperty('--team-wash',team.color+'20');node.style.setProperty('--team-wash-strong',team.color+'38')}
+function teamMark(team,extra=''){
+ const wrap=safeNode('span',undefined,'team-mark '+extra);
+ if(team.logo){const img=safeNode('img');img.src='./assets/teams/'+team.logo;img.alt=team.name+' logo';img.width=38;img.height=38;wrap.append(img)}
+ else{wrap.append(safeNode('span',team.key==='unknown'?'?':team.name==='Red Bull Racing'?'RBR':team.name.slice(0,3).toUpperCase(),'team-monogram'));wrap.setAttribute('aria-label',team.name)}
+ return wrap;
+}
 function authMessage(text){$('auth-message').textContent=text}
 function resetView(){snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
 async function detach(){const old=channel;channel=null;if(old&&client)await client.removeChannel(old)}
@@ -10,21 +18,26 @@ function status(){const label=feedState(snapshot,race,Date.now(),demo);$('feed')
 function render(){
   status();const rows=Array.isArray(snapshot?.data?.drivers)?snapshot.data.drivers:[];const q=$('search').value.toLowerCase();
   $('driver-count').textContent=' / '+rows.length+' drivers';
-  const visible=rows.filter(d=>driverName(d,race).toLowerCase().includes(q)).sort((a,b)=>(a.position||99)-(b.position||99));
+  const visible=rows.filter(d=>(driverName(d,race)+' '+teamFor(d.team_id).name).toLowerCase().includes(q)).sort((a,b)=>(a.position||99)-(b.position||99));
   $('rows').replaceChildren();$('empty').hidden=visible.length>0;
   $('empty').textContent=rows.length?'No drivers match your search.':'No race data yet. The host must start the receiver.';
   for(const d of visible){
-    const tr=safeNode('tr');tr.tabIndex=0;tr.setAttribute('role','button');tr.setAttribute('aria-label','Inspect '+driverName(d,race));tr.dataset.slot=d.slot;
-    if(d.slot===selected)tr.className='selected';
-    const identity=safeNode('td');identity.append(safeNode('b',driverName(d,race)),safeNode('small',({1:'PC · Steam',3:'PlayStation',4:'Xbox',6:'PC · EA'}[d.platform]||'Platform unknown')+' · #'+(d.race_number??'—')));
+    const team=teamFor(d.team_id);const tr=safeNode('tr');tr.className='team-row';setTeamColors(tr,team);tr.tabIndex=0;tr.setAttribute('role','button');tr.setAttribute('aria-label','Inspect '+driverName(d,race)+' · '+team.name);tr.dataset.slot=d.slot;
+    if(d.slot===selected)tr.className+=' selected';
+    const identity=safeNode('td');identity.className='driver-identity';
+    const wrap=safeNode('div',undefined,'identity-wrap'),copy=safeNode('div',undefined,'identity-copy');
+    copy.append(safeNode('b',driverName(d,race)),safeNode('small',team.name+' · #'+(d.race_number??'—'),'team-name'),safeNode('small',({1:'PC · Steam',3:'PlayStation',4:'Xbox',6:'PC · EA'}[d.platform]||'Platform unknown'),'platform-label'));
+    wrap.append(teamMark(team),copy);identity.append(wrap);
     tr.append(safeNode('td',d.position||'—'),identity,safeNode('td',d.lap??'—'),safeNode('td',d.position===1?'LEADER':reading(typeof d.gap_ms==='number'?d.gap_ms/1000:null,'s',3)),safeNode('td',lapTime(d.last_lap_ms)),safeNode('td',({16:'S',17:'M',18:'H',7:'I',8:'W'}[d.compound]||'—')+' · '+reading(d.tyre_age,'L')),safeNode('td',energy(d)+(d.deploy_mode===3?' · BOOST':'')),safeNode('td',d.telemetry_public?reading(d.fuel_kg,' kg',1):'Private'));
     const choose=()=>{selected=d.slot;render()};tr.onclick=choose;tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose()}};
     $('rows').append(tr);
   }
   if(selected===null&&rows.length){selected=rows[0].slot;render();return}
   const d=rows.find(d=>d.slot===selected);if(!d){$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));return}
-  const detail=$('detail');detail.replaceChildren(safeNode('div','DRIVER TELEMETRY','eyebrow'));
-  const head=safeNode('div',undefined,'driver');head.append(safeNode('span',String(d.position||'—').padStart(2,'0'),'number'));const h=safeNode('div');h.append(safeNode('h2',driverName(d,race)),safeNode('p',d.pit_status?'In pit lane':'On track'));head.append(h);detail.append(head);
+  const detail=$('detail');setTeamColors(detail,teamFor(d.team_id));detail.replaceChildren(safeNode('div','DRIVER TELEMETRY','eyebrow'));
+  const team=teamFor(d.team_id),head=safeNode('div',undefined,'driver');
+  head.append(teamMark(team,'detail-team-mark'));const h=safeNode('div');h.append(safeNode('h2',driverName(d,race)),safeNode('p',team.name+' · Car #'+(d.race_number??'—'),'team-name'));head.append(h);detail.append(head);
+  const context=safeNode('div',undefined,'driver-context');context.append(safeNode('span','P'+(d.position||'—')),safeNode('span',d.pit_status?'In pit lane':'On track'));detail.append(context);
   const metric=(name,value)=>{const n=safeNode('div',undefined,'metric');n.append(safeNode('span',name),safeNode('b',value));detail.append(n)};
   metric('Last lap',lapTime(d.last_lap_ms));metric('Speed',reading(d.speed_kph,' km/h'));metric('Sector 1',lapTime(d.sector1_ms));metric('Sector 2',lapTime(d.sector2_ms));metric('Penalties',reading(d.penalties,'s'));
   detail.append(safeNode('div','Tyre wear · percentage used','sectiontitle'));const wheels=safeNode('div',undefined,'wheels');
@@ -80,7 +93,7 @@ $('sign-out').onclick=signOut;$('search').oninput=render;$('refresh').onclick=re
 $('setup-tab').onclick=()=>{$('flags').hidden=true;$('flags-tab').classList.remove('active');$('login').hidden=true;$('dashboard').hidden=true;$('connection').hidden=false;$('setup-tab').classList.add('active');$('live-tab').classList.remove('active')};
 function showLive(){$('flags').hidden=true;$('flags-tab').classList.remove('active');$('connection').hidden=true;$('dashboard').hidden=!(member||demo);$('login').hidden=!!(member||demo);$('setup-tab').classList.remove('active');$('live-tab').classList.add('active')}
 $('live-tab').onclick=showLive;$('back').onclick=showLive;
-function demoDrivers(){return ['Apex','Vortex','Phoenix','Storm','Nova','Ghost','Falcon','Blaze','Echo','Drift'].map((n,i)=>({slot:i,name:'F7R '+n,race_number:10+i,platform:[1,3,4][i%3],position:i+1,lap:18,last_lap_ms:87182+i*73,sector1_ms:28000,sector2_ms:30000,gap_ms:i*1742,compound:[17,16,18][i%3],tyre_age:5+i,ers_percent:86-i*6,deploy_mode:i===2?3:1,fuel_kg:21.4+i*.3,fuel_laps:8.3,wear:[18+i,20+i,21+i,23+i],damage:{front_left:0,front_right:0,rear:0,floor:0,engine:0},telemetry_public:true,penalties:0,speed_kph:285, pit_status:0}))}
+function demoDrivers(){return ['Apex','Vortex','Phoenix','Storm','Nova','Ghost','Falcon','Blaze','Echo','Drift'].map((n,i)=>({slot:i,name:'F7R '+n,team_id:[484,477,476,480,481,479,485,482,483,486][i],race_number:10+i,platform:[1,3,4][i%3],position:i+1,lap:18,last_lap_ms:87182+i*73,sector1_ms:28000,sector2_ms:30000,gap_ms:i*1742,compound:[17,16,18][i%3],tyre_age:5+i,ers_percent:86-i*6,deploy_mode:i===2?3:1,fuel_kg:21.4+i*.3,fuel_laps:8.3,wear:[18+i,20+i,21+i,23+i],damage:{front_left:0,front_right:0,rear:0,floor:0,engine:0},telemetry_public:true,penalties:0,speed_kph:285, pit_status:0}))}
 $('demo').onclick=async()=>{++generation;await stopFlags();$('flags').hidden=true;await detach();demo=true;member=null;races=[{id:'demo',title:'British Grand Prix · design demo',status:'live',game_format:2026}];$('race-select').replaceChildren(new Option('Design demo','demo'));$('login').hidden=true;$('dashboard').hidden=false;$('sign-out').textContent='Exit demo';$('welcome').textContent='Fictional data for exploring the dashboard.';await chooseRace('demo')};
 setInterval(async()=>{status();if(demo&&snapshot){snapshot.received_at=new Date().toISOString();snapshot.data.drivers.forEach(d=>d.ers_percent=Math.max(5,Math.min(100,d.ers_percent+Math.floor(Math.random()*7)-3)));render()}},1000);
 setInterval(async()=>{if(polling||demo||!member||member.telemetryUnavailable)return;polling=true;try{await readSnapshot();if(race){const g=generation;const {data,error}=await client.from('f7r_sessions').select('status,driver_names').eq('id',race.id).maybeSingle();if(g!==generation)return;if(error||!data){await signOut();authMessage('Access ended or the race is unavailable.');return}Object.assign(race,data);render()}}finally{polling=false}},5000);

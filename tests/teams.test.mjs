@@ -1,0 +1,3 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {teamFor} from '../dashboard/teams.js';
+test('Season Pack 16-bit IDs distinguish Audi, Cadillac and base-game Sauber',()=>{assert.equal(teamFor(476).name,'Mercedes');assert.equal(teamFor(484).name,'McLaren');assert.equal(teamFor(485).name,'Audi');assert.equal(teamFor(486).name,'Cadillac');assert.equal(teamFor(9).name,'Sauber')});
+test('unknown team identifiers stay neutral and do not become file paths',()=>{for(const id of [null,undefined,999,'../../file.png','484'])assert.equal(teamFor(id).key,'unknown');assert.equal(teamFor(483).logo,null)});
