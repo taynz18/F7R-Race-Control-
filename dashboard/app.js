@@ -86,8 +86,9 @@ setInterval(async()=>{status();if(demo&&snapshot){snapshot.received_at=new Date(
 setInterval(async()=>{if(polling||demo||!member||member.telemetryUnavailable)return;polling=true;try{await readSnapshot();if(race){const g=generation;const {data,error}=await client.from('f7r_sessions').select('status,driver_names').eq('id',race.id).maybeSingle();if(g!==generation)return;if(error||!data){await signOut();authMessage('Access ended or the race is unavailable.');return}Object.assign(race,data);render()}}finally{polling=false}},5000);
 async function start(){try{const response=await fetch('./config.json',{cache:'no-store'});if(!response.ok)throw Error('Missing config.json');const c=await response.json();if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(c.supabase_url)||!c.supabase_publishable_key?.startsWith('sb_publishable_'))throw Error('Set the Supabase project URL and publishable key in config.json.');if(!window.supabase)throw Error('Sign-in library did not load. Check your internet connection.');client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:{persistSession:false,autoRefreshToken:true,detectSessionInUrl:false}});client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'&&member)setTimeout(signOut,0)});$('sign-in').disabled=false;authMessage('Ready to sign in.')}catch(e){authMessage(e.message)}}start();
 
-function showFlags(){
- if(!member||demo){$('auth-message').textContent='Sign in with your F7R account to view live flags. Admin approval is required to send signals.';showLive();return}
+async function showFlags(){
+ if(demo)await signOut();
+ if(!member){$('auth-message').textContent='Sign in with your F7R account to view live flags. Admin approval is required to send signals.';showLive();return}
  $('login').hidden=true;$('dashboard').hidden=true;$('connection').hidden=true;$('flags').hidden=false;
  $('flags-tab').classList.add('active');$('live-tab').classList.remove('active');$('setup-tab').classList.remove('active');
 }

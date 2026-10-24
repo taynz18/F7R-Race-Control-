@@ -12,6 +12,6 @@ test('dashboard demo, search, driver selection, guide and logout work without ne
  el('search').value='Ghost';el('search').oninput();assert.equal(el('rows').children.length,1);
  el('rows').children[0].onclick();assert.match(el('detail').text,/F7R Ghost/);
  el('setup-tab').onclick();assert.equal(el('connection').hidden,false);el('back').onclick();assert.equal(el('dashboard').hidden,false);
- await el('sign-out').onclick();assert.equal(el('login').hidden,false);assert.equal(el('dashboard').hidden,true);assert.equal(el('rows').children.length,0);
+ await el('flags-tab').onclick();assert.match(el('auth-message').textContent,/Sign in with your F7R account/);assert.equal(el('flags').hidden,true);assert.equal(el('login').hidden,false);assert.equal(el('dashboard').hidden,true);assert.equal(el('rows').children.length,0);
 });
 

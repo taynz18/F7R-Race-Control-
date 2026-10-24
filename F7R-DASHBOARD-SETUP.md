@@ -101,7 +101,8 @@ npm test runs decoder/model/UI/controller checks plus the existing flag desk tes
 GitHub checks test source automatically; the Windows release workflow is unchanged.
 The SQL files still need owner execution and their database permission tests.
 A real mixed-platform lobby, driver logins and cross-device flag delivery must be
-verified before racing. Browser layout verification depends on preview access.
+verified before racing. The published sign-in and demo layouts were visually checked. Real driver/admin
+logins and cross-device flag delivery still need owner verification.
 No development test sends real flags.
 
 The separate F7R-dashboard repository is an earlier prototype; this combined
