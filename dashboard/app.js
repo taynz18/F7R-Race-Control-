@@ -1,3 +1,4 @@
+import {renderTrackMap} from './track-map.js?v=0.8.0';
 import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot,damageAlert,penaltyLabel} from './model.js?v=0.5.1';
 import {renderCar} from './car-view.js?v=0.4.1';
 import {teamFor} from './teams.js?v=0.3.1';
@@ -41,12 +42,13 @@ $('guest').onclick=async()=>{
  finally{$('guest').disabled=!client}
 };
 function authMessage(text){$('auth-message').textContent=text}
-function resetView(){$('receiver-panel').hidden=true;snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
+function resetView(){$('track-map').replaceChildren();$('receiver-panel').hidden=true;snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
 async function detach(){const old=channel;channel=null;if(old&&client)await client.removeChannel(old)}
 function status(){const label=feedState(snapshot,race,Date.now(),demo);$('feed').textContent=label;$('feed').classList.toggle('green',label==='LIVE');$('freshness').textContent=snapshot?'Last snapshot: '+new Date(snapshot.received_at).toLocaleTimeString():'No telemetry received';$('transport').textContent=demo?'Simulation · not a real race':transport;$('notice').textContent=demo?'DESIGN DEMO — fictional names and simulated values.':label.startsWith('STALE')?'Receiver data is stale. Values below are the last known readings.':label==='RACE FINISHED'?'Race finished. Showing the last stored snapshot.':''}
 function render(){
   status();const rows=Array.isArray(snapshot?.data?.drivers)?snapshot.data.drivers:[];const q=$('search').value.toLowerCase();
   $('driver-count').textContent=' / '+rows.length+' drivers';
+  $('track-map').replaceChildren(renderTrackMap(snapshot?.data,{selected,onSelect:slot=>{selected=slot;render()},race,stale:feedState(snapshot,race,Date.now(),demo).startsWith('STALE'),demo}));
   const visible=rows.filter(d=>(driverName(d,race)+' '+teamFor(d.team_id).name).toLowerCase().includes(q)).sort((a,b)=>(a.position||99)-(b.position||99));
   $('rows').replaceChildren();$('empty').hidden=visible.length>0;
   $('empty').textContent=rows.length?'No drivers match your search.':'No race data yet. The host must start the receiver.';
@@ -88,7 +90,7 @@ async function chooseRace(id){
   $('race-title').textContent=race?.title||'No races available';if(!race)return;
   $('race-description').textContent='UDP '+race.game_format+' · '+race.status;
   if(member?.telemetryUnavailable){transport='Telemetry setup required';$('notice').textContent='Flag controls are ready. Run the dashboard setup SQL to enable telemetry.';return}
-  if(demo){snapshot={session_id:race.id,received_at:new Date().toISOString(),frame:1,data:{drivers:demoDrivers()}};render();return}
+  if(demo){snapshot={session_id:race.id,received_at:new Date().toISOString(),frame:1,data:demoMapData()};render();return}
   channel=client.channel('f7r-race-'+id+'-'+g).on('postgres_changes',{event:'*',schema:'public',table:'f7r_snapshots',filter:'session_id=eq.'+id},payload=>apply(payload.new,g)).subscribe(s=>{if(g!==generation)return;transport=s==='SUBSCRIBED'?'Live connection':'Reconnecting · polling fallback';status();if(s==='SUBSCRIBED')readSnapshot(g)});
   await readSnapshot(g);await refreshReceiver();
 }
@@ -185,3 +187,9 @@ $('receiver-toggle').onclick=async()=>{
  finally{receiverWriteBusy=false;if(g===generation)await refreshReceiver();}
 };
 setInterval(refreshReceiver,3000);
+
+function demoMapData(){
+ const points=Array.from({length:192},(_,i)=>{const a=i/192*Math.PI*2,r=900+180*Math.sin(a*3)+90*Math.cos(a*7);return {i,x:Math.cos(a)*r,z:Math.sin(a)*r*.65}});
+ const drivers=demoDrivers().map((d,i)=>({...d,world_position:{x:points[i*8].x,z:points[i*8].z},motion_stale:false}));
+ return {format:2026,track_id:7,track_map:{bins:192,points},drivers};
+}

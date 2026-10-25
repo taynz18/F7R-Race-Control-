@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {Decoder,header} from '../receiver/decoder.mjs';
 function packet(id,format=2026,frame=100,uid=9007199254740993n){
- const sizes=format===2026?{1:926,2:1399,4:1470,6:1448,7:1445,10:1133,16:269}:{1:753,2:1285,4:1284,6:1352,7:1239,10:1041};
+ const sizes=format===2026?{0:1325,1:926,2:1399,4:1470,6:1448,7:1445,10:1133,16:269}:{0:1349,1:753,2:1285,4:1284,6:1352,7:1239,10:1041};
  const b=Buffer.alloc(sizes[id]);b.writeUInt16LE(format,0);b[5]=1;b[6]=id;b.writeBigUInt64LE(uid,7);b.writeUInt32LE(frame,23);return b;
 }
 function feed(format=2026,share=true,names=true){
@@ -24,3 +24,23 @@ test('2025 format fallback',()=>{const dec=feed(2025),st=packet(7,2025);st.write
 test('24th driver is decoded',()=>{const dec=new Decoder(),p=packet(4),l=packet(2);p[29]=24;const o=30+23*60;p[o+42]=1;p[o+43]=1;p.write('Last Driver',o+10);dec.accept(p,1000);dec.accept(l,1000);assert.equal(dec.snapshot(1001).data.drivers[23].name,'Last Driver')});
 test('nonfinite sensors become null',()=>{const dec=feed(),st=packet(7);st.writeFloatLE(NaN,34);dec.accept(st,1000);assert.equal(dec.snapshot(1001).data.drivers[0].fuel_kg,null)});
 
+
+for(const format of [2025,2026])test('motion positions and measured outline '+format,()=>{
+ const dec=feed(format),s=packet(1,format),m=packet(0,format),l=packet(2,format,101);
+ s.writeUInt16LE(5000,33);s.writeInt8(7,36);m.writeFloatLE(100,29);m.writeFloatLE(300,37);
+ l.writeFloatLE(1250,49);l[61]=1;l[74]=2;
+ dec.accept(s,1000);dec.accept(m,1000);dec.accept(l,1000);
+ const snap=dec.snapshot(1001);assert.deepEqual(snap.data.drivers[0].world_position,{x:100,z:300});
+ assert.equal(snap.data.track_map.points[0].i,48);assert.equal(snap.data.track_id,7);
+ assert.equal(dec.snapshot(2600).data.drivers[0].world_position,null);
+ assert.equal(dec.snapshot(2600).data.track_map.points.length,1);
+});
+test('pit lane and invalid coordinates cannot distort circuit trace',()=>{
+ const dec=feed(),s=packet(1),m=packet(0),l=packet(2,2026,101);
+ s.writeUInt16LE(5000,33);m.writeFloatLE(NaN,29);m.writeFloatLE(300,37);l[74]=2;
+ dec.accept(s,1000);dec.accept(m,1000);dec.accept(l,1000);
+ assert.equal(dec.snapshot(1001).data.drivers[0].world_position,null);
+ assert.equal(dec.snapshot(1001).data.track_map.points.length,0);
+ const next=packet(0,2026,102);next.writeFloatLE(100,29);next.writeFloatLE(300,37);l.writeUInt32LE(102,23);l[63]=1;
+ dec.accept(next,1100);dec.accept(l,1100);assert.equal(dec.snapshot(1101).data.track_map.points.length,0);
+});

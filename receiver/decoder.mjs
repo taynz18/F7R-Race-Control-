@@ -1,8 +1,8 @@
 // F1 25 UDP format 2025 and F1 25: 2026 Season Pack format 2026.
 // Independently implemented from EA's published structures. Wheel order: RL RR FL FR.
 const layouts={
-  2025:{cars:22,sizes:{1:753,2:1285,4:1284,6:1352,7:1239,10:1041},participant:57,status:55,telemetry:60},
-  2026:{cars:24,sizes:{1:926,2:1399,4:1470,6:1448,7:1445,10:1133,16:269},participant:60,status:59,telemetry:59}
+  2025:{cars:22,sizes:{0:1349,1:753,2:1285,4:1284,6:1352,7:1239,10:1041},participant:57,status:55,telemetry:60},
+  2026:{cars:24,sizes:{0:1325,1:926,2:1399,4:1470,6:1448,7:1445,10:1133,16:269},participant:60,status:59,telemetry:59}
 };
 const finite=(n,min=-1e6,max=1e6)=>Number.isFinite(n)&&n>=min&&n<=max?n:null;
 export function header(b){
@@ -14,7 +14,7 @@ export function header(b){
   return {format,id,uid:b.readBigUInt64LE(7).toString(),frame:b.readUInt32LE(23),layout};
 }
 export class Decoder{
-  constructor(){this.uid=null;this.format=null;this.parts=new Map();this.frame=-1;}
+  constructor(){this.uid=null;this.format=null;this.parts=new Map();this.frame=-1;this.mapPoints=new Map();this.mapTrack=null;}
   accept(b,now=Date.now()){
     const h=header(b);if(!h)return false;
     if(this.uid && (this.uid!==h.uid || this.format!==h.format))throw Error('Game session changed. Create a new F7R race and restart the receiver.');
@@ -27,6 +27,8 @@ export class Decoder{
     const fresh=(id,ttl=2500)=>{const p=this.parts.get(id);return p&&now-p.at<=ttl?p.b:null};
     const p=fresh(4,15000),lap=fresh(2);
     if(!p||!lap)return null;
+    const motion=fresh(0,1500),sessionPacket=fresh(1,15000),trackLength=sessionPacket?.readUInt16LE(33)||null,trackId=sessionPacket?.readInt8(36)??null;
+    if(trackId!==null&&this.mapTrack!==trackId){this.mapPoints.clear();this.mapTrack=trackId;}
     const layout=layouts[this.format],status=fresh(7),damage=fresh(10),tel=fresh(6),extra=fresh(16),session=fresh(1,15000);
     const drivers=[];
     for(let i=0;i<Math.min(p[29],layout.cars);i++){
@@ -35,8 +37,16 @@ export class Decoder{
       const raw=p.subarray(o+7+shift,o+39+shift).toString('utf8').split('\0')[0].replace(/[\u0000-\u001f]/g,'').trim();
       const l=29+i*57,s=29+i*layout.status,d=29+i*46,t=29+i*layout.telemetry,e=29+i*10;
       const shared=ai||publicData;
+      const mo=29+i*(this.format===2026?54:60),x=motion?finite(motion.readFloatLE(mo),-100000,100000):null,z=motion?finite(motion.readFloatLE(mo+8),-100000,100000):null;
+      const validPosition=x!==null&&z!==null&&(x!==0||z!==0)&&lap[l+45]!==0&&lap[l+45]!==1;
+      const distance=finite(lap.readFloatLE(l+20),-10000,100000);
+      if(validPosition&&trackLength>0&&distance!==null&&distance>=0&&distance<trackLength&&lap[l+34]===0){
+        const bin=Math.min(191,Math.floor(distance/trackLength*192));
+        this.mapPoints.set(bin,{i:bin,x:Math.round(x*10)/10,z:Math.round(z*10)/10});
+      }
       const car={slot:i,network_id:is26?p.readUInt16LE(o+3):p[o+2],team_id:is26?p.readUInt16LE(o+5):p[o+3],
         race_number:p[o+5+shift],platform:p[o+43+shift],name:(ai||showName)?raw:null,
+        world_position:validPosition?{x,z}:null,lap_distance:distance,motion_stale:!motion,
         name_shared:ai||showName,telemetry_public:shared,position:lap[l+32],lap:lap[l+33],
         last_lap_ms:lap.readUInt32LE(l),current_lap_ms:lap.readUInt32LE(l+4),
         sector1_ms:lap.readUInt16LE(l+8)+lap[l+10]*60000,sector2_ms:lap.readUInt16LE(l+11)+lap[l+13]*60000,
@@ -55,6 +65,7 @@ export class Decoder{
       drivers.push(car);
     }
     return {game_uid:this.uid,frame:this.frame,data:{format:this.format,drivers,
+      track_length:trackLength,track_map:{bins:192,points:[...this.mapPoints.values()].sort((a,b)=>a.i-b.i)},
       weather:session?session[29]:null,track_temperature:session?session.readInt8(30):null,
       total_laps:session?session[32]:null,track_id:session?session.readInt8(36):null}};
   }
