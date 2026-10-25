@@ -9,7 +9,7 @@ function feed(format=2026,share=true,names=true){
 }
 test('64-bit game UID remains exact',()=>assert.equal(header(packet(2)).uid,'9007199254740993'));
 test('2026 participant/status/damage offsets',()=>{
- const dec=feed(),st=packet(7),dm=packet(10);st.writeFloatLE(22.5,34);st.writeFloatLE(2000000,65);st[69]=3;
+ const dec=feed(),st=packet(7),dm=packet(10);st.writeFloatLE(22.5,34);st.writeFloatLE(2000000,66);st[70]=3;
  [10,20,30,40].forEach((n,i)=>dm.writeFloatLE(n,29+i*4));dm[57]=7;dm[66]=12;
  dec.accept(st,1000);dec.accept(dm,1000);const d=dec.snapshot(1100).data.drivers[0];
  assert.equal(d.name,'F7R Racer');assert.equal(d.race_number,77);assert.equal(d.platform,4);assert.equal(d.fuel_kg,22.5);assert.equal(d.ers_joules,2000000);assert.equal(d.deploy_mode,3);assert.deepEqual(d.wear,[10,20,30,40]);assert.equal(d.damage.front_left,7);assert.equal(d.damage.engine,12);assert.equal(d.last_lap_ms,90123);assert.equal(d.lap,18);
@@ -43,4 +43,27 @@ test('pit lane and invalid coordinates cannot distort circuit trace',()=>{
  assert.equal(dec.snapshot(1001).data.track_map.points.length,0);
  const next=packet(0,2026,102);next.writeFloatLE(100,29);next.writeFloatLE(300,37);l.writeUInt32LE(102,23);l[63]=1;
  dec.accept(next,1100);dec.accept(l,1100);assert.equal(dec.snapshot(1101).data.track_map.points.length,0);
+});
+
+for(const format of [2025,2026])test('visual compound, tyre age and ERS use distinct documented fields '+format,()=>{
+ const dec=feed(format),status=packet(7,format);
+ // Relative offsets: actual compound25, visual26, age27, flag28, ICE29, MGUK33, store37, mode41.
+ status[29+25]=17;status[29+26]=16;status[29+27]=2;status[29+28]=3;
+ status.writeFloatLE(123456,29+29);status.writeFloatLE(654321,29+33);
+ status.writeFloatLE(2000000,29+37);status[29+41]=3;
+ dec.accept(status,1000);const d=dec.snapshot(1001).data.drivers[0];
+ assert.equal(d.compound,16);assert.equal(d.tyre_age,2);assert.equal(d.ers_joules,2000000);assert.equal(d.deploy_mode,3);
+});
+test('wear readings come from each car and each wheel rather than status bytes',()=>{
+ const dec=new Decoder(),p=packet(4),l=packet(2),damage=packet(10);
+ p[29]=2;for(let i=0;i<2;i++){p[30+i*60+42]=1;p[30+i*60+43]=1}
+ const values=[[4.25,5.5,6.75,8],[31.25,32.5,33.75,35]];
+ values.forEach((w,i)=>w.forEach((n,j)=>damage.writeFloatLE(n,29+i*46+j*4)));
+ dec.accept(p,1000);dec.accept(l,1000);dec.accept(damage,1000);
+ const cars=dec.snapshot(1001).data.drivers;
+ assert.deepEqual(cars[0].wear,values[0]);assert.deepEqual(cars[1].wear,values[1]);
+});
+test('restricted driver tyre age is not exposed',()=>{
+ const dec=feed(2026,false,false),status=packet(7);status[29+27]=16;
+ dec.accept(status,1000);assert.equal(dec.snapshot(1001).data.drivers[0].tyre_age,null);
 });
