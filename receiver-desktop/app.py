@@ -27,7 +27,7 @@ class ReceiverApp:
         self.events, self.generation, self.races = queue.Queue(), 0, []
         self.closed = False
         self.last_error = ""
-        root.title("F7R Receiver · 0.1.9")
+        root.title("F7R Receiver · 0.1.10")
         root.geometry(f"{min(650, root.winfo_screenwidth()-60)}x{min(740, root.winfo_screenheight()-100)}")
         root.minsize(500, 500)
         root.configure(bg=BG)

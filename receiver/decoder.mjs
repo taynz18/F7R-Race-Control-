@@ -30,6 +30,8 @@ export class Decoder{
     const motion=fresh(0,1500),sessionPacket=fresh(1,15000),trackLength=sessionPacket?.readUInt16LE(33)||null,trackId=sessionPacket?.readInt8(36)??null;
     if(trackId!==null&&this.mapTrack!==trackId){this.mapPoints.clear();this.mapTrack=trackId;}
     const layout=layouts[this.format],status=fresh(7),damage=fresh(10),tel=fresh(6),extra=fresh(16),session=fresh(1,15000);
+    const safetySession=fresh(1);
+    const marshalZones=safetySession?Array.from({length:Math.min(safetySession[48],21)},(_,i)=>({start:finite(safetySession.readFloatLE(49+i*5),0,1),flag:safetySession.readInt8(53+i*5)})).filter(z=>z.start!==null&&z.flag>=-1&&z.flag<=3):null;
     const drivers=[];
     for(let i=0;i<Math.min(p[29],layout.cars);i++){
       const o=30+i*layout.participant,is26=this.format===2026,shift=is26?3:0;
@@ -68,7 +70,8 @@ export class Decoder{
       track_length:trackLength,track_map:{bins:192,points:[...this.mapPoints.values()].sort((a,b)=>a.i-b.i)},
       weather:session?session[29]:null,track_temperature:session?session.readInt8(30):null,
       // EA PacketSessionData: 21 packed five-byte marshal zones precede safetyCarStatus.
-      safety_car_status:session&&session[154]<=3?session[154]:null,
+      safety_car_status:safetySession&&safetySession[154]<=3?safetySession[154]:null,
+      marshal_zones:marshalZones,
       total_laps:session?session[32]:null,track_id:session?session.readInt8(36):null}};
   }
 }

@@ -69,3 +69,5 @@ test('restricted driver tyre age is not exposed',()=>{
 });
 
 for(const format of [2025,2026])test('live safety periods decode and clear '+format,()=>{const dec=feed(format);assert.equal(dec.snapshot(1001).data.safety_car_status,null);for(const state of [2,1,0,3,255]){const s=packet(1,format,200+state);s[154]=state;dec.parts.delete(1);dec.accept(s,1001);assert.equal(dec.snapshot(1002).data.safety_car_status,state<=3?state:null)}assert.equal(dec.snapshot(17000),null)});
+
+for(const format of [2025,2026])test('marshal yellow zones decode, clear and expire '+format,()=>{const dec=feed(format),s=packet(1,format,500);s[48]=2;s.writeFloatLE(0,49);s[53]=1;s.writeFloatLE(.5,54);s[58]=3;dec.accept(s,1000);assert.deepEqual(dec.snapshot(1001).data.marshal_zones,[{start:0,flag:1},{start:.5,flag:3}]);s.writeUInt32LE(501,23);s[58]=1;dec.accept(s,1002);assert.equal(dec.snapshot(1003).data.marshal_zones[1].flag,1);dec.accept(packet(2,format,502),4000);assert.equal(dec.snapshot(4001).data.marshal_zones,null);assert.equal(dec.snapshot(4001).data.safety_car_status,null)});

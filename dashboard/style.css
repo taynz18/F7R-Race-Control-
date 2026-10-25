@@ -42,3 +42,6 @@ header{border-bottom-color:#37425c66}.heading h1{background:linear-gradient(105d
 .safety-banner{display:flex;align-items:center;gap:22px;padding:22px 28px;margin:0 0 24px;border:1px solid #ffd34d99;border-left:5px solid #ffe16b;border-radius:12px;background:linear-gradient(110deg,#ffd54b,#b9821c 75%,#624817);color:#171303;box-shadow:0 12px 45px #e6b52920}
 .safety-banner[hidden]{display:none}.safety-banner>strong{font-size:clamp(2rem,5vw,3.3rem);font-weight:900;letter-spacing:-.04em;line-height:1}.safety-banner div{display:grid;gap:5px}.safety-banner b{font-size:clamp(1rem,2.5vw,1.4rem);letter-spacing:.09em}.safety-banner span{font-size:.7rem;font-weight:700;letter-spacing:.12em}
 @media(prefers-reduced-motion:reduce){#race-surface{transition:none}}
+
+#race-surface.safety-active.local-yellow{background:radial-gradient(ellipse at 35% 0%,#ffd34d16,transparent 50%)}
+#race-surface.local-yellow .safety-banner{background:linear-gradient(110deg,#ffd54b,#bc902e 65%,#40371b);box-shadow:0 8px 30px #e6b52912}
