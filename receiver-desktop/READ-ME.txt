@@ -1,3 +1,6 @@
+F7R CONTINUOUS LIVE FEED (0.1.7+)
+The website automatically follows the active feed. New lobbies and qualifying-to-race transitions are followed automatically by this receiver. No new F7R race entry is needed. Keep one receiver open. The previous live snapshot is replaced, not archived. Earlier instructions below about creating fresh race entries are superseded.
+
 F7R RECEIVER FOR WINDOWS
 
 1. Extract the entire ZIP into a folder on your laptop.

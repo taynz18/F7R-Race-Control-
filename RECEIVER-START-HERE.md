@@ -1,3 +1,7 @@
+# Continuous live feed — receiver 0.1.7 and later
+
+The website automatically follows the active shared feed. There is no race picker. The receiver now follows game session changes, including qualifying to race, without creating fresh F7R race entries. Keep one receiver connected and keep the admin telemetry switch on. New game data replaces the previous live snapshot; this is a live display, not a race archive. Driver and guest viewers remain read-only.
+
 # F7R Windows receiver
 
 For the sign-in window and automatic game detection, download **F7R-Receiver-Windows.zip** from the [F7R Receiver releases](https://github.com/taynz18/F7R-Race-Control-/releases?q=f7r-receiver). Extract the entire ZIP and open **F7R Receiver.exe**. No Node.js installation is needed. Sign in, choose your assigned live race, and click Connect receiver. Then use Start live telemetry in the admin dashboard.

@@ -4,7 +4,16 @@ export function reading(n,suffix='',digits=0){return isNumber(n)?n.toFixed(digit
 export function driverName(d,race){if(d.telemetry_public===false)return 'Player';const mapped=race?.driver_names?.[String(d.slot)];return typeof mapped==='string'&&mapped.trim()?mapped.slice(0,64):typeof d.name==='string'&&d.name.trim()?d.name.slice(0,64):'Player'}
 export function energy(d){if(!d.telemetry_public)return 'Private';if(isNumber(d.ers_percent))return d.ers_percent.toFixed(0)+'%';return isNumber(d.ers_joules)?(d.ers_joules/1e6).toFixed(2)+' MJ':'—'}
 export function feedState(snapshot,race,now=Date.now(),demo=false){if(demo)return 'DEMO DATA';if(!snapshot)return 'WAITING FOR RECEIVER';if(race?.status==='finished')return 'RACE FINISHED';return now-Date.parse(snapshot.received_at)>8000?'STALE · LAST KNOWN DATA':'LIVE'}
-export function acceptsSnapshot(current,next){return !!next&&(!current||(next.session_id===current.session_id&&Number(next.frame)>Number(current.frame)))}
+export function acceptsSnapshot(current,next){
+ if(!next)return false;if(!current)return true;if(next.session_id!==current.session_id)return false;
+ if(current.game_uid&&next.game_uid&&current.game_uid!==next.game_uid)return Date.parse(next.received_at)>Date.parse(current.received_at);
+ return Number(next.frame)>Number(current.frame);
+}
+export function currentLiveRace(races,stamps=[],now=Date.now()){
+ const live=races.filter(r=>r.status==='live');
+ const fresh=stamps.filter(s=>live.some(r=>r.id===s.session_id)&&now-Date.parse(s.received_at)<15000).sort((a,b)=>Date.parse(b.received_at)-Date.parse(a.received_at));
+ return live.find(r=>r.id===fresh[0]?.session_id)||[...live].sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at))[0]||null;
+}
 
 
 export function damageAlert(driver){

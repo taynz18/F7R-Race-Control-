@@ -25,9 +25,9 @@ async function authenticate(){
 await authenticate();
 const races=await request('/rest/v1/f7r_sessions?id=eq.'+sessionId+'&select=id,publisher_id,status,game_format',null,'GET',auth.access_token);
 if(races?.length!==1||races[0].publisher_id!==auth.user.id||races[0].status!=='live')throw Error('Account is not the assigned publisher for this live race');
-const race=races[0],decoder=new Decoder(),socket=dgram.createSocket('udp4');let enabled=false,controlAt=0,healthAt=0,healthState='waiting',lastUpload=0;let lockedSource=null;let busy=false,lastFrame=-1,stopped=false,lastPacket=0;
+const race=races[0],socket=dgram.createSocket('udp4');let decoder=new Decoder(),storedUid=null;let enabled=false,controlAt=0,healthAt=0,healthState='waiting',lastUpload=0;let lockedSource=null;let busy=false,lastFrame=-1,stopped=false,lastPacket=0;
 const existing=await request('/rest/v1/f7r_snapshots?session_id=eq.'+sessionId+'&select=game_uid,frame',null,'GET',auth.access_token);
-if(existing?.[0]){decoder.uid=existing[0].game_uid;decoder.format=race.game_format;lastFrame=existing[0].frame;}
+if(existing?.[0]){storedUid=existing[0].game_uid;lastFrame=existing[0].frame;}
 socket.on('error',e=>{console.error('UDP error:',e.code==='EADDRINUSE'?'Port '+port+' is already in use. Close Racing League Tools or use its UDP forwarding to another port, then restart.':e.message);stop();process.exitCode=1});
 socket.on('message',(b,rinfo)=>{
   if(source!=='auto'&&rinfo.address!==source)return;
@@ -36,11 +36,12 @@ socket.on('message',(b,rinfo)=>{
     try{
       const h=header(b);if(!h)return;
       if(h.format!==race.game_format)throw Error('Game UDP format does not match the selected F7R race. Check F1 telemetry format and choose the correct race.');
-      if(decoder.uid&&h.uid!==decoder.uid)throw Error('New game session detected. The selected F7R race contains an earlier game session. Select a fresh live race in the receiver and dashboard, then reconnect.');
+
     }catch(e){console.error(e.message);stop();process.exitCode=1;return}
     lockedSource=rinfo.address;console.log('Game feed found at '+lockedSource+'. Locked to this device until restart.');
   }
-  try{if(decoder.accept(b)){lastPacket=Date.now();if(decoder.format!==race.game_format)throw Error('Wrong UDP format for this F7R race');}}
+  try{const h=header(b);if(h&&decoder.uid&&h.uid!==decoder.uid){decoder=new Decoder();lastPacket=0;lastUpload=0;console.log('New game session detected. Following the live game automatically.');}
+    if(decoder.accept(b)){lastPacket=Date.now();if(decoder.format!==race.game_format)throw Error('Wrong UDP format for this F7R race');}}
   catch(e){console.error(e.message);if(/session changed|Wrong UDP/.test(e.message)){stop();process.exitCode=1}}
 });
 const capacity=env.F7R_ERS_CAPACITY_J?Number(env.F7R_ERS_CAPACITY_J):null;
@@ -62,7 +63,15 @@ const timer=setInterval(async()=>{
       await request('/rest/v1/f7r_receiver_status?on_conflict=session_id',{session_id:sessionId,state,last_seen:new Date().toISOString(),driver_count:snap?.data?.drivers.length||0},'POST',auth.access_token,'resolution=merge-duplicates,return=minimal');
       healthAt=Date.now();if(healthState!==state)console.log('Receiver state: '+state);healthState=state;
     }
-    if(!enabled||Date.now()-lastPacket>2500||!snap||snap.frame<=lastFrame)return;
+    if(!enabled||Date.now()-lastPacket>2500||!snap)return;
+    if(storedUid!==snap.game_uid){
+      // Only the assigned, enabled publisher can replace this feed's last snapshot.
+      if(storedUid)await request('/rest/v1/f7r_snapshots?session_id=eq.'+sessionId+'&game_uid=eq.'+encodeURIComponent(storedUid),null,'DELETE',auth.access_token);
+      const latest=await request('/rest/v1/f7r_snapshots?session_id=eq.'+sessionId+'&select=game_uid,frame',null,'GET',auth.access_token);
+      if(latest?.[0]&&latest[0].game_uid!==snap.game_uid)throw Error('Waiting for permission to replace the previous game feed.');
+      storedUid=snap.game_uid;lastFrame=latest?.[0]?.frame??-1;
+    }
+    if(snap.frame<=lastFrame)return;
     snap.data.drivers.forEach(d=>{d.ers_percent=capacity&&d.ers_joules!==null?Math.max(0,Math.min(100,d.ers_joules/capacity*100)):null});
     await request('/rest/v1/f7r_snapshots?on_conflict=session_id',{session_id:sessionId,...snap},'POST',auth.access_token,'resolution=merge-duplicates,return=minimal');
     lastFrame=snap.frame;lastUpload=Date.now();

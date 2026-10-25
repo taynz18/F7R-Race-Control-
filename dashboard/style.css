@@ -19,3 +19,19 @@
 .energy-cell{white-space:nowrap}.boost-active{display:inline-block;margin-left:7px;padding:3px 5px;border:1px solid #72ff61;border-radius:4px;background:#143b1a;color:#8bff70;font-size:9px;font-weight:800;letter-spacing:.7px;line-height:1.2;text-shadow:0 0 5px #59ff46,0 0 10px #38fa37;box-shadow:0 0 5px #5dff4370,inset 0 0 5px #5dff4328}
 
 .track-map{margin:0 0 24px;padding:22px;background:radial-gradient(ellipse at 50% 55%,#1b2635,#111620 70%)}.track-map:empty{display:none}.track-map-heading{display:flex;align-items:center;gap:18px}.track-map-heading img{width:105px;height:65px;object-fit:contain}.track-map-heading p,.track-map-foot{font-size:11px;line-height:1.6;color:#9eacc1}.track-map-svg{display:block;width:100%;max-height:440px;min-height:220px}.track-driver{cursor:pointer}.track-driver:hover circle,.track-driver:focus circle{stroke:white;stroke-width:4}.track-map-svg.stale{opacity:.45}.track-map-foot{margin:5px 0 0}@media(max-width:700px){.track-map{padding:14px}.track-map-heading img{width:75px}.track-map-heading h2{font-size:14px}}
+
+/* F7R continuous live feed refresh */
+body{background:radial-gradient(ellipse at 80% 0%,#17243d80,transparent 45%),radial-gradient(ellipse at 10% 10%,#9b193422,transparent 40%),#090c12}
+aside{background:linear-gradient(170deg,#181521,#0b1019 60%);box-shadow:12px 0 60px #0003}
+header{border-bottom-color:#37425c66}.heading h1{background:linear-gradient(105deg,#fff 25%,#bac8e9 80%);color:transparent;background-clip:text}
+.automatic-session{background:linear-gradient(115deg,#361927aa,#1a2335 48%,#142b35aa);border:1px solid #56516c66;border-left:3px solid #f32940;box-shadow:0 12px 35px #0003}
+.automatic-session h2{font-size:22px;margin-top:10px}.auto-feed-label{font-size:9px;letter-spacing:1.6px;color:#a3c6d8;border:1px solid #6da3b344;padding:10px;border-radius:30px}
+.session-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:24px}.session-stats article{padding:20px 24px;background:linear-gradient(125deg,#20293b,#121722);border-color:#37425a66;position:relative}
+.session-stats article:first-child{background:linear-gradient(125deg,#3e1d2c,#151b29)}.session-stats article:last-child{background:linear-gradient(125deg,#15383d,#151b29)}
+.session-stats span{display:block;font-size:9px;letter-spacing:1.8px;color:#b8c4da}.session-stats strong{display:block;font-size:30px;margin:12px 0;color:#fff}.session-stats small{font-size:10px;color:#8f9eb7}
+.team-row{background:linear-gradient(100deg,var(--team-wash-strong),var(--team-wash) 40%,#151a24 85%)}.team-row:hover{filter:brightness(1.15)}
+.detail{background:linear-gradient(155deg,var(--team-wash-strong),#151a25 38%);box-shadow:0 10px 35px #0003}
+.track-map{border-color:#53628255;background:radial-gradient(ellipse at 50% 55%,#243652,#111722 72%)}
+.login-card{background:linear-gradient(145deg,#271c2b,#171e2c 55%,#122932);border-color:#4a435766;box-shadow:0 20px 70px #0005}
+.badge.green{background:#133b2b;border:1px solid #3bba7744;box-shadow:0 0 20px #20db7315}
+@media(max-width:700px){.session-stats{gap:8px}.session-stats article{padding:14px 10px}.session-stats strong{font-size:23px}.session-stats span{font-size:8px;letter-spacing:1px}.auto-feed-label{display:none}.automatic-session h2{font-size:18px}}

@@ -8,3 +8,9 @@ test('older and unrelated race snapshots rejected',()=>{const c={session_id:'a',
 
 
 test('private telemetry retains the car but labels the driver Player',()=>{assert.equal(driverName({slot:1,name:'Hidden Driver',telemetry_public:false},{driver_names:{1:'Mapped Driver'}}),'Player')});
+
+test('a newer game session with reset frame is accepted; delayed old session is rejected',()=>{
+ const old={session_id:'race',game_uid:'old',frame:10000,received_at:'2026-10-25T12:00:00Z'};
+ const next={session_id:'race',game_uid:'new',frame:1,received_at:'2026-10-25T12:01:00Z'};
+ assert.equal(acceptsSnapshot(old,next),true);assert.equal(acceptsSnapshot(next,old),false);
+});

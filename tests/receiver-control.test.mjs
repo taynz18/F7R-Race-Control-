@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 async function setupReceiver({existingUid=null,packetUid='1',packetFormat=2026}={}){
- let enabled=false,failControl=false,tick,time=100000,uploads=0,frame=1;
+ let enabled=false,failControl=false,tick,time=100000,uploads=0,frame=1,deletes=0;
  const handlers={},health=[],errors=[];let closed=false;
  const socket={on(k,f){handlers[k]=f},bind(p,a,f){f()},close(){closed=true}};
  class FakeDate extends Date{static now(){return time}}
@@ -15,15 +15,15 @@ async function setupReceiver({existingUid=null,packetUid='1',packetFormat=2026}=
   else if(path==='/rest/v1/f7r_sessions')data=[{publisher_id:'publisher',status:'live',game_format:2026}];
   else if(path==='/rest/v1/f7r_receiver_controls'){if(failControl)throw Error('Network unavailable');data=[{enabled}]}
   else if(path==='/rest/v1/f7r_receiver_status')health.push(JSON.parse(options.body));
-  else if(path==='/rest/v1/f7r_snapshots'){if(options.method==='POST')uploads++;else data=existingUid?[{game_uid:existingUid,frame:0}]:[]}
+  else if(path==='/rest/v1/f7r_snapshots'){if(options.method==='POST')uploads++;else if(options.method==='DELETE'){deletes++;existingUid=null;}else data=existingUid?[{game_uid:existingUid,frame:0}]:[]}
   return {ok:true,text:async()=>JSON.stringify(data)};
  };
- class Decoder{constructor(){this.uid=null;this.format=2026}accept(){return true}snapshot(){return {frame:frame++,data:{drivers:[{ers_joules:10}]}}}}
+ class Decoder{constructor(){this.uid=null;this.format=2026}accept(){this.uid=packetUid;return true}snapshot(){return {game_uid:this.uid,frame:frame++,data:{drivers:[{ers_joules:10}]}}}}
  let code=await readFile(new URL('../receiver/start.mjs',import.meta.url),'utf8');
  code=code.replace(/^import[^\n]*\n/gm,'').replace("new URL('../config.json',import.meta.url)","'config'");
  const ctx={process,Date:FakeDate,Decoder,header:()=>({format:packetFormat,uid:packetUid}),dgram:{createSocket:()=>socket},readFile:async()=>JSON.stringify({supabase_url:'https://example.supabase.co',supabase_publishable_key:'sb_publishable_test'}),fetch:request,AbortSignal,setInterval:f=>{tick=f;return 1},clearInterval(){},networkInterfaces:()=>({}),console:{log(){},error(...args){errors.push(args.join(' '))}}};
  vm.createContext(ctx);await vm.runInContext('(async()=>{'+code+'})()',ctx);
- return {handlers,health,errors,process,get closed(){return closed},get uploads(){return uploads},tick:()=>tick(),advance(){time+=2100},enable(value){enabled=value},fail(){failControl=true}};
+ return {handlers,health,errors,process,get closed(){return closed},get uploads(){return uploads},get deletes(){return deletes},tick:()=>tick(),advance(){time+=2100},enable(value){enabled=value},fail(){failControl=true},changeGame(uid){packetUid=uid;frame=1}};
 }
 test('receiver waits for admin start, publishes, and fails closed on lost control',async()=>{
  const r=await setupReceiver();
@@ -35,10 +35,15 @@ test('receiver waits for admin start, publishes, and fails closed on lost contro
  r.enable(true);r.fail();r.advance();await r.tick();assert.equal(r.uploads,1);
 });
 
-test('a different stored game session reports a clear error instead of waiting forever',async()=>{
+test('new game replaces only the assigned old snapshot and resumes publishing',async()=>{
+ const r=await setupReceiver({existingUid:'old-session',packetUid:'new-session'});r.enable(true);
+ r.handlers.message(Buffer.alloc(1),{address:'127.0.0.1'});await r.tick();
+ assert.equal(r.closed,false);assert.equal(r.deletes,1);assert.equal(r.uploads,1);
+});
+test('paused feed does not replace its snapshot for a new game',async()=>{
  const r=await setupReceiver({existingUid:'old-session',packetUid:'new-session'});
- r.handlers.message(Buffer.alloc(1),{address:'127.0.0.1'});
- assert.equal(r.closed,true);assert.equal(r.process.exitCode,1);assert.match(r.errors.join(' '),/New game session detected/);await r.tick();assert.equal(r.uploads,0);
+ r.handlers.message(Buffer.alloc(1),{address:'127.0.0.1'});await r.tick();
+ assert.equal(r.deletes,0);assert.equal(r.uploads,0);
 });
 test('a matching stored session continues receiving forwarded packets',async()=>{
  const r=await setupReceiver({existingUid:'1'});
@@ -47,4 +52,12 @@ test('a matching stored session continues receiving forwarded packets',async()=>
 test('a mismatched game format reports a clear error',async()=>{
  const r=await setupReceiver({packetFormat:2025});
  r.handlers.message(Buffer.alloc(1),{address:'127.0.0.1'});assert.equal(r.closed,true);assert.match(r.errors.join(' '),/UDP format/);
+});
+
+test('qualifying to race transition resumes with a reset frame without restarting receiver',async()=>{
+ const r=await setupReceiver();r.enable(true);
+ r.handlers.message(Buffer.alloc(1),{address:'127.0.0.1'});await r.tick();assert.equal(r.uploads,1);
+ r.changeGame('race-session');r.advance();
+ r.handlers.message(Buffer.alloc(1),{address:'127.0.0.1'});await r.tick();
+ assert.equal(r.closed,false);assert.equal(r.deletes,1);assert.equal(r.uploads,2);
 });

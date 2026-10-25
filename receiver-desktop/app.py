@@ -187,7 +187,9 @@ class ReceiverApp:
             self.last_error = message or "Receiver error. Check your connection."
             self.status.set(self.last_error)
         elif kind == "log":
-            if message.startswith("Publishing frame"):
+            if message.startswith("New game session detected"):
+                self.status.set("New game session detected · reconnecting the shared feed automatically…")
+            elif message.startswith("Publishing frame"):
                 self.status.set("LIVE · " + message.split("·")[-1].strip() + "\nPublishing to the F7R dashboard.")
             elif message.startswith("Game feed found"):
                 self.status.set(message + "\nUse Start live telemetry in the admin dashboard.")
