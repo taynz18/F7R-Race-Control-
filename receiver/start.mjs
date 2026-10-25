@@ -56,7 +56,7 @@ const timer=setInterval(async()=>{
     const state=!enabled?'paused':Date.now()-lastPacket>2500?(lastPacket?'stale':'waiting'):lastUpload&&Date.now()-lastUpload<2500?'publishing':'waiting';
     if(Date.now()-healthAt>5000||healthState!==state){
       await request('/rest/v1/f7r_receiver_status?on_conflict=session_id',{session_id:sessionId,state,last_seen:new Date().toISOString(),driver_count:snap?.data?.drivers.length||0},'POST',auth.access_token,'resolution=merge-duplicates,return=minimal');
-      healthAt=Date.now();healthState=state;
+      healthAt=Date.now();if(healthState!==state)console.log('Receiver state: '+state);healthState=state;
     }
     if(!enabled||Date.now()-lastPacket>2500||!snap||snap.frame<=lastFrame)return;
     snap.data.drivers.forEach(d=>{d.ers_percent=capacity&&d.ers_joules!==null?Math.max(0,Math.min(100,d.ers_joules/capacity*100)):null});

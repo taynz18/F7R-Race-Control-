@@ -1,0 +1,63 @@
+name: Build F7R Windows Receiver
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'receiver/**'
+      - 'receiver-desktop/**'
+      - 'config.json'
+      - '.github/workflows/receiver-desktop.yml'
+permissions:
+  contents: write
+concurrency:
+  group: f7r-receiver-windows
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Test receiver and dashboard
+        run: node --test tests/*.test.mjs
+      - name: Install Windows packager
+        run: python -m pip install pyinstaller==6.22.3
+      - name: Bundle Node runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force runtime | Out-Null
+          $nodePath = (Get-Command node).Source
+          Copy-Item -LiteralPath $nodePath -Destination runtime/node.exe
+          $licensePath = Join-Path (Split-Path $nodePath) 'LICENSE'
+          if (Test-Path $licensePath) {
+            Copy-Item -LiteralPath $licensePath -Destination runtime/NODE-LICENSE.txt
+          } else {
+            Invoke-WebRequest https://raw.githubusercontent.com/nodejs/node/v24.22.1/LICENSE -OutFile runtime/NODE-LICENSE.txt
+          }
+      - name: Package receiver window
+        run: python -m PyInstaller --noconfirm --onedir --windowed --icon assets/f7r-app.ico --add-data "config.json;." --add-data "receiver;receiver" --add-data "runtime;runtime" --add-data "assets/f7r-app.ico;assets" --name "F7R Receiver" receiver-desktop/app.py
+      - name: Check packaged receiver
+        shell: pwsh
+        run: |
+          $result = Start-Process -FilePath 'dist/F7R Receiver/F7R Receiver.exe' -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw 'Receiver self-test failed' }
+          Copy-Item receiver-desktop/READ-ME.txt 'dist/F7R Receiver/READ-ME.txt'
+          Compress-Archive -Path 'dist/F7R Receiver' -DestinationPath dist/F7R-Receiver-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: F7R-Receiver-Windows
+          path: dist/F7R-Receiver-Windows.zip
+      - name: Publish receiver download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECEIVER_TAG: f7r-receiver-0.1.${{ github.run_number }}
+        shell: pwsh
+        run: |
+          gh release create "$env:RECEIVER_TAG" dist/F7R-Receiver-Windows.zip --target "$env:GITHUB_SHA" --title "F7R Receiver for Windows" --notes "Sign-in window, assigned live races, automatic game detection and bundled runtime. Extract the complete ZIP and run F7R Receiver.exe. Real game compatibility still requires a live test." --latest=false

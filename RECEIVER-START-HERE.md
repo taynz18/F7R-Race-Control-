@@ -1,3 +1,7 @@
+# F7R Windows receiver
+
+For the sign-in window and automatic game detection, download **F7R-Receiver-Windows.zip** from the [F7R Receiver releases](https://github.com/taynz18/F7R-Race-Control-/releases?q=f7r-receiver). Extract the entire ZIP and open **F7R Receiver.exe**. No Node.js installation is needed. Sign in, choose your assigned live race, and click Connect receiver. Then use Start live telemetry in the admin dashboard.
+
 # Start the F7R live receiver on Windows
 
 1. Download this repository using Code > Download ZIP, then extract it.

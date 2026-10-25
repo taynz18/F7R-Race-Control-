@@ -1,0 +1,21 @@
+F7R RECEIVER FOR WINDOWS
+
+1. Extract the entire ZIP into a folder on your laptop.
+2. Open F7R Receiver.exe. Keep the _internal folder beside it.
+3. Sign in with your F7R receiver email and dashboard password.
+4. Choose your assigned live race and click Connect receiver.
+5. Open the dashboard as an approved admin and switch on Start live telemetry.
+
+Game: UDP Telemetry On, Broadcast On, port 20777, format 2026.
+Your game and laptop must be on the same local network.
+Close Racing League Tools first, because it normally uses the same port.
+Leave Game IP blank for automatic detection. Enter a specific device IP if multiple F1 games run on the network.
+If broadcasting does not work, set the game's destination IP to the receiver laptop and turn Broadcast Off.
+If Windows Firewall asks, allow the receiver on your trusted private network.
+
+No Node.js or Python installation is needed. Passwords are not saved.
+Keep this app open for the race. Disconnect / sign out stops this laptop's receiver.
+Dashboard Stop live telemetry pauses uploads without closing the app.
+A new in-game session still needs a new assigned F7R live race and reconnecting.
+
+Dashboard: https://taynz18.github.io/F7R-Race-Control-/
