@@ -7,7 +7,7 @@
 5. In F1 enable UDP Telemetry, Broadcast Mode, format 2026, port 20777, Public telemetry and player names.
 6. Double-click START-F7R-RECEIVER.cmd in the extracted folder.
 7. Press Enter for the initial F7R Live Race and automatic game-device detection.
-8. Sign in with the assigned receiver account. Passwords are not saved to files.
+8. Press Enter for the default receiver email, then type your F7R account password in the terminal and press Enter. Password characters stay hidden and are not saved to files.
 9. Allow the receiver on your private home network if Windows Firewall asks, then enter a game session.
 
 The window should say "Game feed found" then "Publishing frame" with a driver count. Leave it open while racing. All viewers can open https://taynz18.github.io/F7R-Race-Control-/ and continue as guest.
@@ -22,3 +22,6 @@ A new game session (including qualifying to race) currently requires a new F7R r
 
 ## Dashboard Start / Stop controls
 After launching the receiver and signing in, it waits in paused mode. Open the dashboard, sign in as an approved flag admin, select the live race and click Start live telemetry. Stop live telemetry pauses uploads; leave the receiver window open to start again. Closing the window shows Receiver offline after 20 seconds. Control changes are polled every two seconds; the database also blocks uploads while stopped. Download a fresh ZIP for this receiver version.
+
+## Windows script policy
+The main launcher uses Node.js directly, so it does not require PowerShell scripts or a change to Windows execution policy. Download and extract the latest ZIP if you previously saw a launch.ps1 scripts-disabled error. There is no separate Windows sign-in box in this version; enter the password at the hidden terminal prompt.
