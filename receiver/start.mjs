@@ -33,7 +33,11 @@ socket.on('message',(b,rinfo)=>{
   if(source!=='auto'&&rinfo.address!==source)return;
   if(lockedSource&&rinfo.address!==lockedSource)return;
   if(!lockedSource){
-    try{const h=header(b);if(!h||h.format!==race.game_format||decoder.uid&&h.uid!==decoder.uid)return;}catch{return}
+    try{
+      const h=header(b);if(!h)return;
+      if(h.format!==race.game_format)throw Error('Game UDP format does not match the selected F7R race. Check F1 telemetry format and choose the correct race.');
+      if(decoder.uid&&h.uid!==decoder.uid)throw Error('New game session detected. The selected F7R race contains an earlier game session. Select a fresh live race in the receiver and dashboard, then reconnect.');
+    }catch(e){console.error(e.message);stop();process.exitCode=1;return}
     lockedSource=rinfo.address;console.log('Game feed found at '+lockedSource+'. Locked to this device until restart.');
   }
   try{if(decoder.accept(b)){lastPacket=Date.now();if(decoder.format!==race.game_format)throw Error('Wrong UDP format for this F7R race');}}

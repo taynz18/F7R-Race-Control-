@@ -27,3 +27,8 @@ If F7R runs on another PC, use that PC's local IPv4 address as RLT's forwarding 
 Leave F7R Source IP blank for automatic detection (forwarded packets originate from RLT).
 Keep the game's UDP destination/settings feeding RLT on 20777. Connect F7R and enable dashboard telemetry. No router port forwarding is required.
 To change connection mode or port, disconnect and sign in again.
+
+IF THE DASHBOARD SHOWS AN OLD RACE
+Each F7R race is linked to one in-game session. Changing lobby or moving from qualifying to race can change that session.
+A fresh game session needs a fresh assigned F7R race entry. Select that same entry in the receiver and dashboard, then reconnect.
+The receiver now reports a new-session mismatch explicitly instead of silently showing Waiting.
