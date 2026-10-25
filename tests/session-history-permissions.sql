@@ -1,0 +1,63 @@
+begin;
+do $test$
+declare r uuid:=gen_random_uuid(); source uuid; publisher uuid; regular uuid:=gen_random_uuid(); n integer;
+begin
+ select id,publisher_id into source,publisher from public.f7r_sessions where status='live' limit 1;
+ insert into public.f7r_recordings(id,source_id,game_uid,title,started_at,last_seen,final_data)
+ values(r,source,'test-'||r::text,'History permission test',now(),now(),'{"drivers":[],"format":2026}');
+ insert into public.f7r_recording_samples values(r,1,now(),'{"drivers":[],"format":2026}');
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',regular,'role','authenticated','is_anonymous',false)::text,true);
+ execute 'set local role authenticated';
+ select count(*) into n from public.f7r_recordings where id=r;if n<>0 then raise exception 'Driver could read draft';end if;
+ select count(*) into n from public.f7r_recording_samples where recording_id=r;if n<>0 then raise exception 'Driver could read draft samples';end if;
+ begin perform public.f7r_finish_recording(r,'Unauthorized save',false);raise exception 'Driver was allowed to save';exception when insufficient_privilege then null;end;
+ begin update public.f7r_recordings set final_data='{}' where id=r;raise exception 'Captured data was editable';exception when insufficient_privilege then null;end;
+ execute 'reset role';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',publisher,'role','authenticated','is_anonymous',false)::text,true);
+ execute 'set local role authenticated';
+ perform public.f7r_finish_recording(r,'Saved test session',false);
+ execute 'reset role';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',regular,'role','authenticated','is_anonymous',false)::text,true);
+ execute 'set local role authenticated';
+ select count(*) into n from public.f7r_recordings where id=r and state='saved';if n<>1 then raise exception 'Driver cannot read saved session';end if;
+ select count(*) into n from public.f7r_recording_samples where recording_id=r;if n<>1 then raise exception 'Driver cannot read saved samples';end if;
+ execute 'reset role';
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',regular,'role','authenticated','is_anonymous',true)::text,true);
+ execute 'set local role authenticated';
+ select count(*) into n from public.f7r_recordings where id=r;if n<>0 then raise exception 'Anonymous account could read archive';end if;
+ execute 'reset role';
+ execute 'set local role anon';
+ begin perform count(*) from public.f7r_recordings;raise exception 'Guest was allowed archive access';exception when insufficient_privilege then null;end;
+ execute 'reset role';
+end $test$;
+rollback;
+begin;
+do $test$
+declare source uuid:=gen_random_uuid(); publisher uuid; rid uuid; n integer;
+begin
+ select publisher_id into publisher from public.f7r_sessions where status='live' limit 1;
+ insert into public.f7r_sessions(id,title,publisher_id) values(source,'Rollback-only recorder integration test',publisher);
+ insert into public.f7r_receiver_controls(session_id,enabled) values(source,true);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',publisher,'role','authenticated','is_anonymous',false)::text,true);
+ execute 'set local role authenticated';
+ insert into public.f7r_snapshots(session_id,game_uid,frame,data) values(source,'1',1,'{"format":2026,"drivers":[{"slot":0,"lap":1,"result_status":2,"telemetry_public":false,"wear":null,"fuel_kg":null}]}');
+ select id into rid from public.f7r_recordings where source_id=source and game_uid='1';
+ if rid is null then raise exception 'First snapshot was not archived';end if;
+ perform pg_sleep(.45);
+ update public.f7r_snapshots set frame=2 where session_id=source;
+ select sample_count into n from public.f7r_recordings where id=rid;if n<>1 then raise exception 'Sampling was not throttled';end if;
+ perform pg_sleep(.45);
+ update public.f7r_snapshots set frame=3,data=jsonb_set(data,'{drivers,0,lap}','2') where session_id=source;
+ select sample_count into n from public.f7r_recordings where id=rid;if n<>2 then raise exception 'Lap transition was not recorded';end if;
+ perform public.f7r_finish_recording(rid,'Saved incomplete race',false);
+ perform pg_sleep(.45);
+ update public.f7r_snapshots set frame=4,data=jsonb_set(data,'{drivers,0,lap}','3') where session_id=source;
+ select sample_count into n from public.f7r_recordings where id=rid;if n<>2 then raise exception 'Saved recording was not frozen';end if;
+ delete from public.f7r_snapshots where session_id=source;
+ insert into public.f7r_snapshots(session_id,game_uid,frame,data) values(source,'2',1,'{"format":2026,"drivers":[]}');
+ select count(*) into n from public.f7r_recordings where source_id=source;if n<>2 then raise exception 'New UID overwrote earlier race';end if;
+ perform public.f7r_finish_recording((select id from public.f7r_recordings where source_id=source and game_uid='2'),'Discard',true);
+ select count(*) into n from public.f7r_recordings where source_id=source and state='discarded';if n<>1 then raise exception 'Discard did not stop recording';end if;
+ execute 'reset role';
+end $test$;
+rollback;

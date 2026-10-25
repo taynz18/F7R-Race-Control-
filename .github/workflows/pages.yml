@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'history.html'
       - 'dashboard/**'
       - 'tests/*.test.mjs'
       - 'package.json'
@@ -46,7 +47,7 @@ jobs:
           cp -R assets/teams public/assets/teams
           cp -R assets/tyres public/assets/tyres
           cp -R assets/circuits public/assets/circuits
-          cp index.html admin.html admin.css admin.js config.json public/
+          cp index.html history.html admin.html admin.css admin.js config.json public/
           cp assets/f7r-logo.png assets/f7r-app.ico public/assets/
       - uses: actions/upload-pages-artifact@v3
         with:
