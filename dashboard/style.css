@@ -45,3 +45,5 @@ header{border-bottom-color:#37425c66}.heading h1{background:linear-gradient(105d
 
 #race-surface.safety-active.local-yellow{background:radial-gradient(ellipse at 35% 0%,#ffd34d16,transparent 50%)}
 #race-surface.local-yellow .safety-banner{background:linear-gradient(110deg,#ffd54b,#bc902e 65%,#40371b);box-shadow:0 8px 30px #e6b52912}
+
+aside .control-room-link{display:block;width:100%;margin:12px 0;padding:12px;text-align:left;text-decoration:none;font:inherit;color:#eee;border:1px solid #65402c;border-radius:6px;background:linear-gradient(120deg,#38221e,#1b202b)}aside .control-room-link:hover,aside .control-room-link:focus-visible{border-color:#ffbf55;color:#ffda91}
