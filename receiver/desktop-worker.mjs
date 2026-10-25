@@ -24,6 +24,9 @@ try{
  emit('races',{races});
  const choice=await next();
  if(!races.some(r=>r.id===choice.sessionId))throw Error('Choose one of your assigned live races.');
+ const udpPort=choice.udpPort??20777;
+ if(!Number.isInteger(udpPort)||udpPort<1||udpPort>65535)throw Error('Choose a UDP port between 1 and 65535.');
+ process.env.F7R_UDP_PORT=String(udpPort);
  const gameIp=typeof choice.gameIp==='string'?choice.gameIp.trim():'';
  process.env.F7R_SESSION_ID=choice.sessionId;process.env.F7R_GAME_IP=gameIp||'auto';
  process.env.F7R_RECEIVER_EMAIL=credentials.email;process.env.F7R_RECEIVER_PASSWORD=credentials.password;

@@ -29,3 +29,6 @@ After launching the receiver and signing in, it waits in paused mode. Open the d
 
 ## Windows script policy
 The main launcher uses Node.js directly, so it does not require PowerShell scripts or a change to Windows execution policy. Download and extract the latest ZIP if you previously saw a launch.ps1 scripts-disabled error. There is no separate Windows sign-in box in this version; enter the password at the hidden terminal prompt.
+
+## Run alongside RLT
+Choose **Via RLT forwarding** in F7R (listening port **21777**). Keep RLT listening on **20777**, then add RLT UDP forwarding target **127.0.0.1:21777** if both apps use the same laptop. For a second PC, target the F7R PC's local IP instead. Leave F7R Source IP blank. Keep F1 feeding RLT as before. Connect the receiver and enable telemetry in the dashboard. No router port forwarding is needed.

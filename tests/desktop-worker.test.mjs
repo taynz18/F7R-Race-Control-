@@ -2,10 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-async function worker({approved=true,selected='race-1'}={}){
+async function worker({approved=true,selected='race-1',udpPort=20777}={}){
  const messages=[],env={};let started=false;
  const output={write(line){messages.push(JSON.parse(line))}};
- const input={async *[Symbol.asyncIterator](){yield JSON.stringify({email:'receiver@example.test',password:'secret-test'});yield JSON.stringify({sessionId:selected,gameIp:''})},close(){}};
+ const input={async *[Symbol.asyncIterator](){yield JSON.stringify({email:'receiver@example.test',password:'secret-test'});yield JSON.stringify({sessionId:selected,gameIp:'',udpPort})},close(){}};
  const config={supabase_url:'https://example.supabase.co',supabase_publishable_key:'sb_publishable_test'};
  let code=(await readFile(new URL('../receiver/desktop-worker.mjs',import.meta.url),'utf8')).replace(/^import[^\n]*\n/gm,'').replace("new URL('../config.json',import.meta.url)","'config'").replace("await import('./start.mjs')","await startReceiver()");
  const context={process:{stdout:output,stderr:{},stdin:{pause(){}},env},createInterface:()=>input,readFile:async()=>JSON.stringify(config),AbortSignal,
@@ -24,4 +24,11 @@ test('desktop blocks unapproved publishers before starting receiver',async()=>{
 });
 test('desktop cannot select a race outside the returned assignments',async()=>{
  const r=await worker({selected:'unassigned'});assert.equal(r.started,false);assert.equal(r.messages.at(-1).type,'fatal');
+});
+
+test('desktop passes RLT forwarding port to the receiver',async()=>{
+ const r=await worker({udpPort:21777});assert.equal(r.started,true);assert.equal(r.env.F7R_UDP_PORT,'21777');assert.equal(r.env.F7R_GAME_IP,'auto');
+});
+test('invalid forwarding ports cannot start the receiver',async()=>{
+ for(const udpPort of [0,65536,12.5,'21777']){const r=await worker({udpPort});assert.equal(r.started,false);assert.equal(r.messages.at(-1).type,'fatal');}
 });

@@ -19,3 +19,11 @@ Dashboard Stop live telemetry pauses uploads without closing the app.
 A new in-game session still needs a new assigned F7R live race and reconnecting.
 
 Dashboard: https://taynz18.github.io/F7R-Race-Control-/
+
+USE F7R AND RACING LEAGUE TOOLS TOGETHER
+In F7R choose Telemetry connection: Via RLT forwarding. Its listening port becomes 21777.
+In RLT keep the main UDP port at 20777. Add a UDP forwarding target with address 127.0.0.1 and port 21777 if both apps run on the same laptop.
+If F7R runs on another PC, use that PC's local IPv4 address as RLT's forwarding target instead.
+Leave F7R Source IP blank for automatic detection (forwarded packets originate from RLT).
+Keep the game's UDP destination/settings feeding RLT on 20777. Connect F7R and enable dashboard telemetry. No router port forwarding is required.
+To change connection mode or port, disconnect and sign in again.

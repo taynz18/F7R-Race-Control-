@@ -26,6 +26,7 @@ class ReceiverApp:
         self.root, self.process = root, None
         self.events, self.generation, self.races = queue.Queue(), 0, []
         self.closed = False
+        self.last_error = ""
         root.title("F7R Receiver")
         root.geometry(f"{min(650, root.winfo_screenwidth()-60)}x{min(740, root.winfo_screenheight()-100)}")
         root.minsize(500, 500)
@@ -60,7 +61,17 @@ class ReceiverApp:
         tk.Label(outer, text="Assigned live race", bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
         self.race = ttk.Combobox(outer, state="disabled")
         self.race.pack(fill="x", pady=(6, 12))
-        self.ip = self.field(outer, "Game IP (optional — leave blank for automatic detection)", "")
+        self.ip = self.field(outer, "Source IP (optional — leave blank for automatic detection)", "")
+        tk.Label(outer, text="Telemetry connection", bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
+        self.mode = ttk.Combobox(outer, state="readonly", values=["Direct from F1", "Via RLT forwarding"])
+        self.mode.current(0)
+        self.mode.pack(fill="x", pady=(6, 12))
+        self.mode.bind("<<ComboboxSelected>>", self.change_mode)
+        self.port = self.field(outer, "F7R listening port", "20777")
+        self.port_hint = tk.StringVar()
+        tk.Label(outer, textvariable=self.port_hint, bg=BG, fg=MUTED, justify="left",
+                 wraplength=535, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 12))
+        self.change_mode()
         self.connect = self.button(outer, "Connect receiver", self.start_receiver, "#25374a")
         self.connect.configure(state="disabled")
         self.connect.pack(fill="x", pady=(4, 10))
@@ -68,8 +79,8 @@ class ReceiverApp:
         self.disconnect.configure(state="disabled")
         self.disconnect.pack(fill="x")
         self.button(outer, "Open F7R dashboard", lambda: webbrowser.open(DASHBOARD), "#252b38").pack(fill="x", pady=(10, 14))
-        tk.Label(outer, text="Same Wi-Fi as F1 • UDP 20777 • Broadcast On • Format 2026\n"
-                 "Close Racing League Tools before connecting.\n"
+        tk.Label(outer, text="Same network as the game • F1 UDP format 2026\n"
+                 "With RLT: keep F1 → RLT on 20777; forward RLT → F7R on 21777.\n"
                  "Use Start / Stop live telemetry in the admin dashboard.\n"
                  "Keep this app open while racing. Passwords are never saved.",
                  bg=BG, fg=MUTED, justify="left", wraplength=535, font=("Segoe UI", 9)).pack(anchor="w")
@@ -128,15 +139,33 @@ class ReceiverApp:
         process.wait()
         self.events.put((generation, {"type": "exit", "code": process.returncode}))
 
+    def change_mode(self, _event=None):
+        forwarded = self.mode.current() == 1
+        self.port.delete(0, "end")
+        self.port.insert(0, "21777" if forwarded else "20777")
+        self.port_hint.set("In RLT UDP forwarding: target 127.0.0.1, port 21777 (same laptop).\n"
+                           "On different PCs, use this F7R laptop's local IP as the target.\n"
+                           "Leave Source IP blank; forwarded packets come from RLT."
+                           if forwarded else "F1 Broadcast On, UDP port 20777. Close RLT for direct mode.\n"
+                           "Choose Via RLT forwarding to use both apps together.")
+
     def start_receiver(self):
         index = self.race.current()
         if not self.process or index < 0 or index >= len(self.races): return
+        port_text = self.port.get().strip()
+        if not port_text.isascii() or not port_text.isdecimal() or not 1 <= int(port_text) <= 65535:
+            self.status.set("Enter a listening port between 1 and 65535.")
+            return
+        self.last_error = ""
         try:
-            self.process.stdin.write(json.dumps({"sessionId": self.races[index]["id"], "gameIp": self.ip.get().strip()}) + "\n")
+            self.process.stdin.write(json.dumps({"sessionId": self.races[index]["id"], "gameIp": self.ip.get().strip(), "udpPort": int(port_text)}) + "\n")
             self.process.stdin.flush()
             self.connect.configure(state="disabled")
             self.race.configure(state="disabled")
-            self.status.set("Connecting receiver and detecting game…")
+            self.mode.configure(state="disabled")
+            self.port.configure(state="disabled")
+            self.ip.configure(state="disabled")
+            self.status.set("Connecting receiver on UDP " + port_text + " and detecting game…")
         except (OSError, ValueError):
             self.stop()
             self.status.set("Receiver connection closed. Sign in again.")
@@ -155,7 +184,8 @@ class ReceiverApp:
             self.stop()
             self.status.set(message)
         elif kind == "error":
-            self.status.set(message or "Receiver error. Check your connection.")
+            self.last_error = message or "Receiver error. Check your connection."
+            self.status.set(self.last_error)
         elif kind == "log":
             if message.startswith("Publishing frame"):
                 self.status.set("LIVE · " + message.split("·")[-1].strip() + "\nPublishing to the F7R dashboard.")
@@ -164,12 +194,13 @@ class ReceiverApp:
             elif message.startswith("Receiver state:"):
                 state = message.split(":", 1)[1].strip()
                 self.status.set({"paused": "Receiver connected · telemetry paused.\nClick Start live telemetry in the admin dashboard.",
-                                 "waiting": "Receiver connected · waiting for the game.\nCheck F1 Broadcast On, port 20777 and format 2026.",
+                                 "waiting": "Receiver connected · waiting for telemetry on UDP " + self.port.get() + ".\nCheck the game or RLT forwarding target and port.",
                                  "stale": "Game feed interrupted. Last readings may be outdated.",
                                  "publishing": "LIVE · publishing race data."}.get(state, state))
         elif kind == "exit":
+            error = self.last_error
             self.stop()
-            self.status.set("Receiver stopped. Sign in again to reconnect.")
+            self.status.set(error or "Receiver stopped. Sign in again to reconnect.")
 
     def poll(self):
         try:
@@ -198,6 +229,9 @@ class ReceiverApp:
         self.connect.configure(state="disabled")
         self.disconnect.configure(state="disabled")
         self.login.configure(state="normal")
+        self.mode.configure(state="readonly")
+        self.port.configure(state="normal")
+        self.ip.configure(state="normal")
         self.status.set("Disconnected. Sign in to connect your race.")
 
     def close(self):
@@ -220,6 +254,13 @@ def self_test():
     assert app.race.current() == 0
     app.handle({"type": "log", "message": "Receiver state: paused"})
     assert "paused" in app.status.get()
+    app.mode.current(1)
+    app.change_mode()
+    assert app.port.get() == "21777"
+    assert "127.0.0.1" in app.port_hint.get()
+    app.mode.current(0)
+    app.change_mode()
+    assert app.port.get() == "20777"
     app.close()
 
 if __name__ == "__main__":
