@@ -3,7 +3,7 @@ import {renderCar} from './car-view.js?v=0.4.1';
 import {teamFor} from './teams.js?v=0.3.1';
 import {startFlags,stopFlags} from './flag-view.js';
 const $=id=>document.getElementById(id);
-let signingUp=false;
+let signingUp=false,isReceiverAdmin=false,receiverReadBusy=false,receiverWriteBusy=false,receiverEnabled=false;
 let client=null,member=null,races=[],race=null,snapshot=null,channel=null,selected=null,demo=false,generation=0,polling=false,refreshing=false,transport='Not connected';
 const safeNode=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n};
 function setTeamColors(node,team){node.style.setProperty('--team-color',team.color);node.style.setProperty('--team-accent',team.accent);node.style.setProperty('--team-wash',team.color+'20');node.style.setProperty('--team-wash-strong',team.color+'38')}
@@ -41,7 +41,7 @@ $('guest').onclick=async()=>{
  finally{$('guest').disabled=!client}
 };
 function authMessage(text){$('auth-message').textContent=text}
-function resetView(){snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
+function resetView(){$('receiver-panel').hidden=true;snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
 async function detach(){const old=channel;channel=null;if(old&&client)await client.removeChannel(old)}
 function status(){const label=feedState(snapshot,race,Date.now(),demo);$('feed').textContent=label;$('feed').classList.toggle('green',label==='LIVE');$('freshness').textContent=snapshot?'Last snapshot: '+new Date(snapshot.received_at).toLocaleTimeString():'No telemetry received';$('transport').textContent=demo?'Simulation · not a real race':transport;$('notice').textContent=demo?'DESIGN DEMO — fictional names and simulated values.':label.startsWith('STALE')?'Receiver data is stale. Values below are the last known readings.':label==='RACE FINISHED'?'Race finished. Showing the last stored snapshot.':''}
 function render(){
@@ -90,7 +90,7 @@ async function chooseRace(id){
   if(member?.telemetryUnavailable){transport='Telemetry setup required';$('notice').textContent='Flag controls are ready. Run the dashboard setup SQL to enable telemetry.';return}
   if(demo){snapshot={session_id:race.id,received_at:new Date().toISOString(),frame:1,data:{drivers:demoDrivers()}};render();return}
   channel=client.channel('f7r-race-'+id+'-'+g).on('postgres_changes',{event:'*',schema:'public',table:'f7r_snapshots',filter:'session_id=eq.'+id},payload=>apply(payload.new,g)).subscribe(s=>{if(g!==generation)return;transport=s==='SUBSCRIBED'?'Live connection':'Reconnecting · polling fallback';status();if(s==='SUBSCRIBED')readSnapshot(g)});
-  await readSnapshot(g);
+  await readSnapshot(g);await refreshReceiver();
 }
 async function refreshRaces(){
   if(refreshing||demo||!client||!member)return;if(member.telemetryUnavailable){$('race-title').textContent='Telemetry setup required';$('notice').textContent='Your existing flag system is available in Flags. Run dashboard-01-setup.sql for live telemetry.';return}refreshing=true;const g=generation;
@@ -99,7 +99,7 @@ async function refreshRaces(){
   finally{refreshing=false}
 }
 async function signOut(){
-  ++generation;member=null;race=null;demo=false;await stopFlags();$('flags').hidden=true;$('sign-out').textContent='Sign out';await detach();resetView();$('dashboard').hidden=true;$('connection').hidden=true;$('login').hidden=false;
+  ++generation;isReceiverAdmin=false;member=null;race=null;demo=false;await stopFlags();$('flags').hidden=true;$('sign-out').textContent='Sign out';await detach();resetView();$('dashboard').hidden=true;$('connection').hidden=true;$('login').hidden=false;
   if(client){const {error}=await client.auth.signOut({scope:'local'});if(error)authMessage('Signed out of this view; session cleanup failed. Reload before signing in again.');else authMessage('Signed out.')}
 }
 $('login-form').onsubmit=async e=>{
@@ -118,7 +118,7 @@ $('login-form').onsubmit=async e=>{
     // The existing flag_admins table, never dashboard role or user metadata, controls flag access.
     const adminAccess=await client.from('flag_admins').select('user_id').eq('user_id',data.user.id).maybeSingle();
     if(g!==generation)return;
-    const isFlagAdmin=!adminAccess.error&&!!adminAccess.data;
+    const isFlagAdmin=!adminAccess.error&&!!adminAccess.data;isReceiverAdmin=isFlagAdmin;
     const access=await client.from('f7r_members').select('display_name,role,approved').eq('user_id',data.user.id).maybeSingle();
     if(g!==generation)return;
     // Account metadata is used only for display, never to authorize admin/publisher access.
@@ -154,3 +154,34 @@ async function showFlags(){
 }
 $('flags-tab').onclick=showFlags;$('banner-flags').onclick=showFlags;$('flags-logout').onclick=signOut;
 
+
+async function refreshReceiver(){
+ const id=race?.id,g=generation;
+ $('receiver-panel').hidden=!isReceiverAdmin||demo||!id;
+ if(!isReceiverAdmin||demo||!id||receiverReadBusy)return;
+ receiverReadBusy=true;
+ try{
+  const [control,health]=await Promise.all([
+   client.from('f7r_receiver_controls').select('enabled').eq('session_id',id).maybeSingle(),
+   client.from('f7r_receiver_status').select('*').eq('session_id',id).maybeSingle()
+  ]);
+  if(g!==generation||race?.id!==id)return;
+  if(control.error||health.error)throw Error('Could not check receiver connection.');
+  receiverEnabled=control.data?.enabled===true;
+  $('receiver-toggle').textContent=receiverEnabled?'Stop live telemetry':'Start live telemetry';
+  $('receiver-toggle').disabled=receiverWriteBusy||race.status!=='live';
+  const h=health.data,online=h&&Date.now()-Date.parse(h.last_seen)<20000;
+  $('receiver-status').textContent=!online?'Receiver offline · open START-F7R-RECEIVER on your laptop':!receiverEnabled?'Receiver connected · telemetry paused':h.state==='publishing'?'Live · '+h.driver_count+' drivers':h.state==='paused'?'Start requested · waiting for receiver':h.state==='waiting'?'Receiver connected · waiting for game':h.state==='stale'?'Game feed interrupted':'Receiver error · check the laptop window';
+ }catch(e){if(g===generation){$('receiver-status').textContent=e.message;$('receiver-toggle').disabled=true;}}
+ finally{receiverReadBusy=false;}
+}
+$('receiver-toggle').onclick=async()=>{
+ if(!isReceiverAdmin||!race||demo||receiverWriteBusy)return;
+ const id=race.id,g=generation;receiverWriteBusy=true;$('receiver-toggle').disabled=true;
+ try{
+  const {error}=await client.from('f7r_receiver_controls').upsert({session_id:id,enabled:!receiverEnabled},{onConflict:'session_id'});
+  if(error)throw error;
+ }catch{if(g===generation)$('receiver-status').textContent='Control was not saved. Check your admin access and connection.';}
+ finally{receiverWriteBusy=false;if(g===generation)await refreshReceiver();}
+};
+setInterval(refreshReceiver,3000);

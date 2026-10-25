@@ -19,3 +19,6 @@ If broadcast does not reach the laptop, turn Broadcast Off and set the game's UD
 If Racing League Tools must run too, configure its UDP forwarding to this receiver on a different port and set F7R_UDP_PORT accordingly before launching. Do not assume both apps can share 20777.
 
 A new game session (including qualifying to race) currently requires a new F7R race record and receiver restart. Enter the new race UUID in the launcher. The default race ID is only for the initial F7R Live Race. Real game compatibility still needs a live test.
+
+## Dashboard Start / Stop controls
+After launching the receiver and signing in, it waits in paused mode. Open the dashboard, sign in as an approved flag admin, select the live race and click Start live telemetry. Stop live telemetry pauses uploads; leave the receiver window open to start again. Closing the window shows Receiver offline after 20 seconds. Control changes are polled every two seconds; the database also blocks uploads while stopped. Download a fresh ZIP for this receiver version.
