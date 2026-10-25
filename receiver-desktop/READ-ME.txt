@@ -1,3 +1,13 @@
+F7R RECEIVER 0.1.8 — CONNECTION MODES
+
+F1 Broadcast: set F1 UDP On, Broadcast On, and match the game UDP Port to F7R listening port. Same local network.
+
+F1 Direct IP / Port: set F1 UDP On, Broadcast Off, UDP IP Address to the laptop IPv4 shown after receiver sign-in. Set the same port in F1 and F7R (20777 by default, editable).
+
+RLT Forwarding: keep F1 feeding RLT. Add RLT forwarding target IP127.0.0.1 and port matching F7R (21777 by default). Address and port go in SEPARATE boxes. For different laptops use the F7R laptop IPv4 as target.
+
+Leave Source device IP blank in all modes for automatic detection. Disconnect to change mode or port. Direct F1 modes need RLT closed if RLT is using the same port. The website does not listen for UDP; use the port displayed in the receiver app.
+
 F7R CONTINUOUS LIVE FEED (0.1.7+)
 The website automatically follows the active feed. New lobbies and qualifying-to-race transitions are followed automatically by this receiver. No new F7R race entry is needed. Keep one receiver open. The previous live snapshot is replaced, not archived. Earlier instructions below about creating fresh race entries are superseded.
 

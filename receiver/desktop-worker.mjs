@@ -1,3 +1,5 @@
+import {networkInterfaces} from 'node:os';
+import {isIP} from 'node:net';
 import {createInterface} from 'node:readline';
 import {readFile} from 'node:fs/promises';
 const output=process.stdout.write.bind(process.stdout);
@@ -21,13 +23,14 @@ try{
  if(!members[0]?.approved||!['admin','publisher'].includes(members[0].role))throw Error('This account is not an approved telemetry publisher.');
  const races=await api('/rest/v1/f7r_sessions?publisher_id=eq.'+auth.user.id+'&status=eq.live&select=id,title,game_format&order=created_at.desc',null,auth.access_token);
  if(!races.length)throw Error('No live race is assigned to this account. Ask a race admin to assign one.');
- emit('races',{races});
+ emit('races',{races,addresses:Object.values(networkInterfaces()).flat().filter(n=>n?.family==='IPv4'&&!n.internal).map(n=>n.address)});
  const choice=await next();
  if(!races.some(r=>r.id===choice.sessionId))throw Error('Choose one of your assigned live races.');
  const udpPort=choice.udpPort??20777;
  if(!Number.isInteger(udpPort)||udpPort<1||udpPort>65535)throw Error('Choose a UDP port between 1 and 65535.');
  process.env.F7R_UDP_PORT=String(udpPort);
  const gameIp=typeof choice.gameIp==='string'?choice.gameIp.trim():'';
+ if(gameIp&&isIP(gameIp)!==4)throw Error('Source IP must be an IPv4 address without :port, or leave it blank for automatic detection.');
  process.env.F7R_SESSION_ID=choice.sessionId;process.env.F7R_GAME_IP=gameIp||'auto';
  process.env.F7R_RECEIVER_EMAIL=credentials.email;process.env.F7R_RECEIVER_PASSWORD=credentials.password;
  credentials.password='';input.close();process.stdin.pause();

@@ -27,7 +27,7 @@ class ReceiverApp:
         self.events, self.generation, self.races = queue.Queue(), 0, []
         self.closed = False
         self.last_error = ""
-        root.title("F7R Receiver")
+        root.title("F7R Receiver · 0.1.8")
         root.geometry(f"{min(650, root.winfo_screenwidth()-60)}x{min(740, root.winfo_screenheight()-100)}")
         root.minsize(500, 500)
         root.configure(bg=BG)
@@ -61,13 +61,18 @@ class ReceiverApp:
         tk.Label(outer, text="Assigned live race", bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
         self.race = ttk.Combobox(outer, state="disabled")
         self.race.pack(fill="x", pady=(6, 12))
-        self.ip = self.field(outer, "Source IP (optional — leave blank for automatic detection)", "")
+        self.ip = self.field(outer, "Source device IP (optional — normally leave blank)", "")
         tk.Label(outer, text="Telemetry connection", bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
-        self.mode = ttk.Combobox(outer, state="readonly", values=["Direct from F1", "Via RLT forwarding"])
+        self.mode = ttk.Combobox(outer, state="readonly", values=["F1 Broadcast", "F1 Direct IP / Port", "RLT Forwarding"])
         self.mode.current(0)
         self.mode.pack(fill="x", pady=(6, 12))
         self.mode.bind("<<ComboboxSelected>>", self.change_mode)
         self.port = self.field(outer, "F7R listening port", "20777")
+        self.port.bind("<KeyRelease>", self.update_connection_hint)
+        self.local_addresses = []
+        self.address_hint = tk.StringVar(value="This laptop’s IP addresses appear after sign-in.")
+        tk.Label(outer, textvariable=self.address_hint, bg=BG, fg="#8bd7e0", justify="left",
+                 wraplength=535, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 10))
         self.port_hint = tk.StringVar()
         tk.Label(outer, textvariable=self.port_hint, bg=BG, fg=MUTED, justify="left",
                  wraplength=535, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 12))
@@ -80,7 +85,7 @@ class ReceiverApp:
         self.disconnect.pack(fill="x")
         self.button(outer, "Open F7R dashboard", lambda: webbrowser.open(DASHBOARD), "#252b38").pack(fill="x", pady=(10, 14))
         tk.Label(outer, text="Same network as the game • F1 UDP format 2026\n"
-                 "With RLT: keep F1 → RLT on 20777; forward RLT → F7R on 21777.\n"
+                 "Choose a connection mode and follow its settings above.\n"
                  "Use Start / Stop live telemetry in the admin dashboard.\n"
                  "Keep this app open while racing. Passwords are never saved.",
                  bg=BG, fg=MUTED, justify="left", wraplength=535, font=("Segoe UI", 9)).pack(anchor="w")
@@ -140,14 +145,26 @@ class ReceiverApp:
         self.events.put((generation, {"type": "exit", "code": process.returncode}))
 
     def change_mode(self, _event=None):
-        forwarded = self.mode.current() == 1
         self.port.delete(0, "end")
-        self.port.insert(0, "21777" if forwarded else "20777")
-        self.port_hint.set("In RLT UDP forwarding: target 127.0.0.1, port 21777 (same laptop).\n"
-                           "On different PCs, use this F7R laptop's local IP as the target.\n"
-                           "Leave Source IP blank; forwarded packets come from RLT."
-                           if forwarded else "F1 Broadcast On, UDP port 20777. Close RLT for direct mode.\n"
-                           "Choose Via RLT forwarding to use both apps together.")
+        self.port.insert(0, "21777" if self.mode.current() == 2 else "20777")
+        self.update_connection_hint()
+
+    def update_connection_hint(self, _event=None):
+        port = self.port.get().strip() or "YOUR PORT"
+        mode = self.mode.current()
+        if mode == 0:
+            message = ("F1: UDP Telemetry On · Broadcast On · UDP Port " + port +
+                       " · Format 2026.\nKeep F1 and this laptop on the same local network. Source device IP can stay blank.")
+        elif mode == 1:
+            target = ", ".join(self.local_addresses) or "the laptop IP shown above"
+            message = ("F1: UDP Telemetry On · Broadcast Off · UDP Port " + port +
+                       " · Format 2026.\nSet F1 UDP IP Address to this laptop: " + target +
+                       ".\nThe game port and F7R listening port must match. Keep Source device IP blank.")
+        else:
+            message = ("RLT: keep its main input port at 20777. Forward to IP 127.0.0.1 and port " +
+                       port + " on the same laptop.\nEnter the IP and port in separate RLT boxes. "
+                       "For different PCs, forward to this laptop’s IP. Keep Source device IP blank.")
+        self.port_hint.set(message)
 
     def start_receiver(self):
         index = self.race.current()
@@ -155,6 +172,9 @@ class ReceiverApp:
         port_text = self.port.get().strip()
         if not port_text.isascii() or not port_text.isdecimal() or not 1 <= int(port_text) <= 65535:
             self.status.set("Enter a listening port between 1 and 65535.")
+            return
+        if ":" in self.ip.get():
+            self.status.set("Source IP accepts an IP address only, without :port. Usually leave it blank.")
             return
         self.last_error = ""
         try:
@@ -174,6 +194,9 @@ class ReceiverApp:
         kind, message = event.get("type"), event.get("message", "")
         if kind == "races":
             self.races = event["races"]
+            self.local_addresses = event.get("addresses", [])
+            self.address_hint.set("This laptop’s IPv4: " + (", ".join(self.local_addresses) or "No local IPv4 found"))
+            self.update_connection_hint()
             self.race.configure(values=[r["title"] + " · " + str(r["game_format"]) for r in self.races], state="readonly")
             self.race.current(0)
             self.connect.configure(state="normal")
@@ -196,7 +219,7 @@ class ReceiverApp:
             elif message.startswith("Receiver state:"):
                 state = message.split(":", 1)[1].strip()
                 self.status.set({"paused": "Receiver connected · telemetry paused.\nClick Start live telemetry in the admin dashboard.",
-                                 "waiting": "Receiver connected · waiting for telemetry on UDP " + self.port.get() + ".\nCheck the game or RLT forwarding target and port.",
+                                 "waiting": "Receiver connected · waiting for telemetry on UDP " + self.port.get() + ".\nCheck the selected mode’s game settings below.",
                                  "stale": "Game feed interrupted. Last readings may be outdated.",
                                  "publishing": "LIVE · publishing race data."}.get(state, state))
         elif kind == "exit":
@@ -256,13 +279,20 @@ def self_test():
     assert app.race.current() == 0
     app.handle({"type": "log", "message": "Receiver state: paused"})
     assert "paused" in app.status.get()
-    app.mode.current(1)
+    app.mode.current(2)
     app.change_mode()
     assert app.port.get() == "21777"
     assert "127.0.0.1" in app.port_hint.get()
     app.mode.current(0)
     app.change_mode()
     assert app.port.get() == "20777"
+    app.mode.current(1)
+    app.change_mode()
+    assert "Broadcast Off" in app.port_hint.get()
+    app.port.delete(0, "end")
+    app.port.insert(0, "20778")
+    app.update_connection_hint()
+    assert "20778" in app.port_hint.get()
     app.close()
 
 if __name__ == "__main__":
