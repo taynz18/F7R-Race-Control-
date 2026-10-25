@@ -35,3 +35,10 @@ header{border-bottom-color:#37425c66}.heading h1{background:linear-gradient(105d
 .login-card{background:linear-gradient(145deg,#271c2b,#171e2c 55%,#122932);border-color:#4a435766;box-shadow:0 20px 70px #0005}
 .badge.green{background:#133b2b;border:1px solid #3bba7744;box-shadow:0 0 20px #20db7315}
 @media(max-width:700px){.session-stats{gap:8px}.session-stats article{padding:14px 10px}.session-stats strong{font-size:23px}.session-stats span{font-size:8px;letter-spacing:1px}.auto-feed-label{display:none}.automatic-session h2{font-size:18px}}
+
+/* Live game safety periods: persistent yellow wash, no flashing. */
+#race-surface{transition:background-color .3s ease}
+#race-surface.safety-active{background:radial-gradient(ellipse at 35% 0%,#ffd34d30,transparent 65%),linear-gradient(135deg,#b77e141c,transparent 70%)}
+.safety-banner{display:flex;align-items:center;gap:22px;padding:22px 28px;margin:0 0 24px;border:1px solid #ffd34d99;border-left:5px solid #ffe16b;border-radius:12px;background:linear-gradient(110deg,#ffd54b,#b9821c 75%,#624817);color:#171303;box-shadow:0 12px 45px #e6b52920}
+.safety-banner[hidden]{display:none}.safety-banner>strong{font-size:clamp(2rem,5vw,3.3rem);font-weight:900;letter-spacing:-.04em;line-height:1}.safety-banner div{display:grid;gap:5px}.safety-banner b{font-size:clamp(1rem,2.5vw,1.4rem);letter-spacing:.09em}.safety-banner span{font-size:.7rem;font-weight:700;letter-spacing:.12em}
+@media(prefers-reduced-motion:reduce){#race-surface{transition:none}}

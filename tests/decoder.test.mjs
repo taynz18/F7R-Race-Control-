@@ -67,3 +67,5 @@ test('restricted driver tyre age is not exposed',()=>{
  const dec=feed(2026,false,false),status=packet(7);status[29+27]=16;
  dec.accept(status,1000);assert.equal(dec.snapshot(1001).data.drivers[0].tyre_age,null);
 });
+
+for(const format of [2025,2026])test('live safety periods decode and clear '+format,()=>{const dec=feed(format);assert.equal(dec.snapshot(1001).data.safety_car_status,null);for(const state of [2,1,0,3,255]){const s=packet(1,format,200+state);s[154]=state;dec.parts.delete(1);dec.accept(s,1001);assert.equal(dec.snapshot(1002).data.safety_car_status,state<=3?state:null)}assert.equal(dec.snapshot(17000),null)});

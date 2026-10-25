@@ -1,4 +1,4 @@
-F7R RECEIVER 0.1.8 — CONNECTION MODES
+F7R RECEIVER 0.1.9 — CONNECTION MODES
 
 F1 Broadcast: set F1 UDP On, Broadcast On, and match the game UDP Port to F7R listening port. Same local network.
 
@@ -45,3 +45,5 @@ IF THE DASHBOARD SHOWS AN OLD RACE
 Each F7R race is linked to one in-game session. Changing lobby or moving from qualifying to race can change that session.
 A fresh game session needs a fresh assigned F7R race entry. Select that same entry in the receiver and dashboard, then reconnect.
 The receiver now reports a new-session mismatch explicitly instead of silently showing Waiting.
+
+Includes automatic VSC and Safety Car game signals for the live dashboard.

@@ -24,3 +24,9 @@ export function damageAlert(driver){
  return worst>0?{level:worst>=30?'major':'minor',percent:worst}:null;
 }
 export function penaltyLabel(seconds){return Number.isSafeInteger(seconds)&&seconds>0?'+'+seconds:''}
+
+export function safetyPeriod(snapshot,race,now=Date.now(),demo=false){
+ const state=feedState(snapshot,race,now,demo);
+ if(state!=='LIVE'&&state!=='DEMO DATA')return null;
+ return ({1:{code:'SC',label:'SAFETY CAR'},2:{code:'VSC',label:'VIRTUAL SAFETY CAR'}})[snapshot?.data?.safety_car_status]||null;
+}

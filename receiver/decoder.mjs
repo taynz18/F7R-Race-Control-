@@ -67,6 +67,8 @@ export class Decoder{
     return {game_uid:this.uid,frame:this.frame,data:{format:this.format,drivers,
       track_length:trackLength,track_map:{bins:192,points:[...this.mapPoints.values()].sort((a,b)=>a.i-b.i)},
       weather:session?session[29]:null,track_temperature:session?session.readInt8(30):null,
+      // EA PacketSessionData: 21 packed five-byte marshal zones precede safetyCarStatus.
+      safety_car_status:session&&session[154]<=3?session[154]:null,
       total_laps:session?session[32]:null,track_id:session?session.readInt8(36):null}};
   }
 }
