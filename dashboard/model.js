@@ -18,7 +18,8 @@ export function currentLiveRace(races,stamps=[],now=Date.now()){
 
 export function damageAlert(driver){
  if(driver.telemetry_public!==true||driver.damage_stale===true)return null;
- const values=Object.values(driver.damage||{}).filter(n=>isNumber(n)&&n>=0&&n<=100);
+ // Engine condition loss is separate from collision damage and must not outline the row.
+ const values=['front_left','front_right','rear','floor'].map(key=>driver.damage?.[key]).filter(n=>isNumber(n)&&n>=0&&n<=100);
  const worst=values.length?Math.max(...values):0;
  return worst>0?{level:worst>=30?'major':'minor',percent:worst}:null;
 }

@@ -1,5 +1,5 @@
 import {renderTrackMap} from './track-map.js?v=0.8.0';
-import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot,damageAlert,penaltyLabel,currentLiveRace} from './model.js?v=0.9.0';
+import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot,damageAlert,penaltyLabel,currentLiveRace} from './model.js?v=0.9.1';
 import {renderCar} from './car-view.js?v=0.4.1';
 import {teamFor} from './teams.js?v=0.3.1';
 import {startFlags,stopFlags} from './flag-view.js';
