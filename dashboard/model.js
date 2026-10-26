@@ -34,3 +34,26 @@ export function safetyPeriod(snapshot,race,now=Date.now(),demo=false){
  const yellow=snapshot?.data?.marshal_zones?.some(z=>z.flag===3&&isNumber(z.start)&&z.start>=0&&z.start<=1);
  return yellow?{code:'⚑',label:'YELLOW FLAG',local:true,message:'CAUTION ON TRACK · LIVE GAME SIGNAL'}:null;
 }
+
+export function inPitLane(driver){return driver?.pit_status===1||driver?.pit_status===2}
+export class GridChanges{
+ constructor(){this.reset()}
+ reset(){this.key=null;this.at=null;this.previous=new Map();this.changes=new Map()}
+ update(snapshot,now=Date.now()){
+  const key=snapshot.session_id+':'+(snapshot.game_uid||'');
+  const fresh=Number.isFinite(Date.parse(snapshot.received_at))&&now-Date.parse(snapshot.received_at)<=8000;
+  if(this.key!==key||this.at===null||now-this.at>8000||!fresh){this.previous.clear();this.changes.clear()}
+  this.key=key;this.at=now;
+  const next=new Map();
+  for(const d of snapshot.data?.drivers||[]){
+   if(!Number.isInteger(d.position)||d.position<1||d.position>24||d.result_status===0||d.result_status===1)continue;
+   const identity=[d.network_id,d.team_id,d.race_number].join(':');
+   const old=this.previous.get(d.slot);
+   if(fresh&&old?.identity===identity&&old.position!==d.position)this.changes.set(d.slot,{delta:old.position-d.position,until:now+5000});
+   next.set(d.slot,{position:d.position,identity});
+  }
+  this.previous=next;
+  for(const [slot,change] of this.changes)if(change.until<=now||!next.has(slot))this.changes.delete(slot);
+ }
+ get(slot,now=Date.now()){const change=this.changes.get(slot);return change&&change.until>now?change:null}
+}
