@@ -19,7 +19,7 @@ export const TEAMS=Object.freeze({
  f2_rodin:team('f2_rodin','Rodin Motorsport','#65B8FF','#21528F','f2-rodin.png','F2'),
  f2_aix:team('f2_aix','AIX Racing','#B0FF2B','#47791B','f2-aix.png','F2'),
  f2_dams:team('f2_dams','DAMS Lucas Oil','#46B9EB','#193D8C','f2-dams.png','F2'),
- f2_hitech:team('f2_hitech','Hitech TGR','#47D7B4','#1B706B','f2-hitech.png','F2'),
+ f2_hitech:team('f2_hitech','Hitech','#47D7B4','#1B706B','f2-hitech.png','F2'),
  f2_mp:team('f2_mp','MP Motorsport','#FF9148','#A34323','f2-mp.png','F2'),
  f2_prema:team('f2_prema','PREMA Racing','#F34C58','#871A30','f2-prema.png','F2'),
  f2_trident:team('f2_trident','Trident','#6599F5','#183578','f2-trident.png','F2'),
@@ -30,7 +30,8 @@ export const TEAMS=Object.freeze({
 const keys=['mercedes','ferrari','redbull','williams','aston','alpine','racingbulls','haas','mclaren','sauber'];
 const byId=new Map();keys.forEach((key,i)=>{byId.set(i,key);byId.set(185+i,key)});
 ['mercedes','ferrari','redbull','williams','aston','alpine','racingbulls','haas','mclaren','audi','cadillac'].forEach((key,i)=>byId.set(476+i,key));
-// F2 2024 IDs from EA's F1 25 specification; F2 2025 IDs in the 2026 Season Pack.
+// F2 2024/2025 IDs from published specifications; F2 2026 IDs 489–499
+// verified against recorded 2026-season participant IDs and team race-number pairs.
 // Reference: https://github.com/MacManley/f1-26-udp#team-ids
-["f2_art","f2_campos","f2_rodin","f2_aix","f2_dams","f2_hitech","f2_mp","f2_prema","f2_trident","f2_var","f2_invicta"].forEach((key,i)=>{byId.set(158+i,key);byId.set(465+i,key)});
+["f2_art","f2_campos","f2_rodin","f2_aix","f2_dams","f2_hitech","f2_mp","f2_prema","f2_trident","f2_var","f2_invicta"].forEach((key,i)=>{byId.set(158+i,key);byId.set(465+i,key);byId.set(489+i,key)});
 export function teamFor(id){return TEAMS[byId.get(Number.isInteger(id)?id:-1)]||TEAMS.unknown}

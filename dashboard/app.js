@@ -1,7 +1,7 @@
-import {renderTrackMap} from './track-map.js?v=0.13.0';
+import {renderTrackMap} from './track-map.js?v=0.13.1';
 import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot,damageAlert,penaltyLabel,currentLiveRace,safetyPeriod,inPitLane,GridChanges} from './model.js?v=0.12.0';
 import {renderCar} from './car-view.js?v=0.4.1';
-import {teamFor} from './teams.js?v=0.13.0';
+import {teamFor} from './teams.js?v=0.13.1';
 import {startFlags,stopFlags} from './flag-view.js';
 const $=id=>document.getElementById(id);
 let signingUp=false,isReceiverAdmin=false,receiverReadBusy=false,receiverWriteBusy=false,receiverEnabled=false;
