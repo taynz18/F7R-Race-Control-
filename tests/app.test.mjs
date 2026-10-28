@@ -16,6 +16,10 @@ test('dashboard demo, search, driver selection, guide and logout work without ne
  el('search').value='Ghost';el('search').oninput();assert.equal(el('rows').children.length,1);
  el('rows').children[0].onclick();assert.match(el('detail').text,/F7R Ghost/);
  el('setup-tab').onclick();assert.equal(el('connection').hidden,false);el('back').onclick();assert.equal(el('dashboard').hidden,false);
+ 
+ el('search').value='';vm.runInContext("snapshot.data.drivers[0].team_id=465;snapshot.data.drivers[0].compound=19;render()",context);
+ assert.equal(el('series-mark').alt,'Formula 2');assert.match(el('rows').text,/ART Grand Prix/);assert.match(el('rows').text,/SS/);
+ const images=n=>[...(n.tag==='img'?[n.src]:[]),...n.children.flatMap(images)];assert.ok(images(el('rows')).includes('./assets/teams/f2-art.png'));
  await el('flags-tab').onclick();assert.match(el('auth-message').textContent,/Sign in with your F7R account/);assert.equal(el('flags').hidden,true);assert.equal(el('login').hidden,false);assert.equal(el('dashboard').hidden,true);assert.equal(el('rows').children.length,0);
 });
 

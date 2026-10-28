@@ -1,6 +1,6 @@
-import {sessionStats,compoundName} from './history-model.js?v=0.11.0';
+import {sessionStats,compoundName} from './history-model.js?v=0.13.0';
 import {lapTime,reading,driverName} from './model.js?v=0.10.1';
-import {teamFor} from './teams.js?v=0.3.1';
+import {teamFor} from './teams.js?v=0.13.0';
 const $=id=>document.getElementById(id),node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n};
 let client,admin=false,offset=0,loading=false,request=0;
 const date=s=>new Date(s).toLocaleString(),message=t=>$('history-message').textContent=t;

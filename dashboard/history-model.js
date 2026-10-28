@@ -23,4 +23,4 @@ export function sessionStats(samples,finalData={}){
   return {...c,name:driverName(c.driver),best:times.length?Math.min(...times):null,average:mean,consistency:times.length>=2?Math.sqrt(times.reduce((a,b)=>a+(b-mean)**2,0)/times.length):null};
  }).sort((a,b)=>(a.driver.position||99)-(b.driver.position||99));
 }
-export const compoundName=code=>({16:'Soft',17:'Medium',18:'Hard',7:'Intermediate',8:'Wet'})[code]||'Unknown';
+export const compoundName=code=>({16:'Soft',17:'Medium',18:'Hard',7:'Intermediate',8:'Wet',15:'Wet',19:'Super soft',20:'Soft',21:'Medium',22:'Hard'})[code]||'Unknown';

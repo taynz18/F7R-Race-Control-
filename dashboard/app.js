@@ -1,7 +1,7 @@
-import {renderTrackMap} from './track-map.js?v=0.8.0';
+import {renderTrackMap} from './track-map.js?v=0.13.0';
 import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot,damageAlert,penaltyLabel,currentLiveRace,safetyPeriod,inPitLane,GridChanges} from './model.js?v=0.12.0';
 import {renderCar} from './car-view.js?v=0.4.1';
-import {teamFor} from './teams.js?v=0.3.1';
+import {teamFor} from './teams.js?v=0.13.0';
 import {startFlags,stopFlags} from './flag-view.js';
 const $=id=>document.getElementById(id);
 let signingUp=false,isReceiverAdmin=false,receiverReadBusy=false,receiverWriteBusy=false,receiverEnabled=false;
@@ -16,7 +16,7 @@ function teamMark(team,extra=''){
  return wrap;
 }
 function compoundBadge(code){
- const types={16:['S','Soft','#ff4d62'],17:['M','Medium','#ffda55'],18:['H','Hard','#f3f5fa'],7:['I','Intermediate','#6cdd99'],8:['W','Wet','#62adff']};
+ const types={16:['S','Soft','#ff4d62'],17:['M','Medium','#ffda55'],18:['H','Hard','#f3f5fa'],7:['I','Intermediate','#6cdd99'],8:['W','Wet','#62adff'],15:['W','F2 Wet','#62adff'],19:['SS','F2 Super soft','#ca82ff'],20:['S','F2 Soft','#ff4d62'],21:['M','F2 Medium','#ffda55'],22:['H','F2 Hard','#f3f5fa']};
  const [letter,label,color]=types[code]||['—','Unknown','#8d99ad'];
  const icon=safeNode('span',undefined,'compound-icon');icon.style.setProperty('--compound-color',color);icon.setAttribute('role','img');icon.setAttribute('aria-label',label+' tyre');icon.title=label+' tyre';
  const background=safeNode('img');background.src='./assets/tyres/tyre.bg.png';background.alt='';background.width=36;background.height=36;const ring=safeNode('span',undefined,'compound-ring'),text=safeNode('b',letter,'compound-letter');text.setAttribute('aria-hidden','true');icon.append(background,ring,text);return icon;
@@ -43,11 +43,12 @@ $('guest').onclick=async()=>{
  finally{$('guest').disabled=!client}
 };
 function authMessage(text){$('auth-message').textContent=text}
-function resetView(){gridChanges.reset();movementBadges.clear();$('stat-grid').textContent='—';$('stat-sharing').textContent='—';$('stat-lap').textContent='—';$('track-map').replaceChildren();$('receiver-panel').hidden=true;snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
+function resetView(){$('series-mark').src='./assets/teams/f1-2026.png';$('series-mark').alt='Formula 1';$('series-mark').className='f1-mark';gridChanges.reset();movementBadges.clear();$('stat-grid').textContent='—';$('stat-sharing').textContent='—';$('stat-lap').textContent='—';$('track-map').replaceChildren();$('receiver-panel').hidden=true;snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
 async function detach(){const old=channel;channel=null;if(old&&client)await client.removeChannel(old)}
 function status(){for(const [node,until] of movementBadges)node.hidden=Date.now()>=until||!snapshot||feedState(snapshot,race,Date.now(),demo)!==(demo?'DEMO DATA':'LIVE');const period=safetyPeriod(snapshot,race,Date.now(),demo);$('safety-banner').hidden=!period;$('race-surface').classList.toggle('safety-active',!!period);$('safety-code').textContent=period?.code||'';$('safety-label').textContent=period?.label||'';$('safety-message').textContent=period?.message||'';$('race-surface').classList.toggle('local-yellow',!!period?.local);const label=feedState(snapshot,race,Date.now(),demo);$('feed').textContent=label;$('feed').classList.toggle('green',label==='LIVE');$('freshness').textContent=snapshot?'Last snapshot: '+new Date(snapshot.received_at).toLocaleTimeString():'No telemetry received';$('transport').textContent=demo?'Simulation · not a real race':transport;$('notice').textContent=demo?'DESIGN DEMO — fictional names and simulated values.':label.startsWith('STALE')?'Receiver data is stale. Values below are the last known readings.':label==='RACE FINISHED'?'Race finished. Showing the last stored snapshot.':''}
 function render(){
   status();const rows=Array.isArray(snapshot?.data?.drivers)?snapshot.data.drivers:[];const q=$('search').value.toLowerCase();
+  const f2=rows.some(d=>teamFor(d.team_id).series==='F2');$('series-mark').src='./assets/teams/'+(f2?'f2-2026.png':'f1-2026.png');$('series-mark').alt=f2?'Formula 2':'Formula 1';$('series-mark').className='f1-mark'+(f2?' f2-mark':'');
   $('driver-count').textContent=' / '+rows.length+' drivers';
   $('stat-grid').textContent=rows.length||'—';$('stat-sharing').textContent=rows.length?rows.filter(d=>d.telemetry_public).length+' / '+rows.length:'—';
   const leader=rows.find(d=>d.position===1);$('stat-lap').textContent=leader?.lap?leader.lap+(snapshot?.data?.total_laps?' / '+snapshot.data.total_laps:''):'—';

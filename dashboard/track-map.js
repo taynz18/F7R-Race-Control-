@@ -1,5 +1,5 @@
 import {circuitFor} from './circuits.js';
-import {teamFor} from './teams.js?v=0.3.1';
+import {teamFor} from './teams.js?v=0.13.0';
 import {driverName} from './model.js?v=0.5.1';
 export function mapGeometry(data){
  const points=(data?.track_map?.points||[]).filter(p=>Number.isInteger(p.i)&&Number.isFinite(p.x)&&Number.isFinite(p.z)).slice(0,192);
