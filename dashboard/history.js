@@ -1,28 +1,49 @@
-import {sessionStats,compoundName} from './history-model.js?v=0.13.0';
+import {circuitFor} from './circuits.js';
+import {sessionStats,compoundName} from './history-model.js?v=0.14.0';
 import {lapTime,reading,driverName} from './model.js?v=0.10.1';
-import {teamFor} from './teams.js?v=0.13.1';
+import {teamFor} from './teams.js?v=0.14.0';
 const $=id=>document.getElementById(id),node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n};
-let client,admin=false,offset=0,loading=false,request=0;
+let client,signedIn=false,admin=false,offset=0,loading=false,request=0;
 const date=s=>new Date(s).toLocaleString(),message=t=>$('history-message').textContent=t;
 function table(head,rows){const wrap=node('div',undefined,'scroll'),t=node('table'),h=node('thead'),hr=node('tr');for(const label of head)hr.append(node('th',label));h.append(hr);const b=node('tbody');for(const cells of rows){const tr=node('tr');for(const value of cells){const td=node('td');if(value instanceof Node)td.append(value);else td.textContent=String(value);tr.append(td)}b.append(tr)}t.append(h,b);wrap.append(t);return wrap}
-function card(r,draft=false){const a=node('article',undefined,'history-card');a.append(node('h3',r.title),node('small',date(r.started_at)+' → '+date(r.last_seen)),node('p',(r.final_data?.drivers?.length||0)+' drivers · '+r.sample_count+' samples · '+(draft?(Date.now()-Date.parse(r.last_seen)<15000?'Receiving data':'Ready to save'): 'Saved')));
- if(draft){const label=node('label','Session name'),name=node('input');name.value=r.title;name.maxLength=100;name.setAttribute('aria-label','Session name');label.append(name);a.append(label);for(const discard of [false,true]){const b=node('button',discard?'Discard':'Save session',discard?'':'primary');b.onclick=async()=>{const buttons=a.querySelectorAll('button');buttons.forEach(x=>x.disabled=true);try{const {error}=await client.rpc('f7r_finish_recording',{recording:r.id,session_title:name.value.trim(),discard});if(error)throw error;message(discard?'Recording discarded.':'Session saved for signed-in drivers.');await load()}catch(e){message(e.message)}finally{buttons.forEach(x=>x.disabled=false)}};a.append(b)}}
- const open=node('button',draft?'Preview recording':'View session');open.onclick=()=>openSession(r);a.append(open);return a;
+function sessionTitle(r){return r.title==='F7R session'?circuitFor(r.final_data?.track_id).name+' · '+date(r.started_at):r.title}
+function card(r,draft=false,removed=false){
+ const a=node('article',undefined,'history-card'),title=sessionTitle(r);
+ const state=removed?'REMOVED':draft?(Date.now()-Date.parse(r.last_seen)<15000?'RECORDING':'SAVING AUTOMATICALLY'):r.kept_at?'KEPT':'SAVED';
+ a.append(node('small',state,'history-state'),node('h3',title),node('small',date(r.started_at)+' → '+date(r.last_seen)),node('p',(r.final_data?.drivers?.length||0)+' drivers · '+r.sample_count+' samples'));
+ if(r.archive_reason==='inactive')a.append(node('small','Feed ended or was interrupted · showing everything recorded.'));
+ if(r.finished_at&&!draft)a.append(node('small','Race finish detected · saved automatically.'));
+ if(admin){
+  const label=node('label','Session name'),name=node('input');name.value=title.slice(0,100);name.maxLength=100;name.setAttribute('aria-label','Session name');label.append(name);a.append(label);
+  for(const discard of (removed?[false]:[false,true])){
+   const text=removed?'Restore session':discard?'Delete session':draft?'Save now':r.kept_at?'Update name':'Keep session';
+   const button=node('button',text,discard?'':'primary');
+   button.onclick=async()=>{const buttons=a.querySelectorAll('button');buttons.forEach(x=>x.disabled=true);
+    try{const {error}=await client.rpc('f7r_finish_recording',{recording:r.id,session_title:name.value.trim(),discard});if(error)throw error;
+     if(discard){request++;$('session-detail').hidden=true;$('session-detail').replaceChildren()}
+     message(discard?'Session removed from shared history. Admins can restore it below.':removed?'Session restored for drivers.':'Session kept and available to signed-in drivers.');
+     await load();
+    }catch(e){message(e.message)}finally{buttons.forEach(x=>x.disabled=false)}
+   };a.append(button);
+  }
+ }
+ if(!removed){const open=node('button',draft?'Preview recording':'View session');open.onclick=()=>openSession(r);a.append(open)}
+ return a;
 }
-async function load(more=false){if(loading||!client)return;loading=true;try{
- if(!more){offset=0;$('session-list').replaceChildren();$('draft-list').replaceChildren()}
- const {data,error}=await client.from('f7r_recordings').select('id,title,state,started_at,last_seen,sample_count,final_data').eq('state','saved').order('started_at',{ascending:false}).order('id').range(offset,offset+19);if(error)throw error;
+async function load(more=false){if(loading||!client||!signedIn)return;loading=true;try{
+ if(!more){offset=0;$('session-list').replaceChildren();$('draft-list').replaceChildren();$('removed-list').replaceChildren()}
+ const {data,error}=await client.from('f7r_recordings').select('id,title,state,started_at,last_seen,sample_count,final_data,finished_at,archive_reason,kept_at').eq('state','saved').order('started_at',{ascending:false}).order('id').range(offset,offset+19);if(error)throw error;
  for(const r of data||[])$('session-list').append(card(r));offset+=(data||[]).length;$('more-sessions').hidden=(data||[]).length<20;
  if(!offset)$('session-list').append(node('p','No saved sessions yet.'));
- if(admin&&!more){const drafts=await client.from('f7r_recordings').select('*').eq('state','recording').order('started_at',{ascending:false}).limit(50);if(drafts.error)throw drafts.error;for(const r of drafts.data||[])$('draft-list').append(card(r,true));if(!drafts.data?.length)$('draft-list').append(node('p','No recordings waiting. New sessions appear here once live data arrives.'))}
+ if(admin&&!more){const removed=await client.from('f7r_recordings').select('*').eq('state','discarded').order('started_at',{ascending:false}).limit(20);if(removed.error)throw removed.error;for(const r of removed.data||[])$('removed-list').append(card(r,false,true));const drafts=await client.from('f7r_recordings').select('*').eq('state','recording').order('started_at',{ascending:false}).limit(50);if(drafts.error)throw drafts.error;for(const r of drafts.data||[])$('draft-list').append(card(r,true));if(!drafts.data?.length)$('draft-list').append(node('p','No recordings waiting. New sessions appear here once live data arrives.'))}
  }catch(e){message('Could not load sessions: '+e.message)}finally{loading=false}}
 function download(r,samples){const blob=new Blob([JSON.stringify({session:r,samples},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=node('a');a.href=url;a.download='F7R-session-'+r.id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 async function openSession(r){const g=++request,detail=$('session-detail');detail.hidden=false;detail.replaceChildren(node('p','Loading recorded data…'));detail.scrollIntoView({behavior:'smooth',block:'start'});
  try{let samples=[],page=0;while(true){const {data,error}=await client.from('f7r_recording_samples').select('frame,captured_at,data').eq('recording_id',r.id).order('frame').range(page,page+249);if(g!==request)return;if(error)throw error;samples.push(...data);if(data.length<250)break;page+=250}
- if(g!==request)return;const stats=sessionStats(samples,r.final_data);detail.replaceChildren(node('h2',r.title),node('p',date(r.started_at)+' · '+stats.length+' drivers · '+samples.length+' recorded samples'));
+ if(g!==request)return;const stats=sessionStats(samples,r.final_data);detail.replaceChildren(node('h2',sessionTitle(r)),node('p',date(r.started_at)+' · '+stats.length+' drivers · '+samples.length+' recorded samples'));
  const exportButton=node('button','Download recorded data');exportButton.onclick=()=>download(r,samples);detail.append(exportButton,node('p','Last recorded order · penalties shown as reported by the game. Lap statistics include only completed laps observed by the receiver.'));
- const driverDetail=node('div');const rows=stats.map(c=>{const d=c.driver,b=node('button',c.name);b.onclick=()=>showDriver(driverDetail,c);return [d.position||'—',b,teamFor(d.team_id).name,d.lap||'—',lapTime(c.best),lapTime(c.average),c.consistency===null?'—':(c.consistency/1000).toFixed(3)+' s',reading(d.penalties,' s'),c.pitStops+' observed']});
- detail.append(table(['POS','DRIVER','TEAM','LAP','BEST OBSERVED','AVERAGE','CONSISTENCY','PENALTIES','PIT STOPS'],rows),driverDetail);if(stats.length)showDriver(driverDetail,stats[0]);
+ const driverDetail=node('div');const rows=stats.map(c=>{const d=c.driver,b=node('button',c.name);b.onclick=()=>showDriver(driverDetail,c);return [d.position||'—',b,teamFor(d.team_id).name,({2:'Racing',3:'Finished',4:'DNF',5:'Disqualified',6:'Not classified',7:'Retired'})[d.result_status]||'—',d.lap||'—',lapTime(c.best),lapTime(c.average),c.consistency===null?'—':(c.consistency/1000).toFixed(3)+' s',reading(d.penalties,' s'),c.pitStops+' observed']});
+ detail.append(table(['POS','DRIVER','TEAM','STATUS','LAP','BEST OBSERVED','AVERAGE','CONSISTENCY','PENALTIES','PIT STOPS'],rows),driverDetail);if(stats.length)showDriver(driverDetail,stats[0]);
  }catch(e){if(g===request)detail.replaceChildren(node('p','Could not load recorded data: '+e.message))}}
 function showDriver(target,c){target.replaceChildren(node('h3',c.name+' · driver analysis'));const d=c.driver;target.append(node('p','Observed tyre stints: '+(c.stints.map(s=>compoundName(s.compound)+' from lap '+(s.lap||'—')).join(' → ')||'Unavailable')));
  target.append(node('h3','Completed laps'),table(['LAP','TIME'],c.laps.map(l=>[l.lap,lapTime(l.time)])));if(!c.laps.length)target.append(node('p','No completed lap transitions were recorded for this driver.'));
@@ -32,4 +53,6 @@ function showDriver(target,c){target.replaceChildren(node('h3',c.name+' · drive
  select.onchange=render;render();
 }
 $('refresh-history').onclick=()=>load();$('more-sessions').onclick=()=>load(true);
-async function init(){try{const cfg=await (await fetch('./config.json',{cache:'no-store'})).json();client=window.supabase.createClient(cfg.supabase_url,cfg.supabase_publishable_key);const {data,error}=await client.auth.getUser();if(error||!data.user||data.user.is_anonymous){message('Sign in with a driver account to view saved sessions.');const a=node('a','Sign in to F7R');a.href='./index.html';$('history-message').append(document.createTextNode(' '),a);return}const access=await client.from('flag_admins').select('user_id').eq('user_id',data.user.id).maybeSingle();admin=!access.error&&!!access.data;$('history-admin').hidden=!admin;$('history-content').hidden=false;message(admin?'Admin access · manage recordings and view saved sessions.':'Your account can view all saved F7R sessions.');await load();client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){request++;$('history-content').hidden=true;$('history-admin').hidden=true;$('session-detail').replaceChildren();$('session-list').replaceChildren();$('draft-list').replaceChildren();message('Signed out. Sign in again to view session history.')}})}catch(e){message('Could not open history: '+e.message)}}init();
+async function init(){try{const cfg=await (await fetch('./config.json',{cache:'no-store'})).json();client=window.supabase.createClient(cfg.supabase_url,cfg.supabase_publishable_key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});const {data,error}=await client.auth.getUser();if(error||!data.user||data.user.is_anonymous){message('Sign in with a driver account to view saved sessions.');const a=node('a','Sign in to F7R');a.href='./index.html?next=history';$('history-message').append(document.createTextNode(' '),a);return}signedIn=true;const access=await client.from('flag_admins').select('user_id').eq('user_id',data.user.id).maybeSingle();admin=!access.error&&!!access.data;$('history-admin').hidden=!admin;$('history-removed').hidden=!admin;$('history-content').hidden=false;message(admin?'Admin access · manage recordings and view saved sessions.':'Your account can view all saved F7R sessions.');await load();client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'){signedIn=false;request++;$('history-content').hidden=true;$('history-admin').hidden=true;$('history-removed').hidden=true;$('session-detail').replaceChildren();$('session-list').replaceChildren();$('draft-list').replaceChildren();message('Signed out. Sign in again to view session history.')}})}catch(e){message('Could not open history: '+e.message)}}init();
+
+setInterval(()=>{if(signedIn&&client&&offset<=20&&document.activeElement?.tagName!=='INPUT')load()},15000);

@@ -18,3 +18,5 @@ test('actual F7R 2026 F2 feed IDs resolve to their correct identities and assets
  assert.equal(teamFor(487).key,'unknown');assert.equal(teamFor(488).key,'unknown');
  assert.equal(teamFor(484).name,'McLaren');assert.equal(teamFor(486).name,'Cadillac');
 });
+
+test('Williams uses the requested lighter blue, distinct from Red Bull',()=>{assert.equal(teamFor(479).color,'#70C7FF');assert.notEqual(teamFor(479).color,teamFor(478).color)});

@@ -5,7 +5,7 @@ export const TEAMS=Object.freeze({
  mercedes:team('mercedes','Mercedes','#27D9C3','#087E78','mercedes.png'),
  ferrari:team('ferrari','Ferrari','#EF3340','#86172C','ferrari.png'),
  redbull:team('redbull','Red Bull Racing','#4778FF','#172E84','red-bull.png'),
- williams:team('williams','Williams','#438AFF','#19358C','williams.png'),
+ williams:team('williams','Williams','#70C7FF','#347FC9','williams.png'),
  aston:team('aston','Aston Martin','#25B69B','#075347','aston-martin.png'),
  alpine:team('alpine','Alpine','#E98EC0','#3468C2','alpine.png'),
  racingbulls:team('racingbulls','Racing Bulls','#829BFF','#2E48A8','racing-bulls.png'),

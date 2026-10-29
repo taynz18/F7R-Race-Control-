@@ -3,9 +3,13 @@ export function sessionStats(samples,finalData={}){
  const cars=new Map(),ordered=[...samples].sort((a,b)=>Number(a.frame)-Number(b.frame));
  for(const sample of ordered){
   for(const d of sample.data?.drivers||[]){
-   let c=cars.get(d.slot);if(!c){c={slot:d.slot,driver:d,laps:[],timeline:[],lastLap:null,pitStops:0,lastPit:null,stints:[],lastCompound:null,lastAge:null};cars.set(d.slot,c)}
+   let c=cars.get(d.slot);if(!c){c={slot:d.slot,driver:d,laps:[],timeline:[],lastLap:null,lastResult:null,pitStops:0,lastPit:null,stints:[],lastCompound:null,lastAge:null};cars.set(d.slot,c)}
    if(c.lastLap!==null&&d.lap>c.lastLap&&isNumber(d.last_lap_ms)&&d.last_lap_ms>0&&!c.laps.some(l=>l.lap===d.lap-1))
     c.laps.push({lap:d.lap-1,time:d.last_lap_ms});
+   // A finisher can remain on the final lap number; retain that observed last lap once.
+   if(c.lastResult===2&&d.result_status===3&&isNumber(sample.data?.total_laps)&&d.lap===sample.data.total_laps&&isNumber(d.last_lap_ms)&&d.last_lap_ms>0&&!c.laps.some(l=>l.lap===d.lap))
+    c.laps.push({lap:d.lap,time:d.last_lap_ms});
+   c.lastResult=d.result_status;
    // Do not invent missing laps when the receiver joins late or packets are lost.
    if(c.lastLap===null||d.lap>c.lastLap)c.lastLap=d.lap;
    if(d.pit_status>0&&c.lastPit===0)c.pitStops++;

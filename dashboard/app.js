@@ -1,10 +1,10 @@
-import {renderTrackMap} from './track-map.js?v=0.13.1';
+import {renderTrackMap} from './track-map.js?v=0.14.0';
 import {lapTime,reading,driverName,energy,feedState,acceptsSnapshot,damageAlert,penaltyLabel,currentLiveRace,safetyPeriod,inPitLane,GridChanges} from './model.js?v=0.12.0';
 import {renderCar} from './car-view.js?v=0.4.1';
-import {teamFor} from './teams.js?v=0.13.1';
+import {teamFor} from './teams.js?v=0.14.0';
 import {startFlags,stopFlags} from './flag-view.js';
 const $=id=>document.getElementById(id);
-let signingUp=false,isReceiverAdmin=false,receiverReadBusy=false,receiverWriteBusy=false,receiverEnabled=false;
+let authenticating=false,signingUp=false,isReceiverAdmin=false,receiverReadBusy=false,receiverWriteBusy=false,receiverEnabled=false;
 let client=null,member=null,races=[],race=null,snapshot=null,channel=null,selected=null,demo=false,generation=0,polling=false,refreshing=false,transport='Not connected';
 const gridChanges=new GridChanges(),movementBadges=new Map();
 const safeNode=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=String(text);if(cls)n.className=cls;return n};
@@ -120,10 +120,28 @@ async function signOut(){
   ++generation;isReceiverAdmin=false;member=null;race=null;demo=false;await stopFlags();$('flags').hidden=true;$('sign-out').textContent='Sign out';await detach();resetView();$('dashboard').hidden=true;$('connection').hidden=true;$('login').hidden=false;
   if(client){const {error}=await client.auth.signOut({scope:'local'});if(error)authMessage('Signed out of this view; session cleanup failed. Reload before signing in again.');else authMessage('Signed out.')}
 }
+async function openAccount(user,g=++generation){
+ if(!user||user.is_anonymous)return;
+    // The existing flag_admins table, never dashboard role or user metadata, controls flag access.
+    const adminAccess=await client.from('flag_admins').select('user_id').eq('user_id',user.id).maybeSingle();
+    if(g!==generation)return;
+    const isFlagAdmin=!adminAccess.error&&!!adminAccess.data;isReceiverAdmin=isFlagAdmin;
+    const access=await client.from('f7r_members').select('display_name,role,approved').eq('user_id',user.id).maybeSingle();
+    if(g!==generation)return;
+    // Account metadata is used only for display, never to authorize admin/publisher access.
+    const displayName=typeof user.user_metadata?.display_name==='string'?user.user_metadata.display_name.slice(0,64):'Driver';
+    member=access.data?.approved?access.data:{display_name:isFlagAdmin?'Race admin':displayName,role:isFlagAdmin?'admin':'driver',approved:isFlagAdmin};
+    member.telemetryUnavailable=!!access.error;demo=false;$('sign-out').textContent='Sign out';
+    $('login').hidden=true;$('dashboard').hidden=false;$('welcome').textContent='Welcome, '+member.display_name+'. You are watching the shared F7R race feed.';
+    await startFlags(client,isFlagAdmin,user.id);
+    if(g!==generation){await stopFlags();return}
+    if(window.location?.search&&new URLSearchParams(window.location.search).get('next')==='history'){window.location.assign('./history.html');return}
+    await refreshRaces();
+}
 $('login-form').onsubmit=async e=>{
   e.preventDefault();if(!client)return;const g=++generation,createAccount=signingUp;$('sign-in').disabled=true;authMessage(createAccount?'Creating your account…':'Signing in…');
   try{
-    let response;
+    authenticating=true;let response;
     if(createAccount){
       const displayName=$('signup-name').value.trim();
       if(!displayName||displayName.length>64)throw Error('Enter your driver name, up to 64 characters.');
@@ -133,22 +151,9 @@ $('login-form').onsubmit=async e=>{
     $('password').value='';const {data,error}=response;if(error)throw error;if(g!==generation)return;
     if(createAccount&&!data.session){setSignupMode(false);authMessage('Check your email for a confirmation link, then return here to sign in. If you already have an account, sign in with it.');return}
 
-    // The existing flag_admins table, never dashboard role or user metadata, controls flag access.
-    const adminAccess=await client.from('flag_admins').select('user_id').eq('user_id',data.user.id).maybeSingle();
-    if(g!==generation)return;
-    const isFlagAdmin=!adminAccess.error&&!!adminAccess.data;isReceiverAdmin=isFlagAdmin;
-    const access=await client.from('f7r_members').select('display_name,role,approved').eq('user_id',data.user.id).maybeSingle();
-    if(g!==generation)return;
-    // Account metadata is used only for display, never to authorize admin/publisher access.
-    const displayName=typeof data.user.user_metadata?.display_name==='string'?data.user.user_metadata.display_name.slice(0,64):'Driver';
-    member=access.data?.approved?access.data:{display_name:isFlagAdmin?'Race admin':displayName,role:isFlagAdmin?'admin':'driver',approved:isFlagAdmin};
-    member.telemetryUnavailable=!!access.error;demo=false;$('sign-out').textContent='Sign out';
-    $('login').hidden=true;$('dashboard').hidden=false;$('welcome').textContent='Welcome, '+member.display_name+'. You are watching the shared F7R race feed.';
-    await startFlags(client,isFlagAdmin,data.user.id);
-    if(g!==generation){await stopFlags();return}
-    await refreshRaces();
+    await openAccount(data.user,g);
 
-  }catch(e){authMessage(e.message)}finally{$('sign-in').disabled=!client}
+  }catch(e){authMessage(e.message)}finally{authenticating=false;$('sign-in').disabled=!client}
 };
 $('sign-out').onclick=signOut;$('search').oninput=render;
 $('setup-tab').onclick=()=>{$('flags').hidden=true;$('flags-tab').classList.remove('active');$('login').hidden=true;$('dashboard').hidden=true;$('connection').hidden=false;$('setup-tab').classList.add('active');$('live-tab').classList.remove('active')};
@@ -162,7 +167,21 @@ function demoDrivers(){
 $('demo').onclick=async()=>{++generation;await stopFlags();$('flags').hidden=true;await detach();demo=true;member=null;races=[{id:'demo',title:'British Grand Prix · design demo',status:'live',game_format:2026}];$('login').hidden=true;$('dashboard').hidden=false;$('sign-out').textContent='Exit demo';$('welcome').textContent='Fictional data for exploring the dashboard.';await chooseRace('demo')};
 setInterval(async()=>{status();if(demo&&snapshot){snapshot.received_at=new Date().toISOString();snapshot.data.drivers.forEach(d=>d.ers_percent=Math.max(5,Math.min(100,d.ers_percent+Math.floor(Math.random()*7)-3)));render()}},1000);
 setInterval(async()=>{if(polling||demo||!member||member.telemetryUnavailable)return;polling=true;try{await refreshRaces();await readSnapshot();render()}finally{polling=false}},5000);
-async function start(){try{const response=await fetch('./config.json',{cache:'no-store'});if(!response.ok)throw Error('Missing config.json');const c=await response.json();if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(c.supabase_url)||!c.supabase_publishable_key?.startsWith('sb_publishable_'))throw Error('Set the Supabase project URL and publishable key in config.json.');if(!window.supabase)throw Error('Sign-in library did not load. Check your internet connection.');client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:{persistSession:false,autoRefreshToken:true,detectSessionInUrl:false}});client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'&&member&&!member.guest)setTimeout(signOut,0)});$('sign-in').disabled=false;$('guest').disabled=false;authMessage('Ready to sign in or continue as guest.')}catch(e){authMessage(e.message)}}start();
+async function start(){try{
+ const response=await fetch('./config.json',{cache:'no-store'});if(!response.ok)throw Error('Missing config.json');const c=await response.json();
+ if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(c.supabase_url)||!c.supabase_publishable_key?.startsWith('sb_publishable_'))throw Error('Set the Supabase project URL and publishable key in config.json.');
+ if(!window.supabase)throw Error('Sign-in library did not load. Check your internet connection.');
+ client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+ client.auth.onAuthStateChange((event,session)=>{
+  if(event==='SIGNED_OUT'&&member&&!member.guest)setTimeout(signOut,0);
+  if(event==='SIGNED_IN'&&session?.user&&!authenticating&&(!member||member.guest))setTimeout(()=>openAccount(session.user).catch(e=>authMessage(e.message)),0);
+ });
+ $('sign-in').disabled=false;$('guest').disabled=false;authMessage('Checking your saved sign-in…');
+ const initialGeneration=generation;const {data,error}=await client.auth.getUser();
+ if(generation!==initialGeneration||authenticating)return;
+ if(!error&&data?.user&&!data.user.is_anonymous){await openAccount(data.user);authMessage('Signed in.')}
+ else authMessage('Ready to sign in or continue as guest.');
+ }catch(e){authMessage(e.message)}}start();
 
 async function showFlags(){
  if(demo)await signOut();
