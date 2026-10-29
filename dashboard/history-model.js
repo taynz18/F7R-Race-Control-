@@ -28,3 +28,12 @@ export function sessionStats(samples,finalData={}){
  }).sort((a,b)=>(a.driver.position||99)-(b.driver.position||99));
 }
 export const compoundName=code=>({16:'Soft',17:'Medium',18:'Hard',7:'Intermediate',8:'Wet',15:'Wet',19:'Super soft',20:'Soft',21:'Medium',22:'Hard'})[code]||'Unknown';
+
+export function sessionInfo(record){
+ const labels={1:'Practice 1',2:'Practice 2',3:'Practice 3',4:'Short practice',5:'Qualifying 1',6:'Qualifying 2',7:'Qualifying 3',8:'Short qualifying',9:'One-shot qualifying',10:'Sprint shootout 1',11:'Sprint shootout 2',12:'Sprint shootout 3',13:'Short sprint shootout',14:'One-shot sprint shootout',15:'Race',16:'Race 2',17:'Race 3',18:'Time trial'};
+ const manual={practice:'Practice',qualifying:'Qualifying',race:'Race','time-trial':'Time trial'};
+ if(manual[record.session_kind])return {kind:record.session_kind,label:manual[record.session_kind],source:'admin'};
+ const id=record.final_data?.session_type;
+ if(!Number.isInteger(id)||!labels[id])return {kind:'unknown',label:'Unclassified session',source:'unknown'};
+ return {kind:id<=4?'practice':id<=14?'qualifying':id<=17?'race':'time-trial',label:labels[id],source:'game'};
+}
