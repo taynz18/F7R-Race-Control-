@@ -17,7 +17,7 @@ function teamMark(team,extra=''){
 }
 function compoundBadge(code){
  const types={16:['S','Soft','#ff4d62'],17:['M','Medium','#ffda55'],18:['H','Hard','#f3f5fa'],7:['I','Intermediate','#6cdd99'],8:['W','Wet','#62adff'],15:['W','F2 Wet','#62adff'],19:['SS','F2 Super soft','#ca82ff'],20:['S','F2 Soft','#ff4d62'],21:['M','F2 Medium','#ffda55'],22:['H','F2 Hard','#f3f5fa']};
- const [letter,label,color]=types[code]||['â€”','Unknown','#8d99ad'];
+ const [letter,label,color]=types[code]||['—','Unknown','#8d99ad'];
  const icon=safeNode('span',undefined,'compound-icon');icon.style.setProperty('--compound-color',color);icon.setAttribute('role','img');icon.setAttribute('aria-label',label+' tyre');icon.title=label+' tyre';
  const background=safeNode('img');background.src='./assets/tyres/tyre.bg.png';background.alt='';background.width=36;background.height=36;const ring=safeNode('span',undefined,'compound-ring'),text=safeNode('b',letter,'compound-letter');text.setAttribute('aria-hidden','true');icon.append(background,ring,text);return icon;
 }
@@ -36,40 +36,40 @@ $('guest').onclick=async()=>{
    await signOut();const g=++generation;
    member={display_name:'Guest',role:'guest',approved:false,guest:true};demo=false;
    $('login').hidden=true;$('dashboard').hidden=false;$('sign-out').textContent='Exit guest';
-   $('welcome').textContent='Guest viewing Â· live race data. Sign in as an approved admin to use race controls.';
+   $('welcome').textContent='Guest viewing · live race data. Sign in as an approved admin to use race controls.';
    await startFlags(client,false,null);if(g!==generation){await stopFlags();return}
    await refreshRaces();
  }catch(e){await signOut();authMessage('Could not open guest viewing. '+e.message)}
  finally{$('guest').disabled=!client}
 };
 function authMessage(text){$('auth-message').textContent=text}
-function resetView(){$('series-mark').src='./assets/teams/f1-2026.png';$('series-mark').alt='Formula 1';$('series-mark').className='f1-mark';gridChanges.reset();movementBadges.clear();$('stat-grid').textContent='â€”';$('stat-sharing').textContent='â€”';$('stat-lap').textContent='â€”';$('track-map').replaceChildren();$('receiver-panel').hidden=true;snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetryâ€¦';$('race-description').textContent='Waiting for receiver';status();}
+function resetView(){$('series-mark').src='./assets/teams/f1-2026.png';$('series-mark').alt='Formula 1';$('series-mark').className='f1-mark';gridChanges.reset();movementBadges.clear();$('stat-grid').textContent='—';$('stat-sharing').textContent='—';$('stat-lap').textContent='—';$('track-map').replaceChildren();$('receiver-panel').hidden=true;snapshot=null;selected=null;$('rows').replaceChildren();$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));$('driver-count').textContent='';$('empty').hidden=false;$('empty').textContent='Waiting for telemetry…';$('race-description').textContent='Waiting for receiver';status();}
 async function detach(){const old=channel;channel=null;if(old&&client)await client.removeChannel(old)}
-function status(){for(const [node,until] of movementBadges)node.hidden=Date.now()>=until||!snapshot||feedState(snapshot,race,Date.now(),demo)!==(demo?'DEMO DATA':'LIVE');const period=safetyPeriod(snapshot,race,Date.now(),demo);$('safety-banner').hidden=!period;$('race-surface').classList.toggle('safety-active',!!period);$('safety-code').textContent=period?.code||'';$('safety-label').textContent=period?.label||'';$('safety-message').textContent=period?.message||'';$('race-surface').classList.toggle('local-yellow',!!period?.local);const label=feedState(snapshot,race,Date.now(),demo);$('feed').textContent=label;$('feed').classList.toggle('green',label==='LIVE');$('freshness').textContent=snapshot?'Last snapshot: '+new Date(snapshot.received_at).toLocaleTimeString():'No telemetry received';$('transport').textContent=demo?'Simulation Â· not a real race':transport;$('notice').textContent=demo?'DESIGN DEMO â€” fictional names and simulated values.':label.startsWith('STALE')?'Receiver data is stale. Values below are the last known readings.':label==='RACE FINISHED'?'Race finished. Showing the last stored snapshot.':''}
+function status(){for(const [node,until] of movementBadges)node.hidden=Date.now()>=until||!snapshot||feedState(snapshot,race,Date.now(),demo)!==(demo?'DEMO DATA':'LIVE');const period=safetyPeriod(snapshot,race,Date.now(),demo);$('safety-banner').hidden=!period;$('race-surface').classList.toggle('safety-active',!!period);$('safety-code').textContent=period?.code||'';$('safety-label').textContent=period?.label||'';$('safety-message').textContent=period?.message||'';$('race-surface').classList.toggle('local-yellow',!!period?.local);const label=feedState(snapshot,race,Date.now(),demo);$('feed').textContent=label;$('feed').classList.toggle('green',label==='LIVE');$('freshness').textContent=snapshot?'Last snapshot: '+new Date(snapshot.received_at).toLocaleTimeString():'No telemetry received';$('transport').textContent=demo?'Simulation · not a real race':transport;$('notice').textContent=demo?'DESIGN DEMO — fictional names and simulated values.':label.startsWith('STALE')?'Receiver data is stale. Values below are the last known readings.':label==='RACE FINISHED'?'Race finished. Showing the last stored snapshot.':''}
 function render(){
   status();const rows=Array.isArray(snapshot?.data?.drivers)?snapshot.data.drivers:[];const q=$('search').value.toLowerCase();
   const f2=rows.some(d=>teamFor(d.team_id).series==='F2');$('series-mark').src='./assets/teams/'+(f2?'f2-2026.png':'f1-2026.png');$('series-mark').alt=f2?'Formula 2':'Formula 1';$('series-mark').className='f1-mark'+(f2?' f2-mark':'');
   $('driver-count').textContent=' / '+rows.length+' drivers';
-  $('stat-grid').textContent=rows.length||'â€”';$('stat-sharing').textContent=rows.length?rows.filter(d=>d.telemetry_public).length+' / '+rows.length:'â€”';
-  const leader=rows.find(d=>d.position===1);$('stat-lap').textContent=leader?.lap?leader.lap+(snapshot?.data?.total_laps?' / '+snapshot.data.total_laps:''):'â€”';
+  $('stat-grid').textContent=rows.length||'—';$('stat-sharing').textContent=rows.length?rows.filter(d=>d.telemetry_public).length+' / '+rows.length:'—';
+  const leader=rows.find(d=>d.position===1);$('stat-lap').textContent=leader?.lap?leader.lap+(snapshot?.data?.total_laps?' / '+snapshot.data.total_laps:''):'—';
   $('track-map').replaceChildren(renderTrackMap(snapshot?.data,{selected,onSelect:slot=>{selected=slot;render()},race,stale:feedState(snapshot,race,Date.now(),demo).startsWith('STALE'),demo}));
   const visible=rows.filter(d=>(driverName(d,race)+' '+teamFor(d.team_id).name).toLowerCase().includes(q)).sort((a,b)=>(a.position||99)-(b.position||99));
   movementBadges.clear();$('rows').replaceChildren();$('empty').hidden=visible.length>0;
   $('empty').textContent=rows.length?'No drivers match your search.':'No race data yet. The host must start the receiver.';
   for(const d of visible){
-    const team=teamFor(d.team_id);const tr=safeNode('tr');tr.className='team-row';setTeamColors(tr,team);tr.tabIndex=0;tr.setAttribute('role','button');tr.setAttribute('aria-label','Inspect '+driverName(d,race)+' Â· '+team.name);tr.dataset.slot=d.slot;
+    const team=teamFor(d.team_id);const tr=safeNode('tr');tr.className='team-row';setTeamColors(tr,team);tr.tabIndex=0;tr.setAttribute('role','button');tr.setAttribute('aria-label','Inspect '+driverName(d,race)+' · '+team.name);tr.dataset.slot=d.slot;
     if(d.slot===selected)tr.className+=' selected';
-    const alert=damageAlert(d);if(alert){tr.className+=' damage-'+alert.level;tr.title=(alert.level==='major'?'Major':'Minor')+' damage Â· '+alert.percent.toFixed(1)+'% maximum';tr.setAttribute('aria-label','Inspect '+driverName(d,race)+' Â· '+team.name+' Â· '+tr.title)}
+    const alert=damageAlert(d);if(alert){tr.className+=' damage-'+alert.level;tr.title=(alert.level==='major'?'Major':'Minor')+' damage · '+alert.percent.toFixed(1)+'% maximum';tr.setAttribute('aria-label','Inspect '+driverName(d,race)+' · '+team.name+' · '+tr.title)}
     const identity=safeNode('td');identity.className='driver-identity';
     const wrap=safeNode('div',undefined,'identity-wrap'),copy=safeNode('div',undefined,'identity-copy');
     const nameLine=safeNode('span',undefined,'driver-name-line');nameLine.append(safeNode('b',driverName(d,race)));const penalty=penaltyLabel(d.penalties);if(penalty){const badge=safeNode('span',penalty,'penalty-badge');badge.setAttribute('aria-label',d.penalties+' second time penalty');nameLine.append(badge)}
     if(inPitLane(d)){const pit=safeNode('span','PIT','pit-badge');pit.setAttribute('aria-label','In pit lane');nameLine.append(pit)}
-    copy.append(nameLine,safeNode('small',team.name+' Â· #'+(d.race_number??'â€”'),'team-name'),safeNode('small',({1:'PC Â· Steam',3:'PlayStation',4:'Xbox',6:'PC Â· EA'}[d.platform]||'Platform unknown'),'platform-label'));
+    copy.append(nameLine,safeNode('small',team.name+' · #'+(d.race_number??'—'),'team-name'),safeNode('small',({1:'PC · Steam',3:'PlayStation',4:'Xbox',6:'PC · EA'}[d.platform]||'Platform unknown'),'platform-label'));
     wrap.append(teamMark(team),copy);identity.append(wrap);
     const tyreCell=safeNode('td',undefined,'compound-cell');tyreCell.append(compoundBadge(d.compound),safeNode('span',reading(d.tyre_age,'L'),'tyre-age'));
     const energyCell=safeNode('td',undefined,'energy-cell');energyCell.append(safeNode('span',energy(d)));if(d.telemetry_public===true&&d.status_stale!==true&&d.deploy_mode===3){const boost=safeNode('span','BOOST','boost-active');boost.setAttribute('aria-label','Boost deployment active');energyCell.append(boost)}
-    const positionCell=safeNode('td',undefined,'position-cell');positionCell.append(safeNode('span',d.position||'â€”'));const change=gridChanges.get(d.slot);if(change&&feedState(snapshot,race,Date.now(),demo)===(demo?'DEMO DATA':'LIVE')){const up=change.delta>0,badge=safeNode('span',(up?'â†‘':'â†“')+Math.abs(change.delta),'position-change '+(up?'position-up':'position-down'));badge.title=(up?'Gained ':'Lost ')+Math.abs(change.delta)+' position'+(Math.abs(change.delta)===1?'':'s');badge.setAttribute('aria-label',badge.title);movementBadges.set(badge,change.until);positionCell.append(badge)}
-    tr.append(positionCell,identity,safeNode('td',d.lap??'â€”'),safeNode('td',d.position===1?'LEADER':reading(typeof d.gap_ms==='number'?d.gap_ms/1000:null,'s',3)),safeNode('td',lapTime(d.last_lap_ms)),tyreCell,energyCell,safeNode('td',d.telemetry_public?reading(d.fuel_kg,' kg',1):'Private'));
+    const positionCell=safeNode('td',undefined,'position-cell');positionCell.append(safeNode('span',d.position||'—'));const change=gridChanges.get(d.slot);if(change&&feedState(snapshot,race,Date.now(),demo)===(demo?'DEMO DATA':'LIVE')){const up=change.delta>0,badge=safeNode('span',(up?'↑':'↓')+Math.abs(change.delta),'position-change '+(up?'position-up':'position-down'));badge.title=(up?'Gained ':'Lost ')+Math.abs(change.delta)+' position'+(Math.abs(change.delta)===1?'':'s');badge.setAttribute('aria-label',badge.title);movementBadges.set(badge,change.until);positionCell.append(badge)}
+    tr.append(positionCell,identity,safeNode('td',d.lap??'—'),safeNode('td',d.position===1?'LEADER':reading(typeof d.gap_ms==='number'?d.gap_ms/1000:null,'s',3)),safeNode('td',lapTime(d.last_lap_ms)),tyreCell,energyCell,safeNode('td',d.telemetry_public?reading(d.fuel_kg,' kg',1):'Private'));
     const choose=()=>{selected=d.slot;render()};tr.onclick=choose;tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose()}};
     $('rows').append(tr);
   }
@@ -77,15 +77,15 @@ function render(){
   const d=rows.find(d=>d.slot===selected);if(!d){$('detail').replaceChildren(safeNode('p','Select a driver to see car details.'));return}
   const detail=$('detail');setTeamColors(detail,teamFor(d.team_id));detail.replaceChildren(safeNode('div','DRIVER TELEMETRY','eyebrow'));
   const team=teamFor(d.team_id),head=safeNode('div',undefined,'driver');
-  head.append(teamMark(team,'detail-team-mark'));const h=safeNode('div'),heading=safeNode('h2',driverName(d,race));const penalty=penaltyLabel(d.penalties);if(penalty){const badge=safeNode('span',penalty,'penalty-badge');badge.setAttribute('aria-label',d.penalties+' second time penalty');heading.append(badge)}if(inPitLane(d)){const pit=safeNode('span','PIT','pit-badge');pit.setAttribute('aria-label','In pit lane');heading.append(pit)}h.append(heading,safeNode('p',team.name+' Â· Car #'+(d.race_number??'â€”'),'team-name'));head.append(h);detail.append(head);
-  const context=safeNode('div',undefined,'driver-context');context.append(safeNode('span','P'+(d.position||'â€”')),safeNode('span',inPitLane(d)?'In pit lane':'On track'));detail.append(context);
-  const compoundInfo=safeNode('div',undefined,'detail-compound');compoundInfo.append(compoundBadge(d.compound),safeNode('span','Tyre age Â· '+reading(d.tyre_age,' laps')));detail.append(compoundInfo);
+  head.append(teamMark(team,'detail-team-mark'));const h=safeNode('div'),heading=safeNode('h2',driverName(d,race));const penalty=penaltyLabel(d.penalties);if(penalty){const badge=safeNode('span',penalty,'penalty-badge');badge.setAttribute('aria-label',d.penalties+' second time penalty');heading.append(badge)}if(inPitLane(d)){const pit=safeNode('span','PIT','pit-badge');pit.setAttribute('aria-label','In pit lane');heading.append(pit)}h.append(heading,safeNode('p',team.name+' · Car #'+(d.race_number??'—'),'team-name'));head.append(h);detail.append(head);
+  const context=safeNode('div',undefined,'driver-context');context.append(safeNode('span','P'+(d.position||'—')),safeNode('span',inPitLane(d)?'In pit lane':'On track'));detail.append(context);
+  const compoundInfo=safeNode('div',undefined,'detail-compound');compoundInfo.append(compoundBadge(d.compound),safeNode('span','Tyre age · '+reading(d.tyre_age,' laps')));detail.append(compoundInfo);
   detail.append(renderCar(d));
   const metric=(name,value)=>{const n=safeNode('div',undefined,'metric');n.append(safeNode('span',name),safeNode('b',value));detail.append(n)};
   metric('Last lap',lapTime(d.last_lap_ms));metric('Speed',reading(d.speed_kph,' km/h'));metric('Sector 1',lapTime(d.sector1_ms));metric('Sector 2',lapTime(d.sector2_ms));metric('Penalties',reading(d.penalties,'s'));
-  detail.append(safeNode('div','Tyre wear Â· percentage used','sectiontitle'));const wheels=safeNode('div',undefined,'wheels');
+  detail.append(safeNode('div','Tyre wear · percentage used','sectiontitle'));const wheels=safeNode('div',undefined,'wheels');
   for(const [j,name] of [[2,'FL'],[3,'FR'],[0,'RL'],[1,'RR']]){const n=safeNode('div',undefined,'wheel');n.append(safeNode('span',name),safeNode('b',d.telemetry_public?reading(d.wear?.[j],'%',1):'Private'));wheels.append(n)}detail.append(wheels);
-  detail.append(safeNode('div','Energy & fuel','sectiontitle'));metric('ERS battery',energy(d));metric('Deploy mode',d.telemetry_public?({0:'None',1:'Medium',2:'Hotlap',3:'Boost'}[d.deploy_mode]||'â€”'):'Private');metric('Overtake',d.overtake_active===null||d.overtake_active===undefined?'â€”':d.overtake_active?'Active':'Inactive');metric('Fuel',d.telemetry_public?reading(d.fuel_kg,' kg',1):'Private');metric('Fuel laps (game estimate)',d.telemetry_public?reading(d.fuel_laps,'',2):'Private');
+  detail.append(safeNode('div','Energy & fuel','sectiontitle'));metric('ERS battery',energy(d));metric('Deploy mode',d.telemetry_public?({0:'None',1:'Medium',2:'Hotlap',3:'Boost'}[d.deploy_mode]||'—'):'Private');metric('Overtake',d.overtake_active===null||d.overtake_active===undefined?'—':d.overtake_active?'Active':'Inactive');metric('Fuel',d.telemetry_public?reading(d.fuel_kg,' kg',1):'Private');metric('Fuel laps (game estimate)',d.telemetry_public?reading(d.fuel_laps,'',2):'Private');
   detail.append(safeNode('div','Car damage','sectiontitle'));for(const [key,name] of Object.entries({front_left:'Front left wing',front_right:'Front right wing',rear:'Rear wing',floor:'Floor',engine:'Engine'}))metric(name,d.telemetry_public?reading(d.damage?.[key],'%'):'Private');
   if(!d.telemetry_public)detail.append(safeNode('p','Driver telemetry is private. Ask the driver to enable Public sharing.'));
 }
@@ -94,10 +94,10 @@ async function readSnapshot(g=generation){if(!client||!member||!race||demo)retur
 async function chooseRace(id){
   const g=++generation;await detach();if(g!==generation)return;race=races.find(r=>r.id===id)||null;resetView();
   $('race-title').textContent=demo?race?.title:'F7R live telemetry';if(!race)return;
-  $('race-description').textContent='Automatic race feed Â· PC / PlayStation / Xbox';
+  $('race-description').textContent='Automatic race feed · PC / PlayStation / Xbox';
   if(member?.telemetryUnavailable){transport='Telemetry setup required';$('notice').textContent='Flag controls are ready. Run the dashboard setup SQL to enable telemetry.';return}
   if(demo){snapshot={session_id:race.id,received_at:new Date().toISOString(),frame:1,data:demoMapData()};render();return}
-  channel=client.channel('f7r-race-'+id+'-'+g).on('postgres_changes',{event:'*',schema:'public',table:'f7r_snapshots',filter:'session_id=eq.'+id},payload=>apply(payload.new,g)).subscribe(s=>{if(g!==generation)return;transport=s==='SUBSCRIBED'?'Live connection':'Reconnecting Â· polling fallback';status();if(s==='SUBSCRIBED')readSnapshot(g)});
+  channel=client.channel('f7r-race-'+id+'-'+g).on('postgres_changes',{event:'*',schema:'public',table:'f7r_snapshots',filter:'session_id=eq.'+id},payload=>apply(payload.new,g)).subscribe(s=>{if(g!==generation)return;transport=s==='SUBSCRIBED'?'Live connection':'Reconnecting · polling fallback';status();if(s==='SUBSCRIBED')readSnapshot(g)});
   await readSnapshot(g);await refreshReceiver();
 }
 async function refreshRaces(){
@@ -139,7 +139,7 @@ async function openAccount(user,g=++generation){
     await refreshRaces();
 }
 $('login-form').onsubmit=async e=>{
-  e.preventDefault();if(!client)return;const g=++generation,createAccount=signingUp;$('sign-in').disabled=true;authMessage(createAccount?'Creating your accountâ€¦':'Signing inâ€¦');
+  e.preventDefault();if(!client)return;const g=++generation,createAccount=signingUp;$('sign-in').disabled=true;authMessage(createAccount?'Creating your account…':'Signing in…');
   try{
     authenticating=true;let response;
     if(createAccount){
@@ -164,7 +164,7 @@ function demoDrivers(){
  const teams=[484,477,476,480,481,479,485,482,483,486,478];
  return names.map((n,i)=>({slot:i,name:i===21?null:'F7R '+n,team_id:teams[i%11],race_number:10+i,platform:[1,3,4][i%3],position:i+1,lap:18,last_lap_ms:87182+i*73,sector1_ms:28000,sector2_ms:30000,gap_ms:i*1742,compound:[17,16,18][i%3],tyre_age:5+i%10,ers_percent:i===21?null:Math.max(12,86-i*3),deploy_mode:i===21?null:i===2?3:1,fuel_kg:i===21?null:21.4+i*.3,fuel_laps:i===21?null:8.3,wear:i===21?null:[18+i,20+i,21+i,23+i],damage:i===21?null:{front_left:i===0?12:0,front_right:i===1?42:0,rear:0,floor:i===3?8:0,engine:0},telemetry_public:i!==21,penalties:i===1?3:i===3?5:0,speed_kph:285,pit_status:0}));
 }
-$('demo').onclick=async()=>{++generation;await stopFlags();$('flags').hidden=true;await detach();demo=true;member=null;races=[{id:'demo',title:'British Grand Prix Â· design demo',status:'live',game_format:2026}];$('login').hidden=true;$('dashboard').hidden=false;$('sign-out').textContent='Exit demo';$('welcome').textContent='Fictional data for exploring the dashboard.';await chooseRace('demo')};
+$('demo').onclick=async()=>{++generation;await stopFlags();$('flags').hidden=true;await detach();demo=true;member=null;races=[{id:'demo',title:'British Grand Prix · design demo',status:'live',game_format:2026}];$('login').hidden=true;$('dashboard').hidden=false;$('sign-out').textContent='Exit demo';$('welcome').textContent='Fictional data for exploring the dashboard.';await chooseRace('demo')};
 setInterval(async()=>{status();if(demo&&snapshot){snapshot.received_at=new Date().toISOString();snapshot.data.drivers.forEach(d=>d.ers_percent=Math.max(5,Math.min(100,d.ers_percent+Math.floor(Math.random()*7)-3)));render()}},1000);
 setInterval(async()=>{if(polling||demo||!member||member.telemetryUnavailable)return;polling=true;try{await refreshRaces();await readSnapshot();render()}finally{polling=false}},5000);
 async function start(){try{
@@ -176,7 +176,7 @@ async function start(){try{
   if(event==='SIGNED_OUT'&&member&&!member.guest)setTimeout(signOut,0);
   if(event==='SIGNED_IN'&&session?.user&&!authenticating&&(!member||member.guest))setTimeout(()=>openAccount(session.user).catch(e=>authMessage(e.message)),0);
  });
- $('sign-in').disabled=false;$('guest').disabled=false;authMessage('Checking your saved sign-inâ€¦');
+ $('sign-in').disabled=false;$('guest').disabled=false;authMessage('Checking your saved sign-in…');
  const initialGeneration=generation;const {data,error}=await client.auth.getUser();
  if(generation!==initialGeneration||authenticating)return;
  if(!error&&data?.user&&!data.user.is_anonymous){await openAccount(data.user);authMessage('Signed in.')}
@@ -209,7 +209,7 @@ async function refreshReceiver(){
   $('receiver-toggle').textContent=receiverEnabled?'Stop live telemetry':'Start live telemetry';
   $('receiver-toggle').disabled=receiverWriteBusy||race.status!=='live';
   const h=health.data,online=h&&Date.now()-Date.parse(h.last_seen)<20000;
-  $('receiver-status').textContent=!online?'Receiver offline Â· open START-F7R-RECEIVER on your laptop':!receiverEnabled?'Receiver connected Â· telemetry paused':h.state==='publishing'?'Live Â· '+h.driver_count+' drivers':h.state==='paused'?'Start requested Â· waiting for receiver':h.state==='waiting'?'Receiver connected Â· waiting for game':h.state==='stale'?'Game feed interrupted':'Receiver error Â· check the laptop window';
+  $('receiver-status').textContent=!online?'Receiver offline · open START-F7R-RECEIVER on your laptop':!receiverEnabled?'Receiver connected · telemetry paused':h.state==='publishing'?'Live · '+h.driver_count+' drivers':h.state==='paused'?'Start requested · waiting for receiver':h.state==='waiting'?'Receiver connected · waiting for game':h.state==='stale'?'Game feed interrupted':'Receiver error · check the laptop window';
  }catch(e){if(g===generation){$('receiver-status').textContent=e.message;$('receiver-toggle').disabled=true;}}
  finally{receiverReadBusy=false;}
 }

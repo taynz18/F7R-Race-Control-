@@ -1,10 +1,10 @@
 export const FLAG_LABELS={CLEAR:'Clear flags',YELLOW:'Yellow','SAFETY CAR':'Safety car',FCY:'Full course yellow','PREPARE TO RACE':'Prepare to race',RED:'Red',GREEN:'Green',BLUE:'Blue',WHITE:'White',BLACK:'Black',CHEQUERED:'Chequered'};
 export const FLAG_COLORS={CLEAR:'#8b96ab',YELLOW:'#ffd84d','SAFETY CAR':'#ffd84d',FCY:'#ffd84d','PREPARE TO RACE':'#ffd84d',RED:'#ff5267',GREEN:'#70deac',BLUE:'#6baaff',WHITE:'#f5f5ef',BLACK:'#9aa4b5',CHEQUERED:'#f5f5ef'};
 export function flagTimer(state,now){
- if(!state||state.flag==='CLEAR')return {label:'NO FLAG ACTIVE',value:'â€”'};
+ if(!state||state.flag==='CLEAR')return {label:'NO FLAG ACTIVE',value:'—'};
  const end=['FCY','PREPARE TO RACE'].includes(state.flag)&&state.countdown_ends_at?Date.parse(state.countdown_ends_at):null;
  const sec=Math.max(0,end?Math.ceil((end-now)/1000):Math.floor((now-Date.parse(state.updated_at))/1000));
- if(!Number.isFinite(sec))return {label:'TIME UNAVAILABLE',value:'â€”'};
+ if(!Number.isFinite(sec))return {label:'TIME UNAVAILABLE',value:'—'};
  return {label:end?(state.flag==='FCY'?(sec===0?'ACTIVATING FCY':'FCY ACTIVE IN'):(sec===0?'AWAITING GREEN':'GREEN IN')):'LIVE FOR',value:[Math.floor(sec/3600),Math.floor(sec/60)%60,sec%60].map(n=>String(n).padStart(2,'0')).join(':')};
 }
 export class FlagController{

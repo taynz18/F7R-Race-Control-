@@ -8,7 +8,7 @@ for(const [flag,label] of Object.entries(FLAG_LABELS)){
  $('flag-buttons').append(b);flagButtons.push(b);
 }
 function render({state,isAdmin,busy,online,timer}){
- $('flag-admin-controls').hidden=!isAdmin;$('flag-access').textContent=isAdmin?'ADMIN CONTROLS':'DRIVER Â· VIEW ONLY';
+ $('flag-admin-controls').hidden=!isAdmin;$('flag-access').textContent=isAdmin?'ADMIN CONTROLS':'DRIVER · VIEW ONLY';
  $('flag-banner').hidden=!state;
  $('flag-connection').textContent=online?'Live flag connection':'Flag feed offline';
  $('flag-banner').classList.toggle('offline',!online);
@@ -18,7 +18,7 @@ function render({state,isAdmin,busy,online,timer}){
  $('flag-current').textContent=state?(state.flag==='CLEAR'?'No active flag':state.flag==='FCY'&&!state.countdown_ends_at?'FCY active':FLAG_LABELS[state.flag]):'Waiting for race control';
  $('flag-current-message').textContent=state?.custom_message||'';
  $('flag-time-label').textContent=online?timer.label:'LAST KNOWN SIGNAL';
- $('flag-time').textContent=online?timer.value:'â€”';
+ $('flag-time').textContent=online?timer.value:'—';
  $('flag-current-card').style.setProperty('--signal',FLAG_COLORS[state?.flag]||'#8b96ab');
  const disabled=!isAdmin||busy||!online||!state;
  flagButtons.forEach(b=>{b.disabled=disabled;b.setAttribute('aria-pressed',String(b.dataset.flag===state?.flag))});

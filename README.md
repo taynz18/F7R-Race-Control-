@@ -1,4 +1,4 @@
-# F7R Race Control â€” combined dashboard
+# F7R Race Control — combined dashboard
 
 **Start here: [Combined dashboard setup](F7R-DASHBOARD-SETUP.md).**
 
@@ -8,7 +8,7 @@ The home page now combines driver telemetry and live flag viewing. Approved race
 
 # F7R Race Control
 
-**[Download the Windows driver app](https://github.com/taynz18/F7R-Race-Control-/releases/latest/download/RaceFlags-Windows.zip)** Â· **[Open the admin portal](https://taynz18.github.io/F7R-Race-Control-/)**
+**[Download the Windows driver app](https://github.com/taynz18/F7R-Race-Control-/releases/latest/download/RaceFlags-Windows.zip)** · **[Open the admin portal](https://taynz18.github.io/F7R-Race-Control-/)**
 
 Drivers: download the ZIP, select **Extract All**, open the **RaceFlags** folder and run **RaceFlags.exe**. Keep the `_internal` folder alongside it. The connection to race control is included.
 
@@ -24,7 +24,7 @@ A Windows driver overlay and a browser admin portal. Supabase provides email/pas
 
 1. Open https://supabase.com/dashboard and create a project named **Race Flags**. Choose your preferred region and save the database password privately. Wait until the project is ready.
 2. Open **SQL Editor**, paste the contents of `supabase/01-setup.sql`, and run it. This creates the tables, access policies, control function and Realtime publication. You can rerun the script without resetting flags or removing admins.
-3. Open **Authentication â†’ Users** and create your admin user with your email and a strong password. If available, mark the email confirmed. Keep the password private. Disable public user sign-ups in Authentication settings; driver accounts are not needed.
+3. Open **Authentication → Users** and create your admin user with your email and a strong password. If available, mark the email confirmed. Keep the password private. Disable public user sign-ups in Authentication settings; driver accounts are not needed.
 4. Copy `supabase/02-add-admin.sql` into a new SQL Editor query, replace the email placeholder with the email you just created, and run it. This approves the account to send flags.
 
 5. Open the project's **Connect** dialog and copy its Project URL and **publishable key**. Put them in `config.json`:
@@ -83,15 +83,15 @@ Create a GitHub repository and upload this folder's **contents**, including the 
 
 ### Admin portal on GitHub Pages
 
-1. Open repository **Settings â†’ Pages** and choose **GitHub Actions** as the source.
-2. Open **Actions â†’ Publish admin portal â†’ Run workflow**.
+1. Open repository **Settings → Pages** and choose **GitHub Actions** as the source.
+2. Open **Actions → Publish admin portal → Run workflow**.
 3. Open the URL from the completed deployment, adding `/admin.html`.
 
 This workflow publishes only the five website/configuration files. The sign-in page is public; account authentication and database permissions protect flag controls. The admin page loads a pinned Supabase client from jsDelivr and optional fonts from Google Fonts.
 
 ### Windows driver releases
 
-Open **Actions â†’ Windows driver release â†’ Run workflow**, enter a new version such as `v1.0.0`, and run it. Pushing a version tag also starts the build. The release workflow installs the pinned dependencies, runs connection tests, builds a Windows app folder, and attaches `RaceFlags-Windows.zip` to a GitHub Release. Drivers download it from **Releases**. Configuration is bundled at build time. GitHub Actions needs permission to write repository contents. The executable is unsigned; Windows may show an unsigned-app notice.
+Open **Actions → Windows driver release → Run workflow**, enter a new version such as `v1.0.0`, and run it. Pushing a version tag also starts the build. The release workflow installs the pinned dependencies, runs connection tests, builds a Windows app folder, and attaches `RaceFlags-Windows.zip` to a GitHub Release. Drivers download it from **Releases**. Configuration is bundled at build time. GitHub Actions needs permission to write repository contents. The executable is unsigned; Windows may show an unsigned-app notice.
 
 Manual source run and build:
 
