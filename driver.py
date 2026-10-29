@@ -16,6 +16,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 
 from connection import FLAGS, receive_flags, validate_config
+from radio_audio import RadioAudio
 from overlay_ui import (COLORS, TRANSPARENT, MIN_WIDTH, MAX_WIDTH, MIN_HEIGHT, MAX_HEIGHT,
                         clamp, hit_zone, resize_from_edge, visible_on_monitors, render_flag)
 
@@ -81,6 +82,7 @@ class DriverApp:
         self.flag = 'YELLOW' if demo else 'CONNECTING'
         self.custom_message, self.countdown_ends_at, self.clock_offset = '', None, 0.0
         self.countdown_display = None
+        self.signal_started = None
         self.settings_file = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'RaceFlags' / 'settings.json'
         try:
             self.settings = json.loads(self.settings_file.read_text(encoding='utf-8'))
@@ -102,6 +104,10 @@ class DriverApp:
         self.hide_clear = tk.BooleanVar(value=bool(self.settings.get('hide_clear',True)))
         self.size = tk.DoubleVar(value=self.width)
         self.size_text = tk.StringVar()
+        self.volume=tk.DoubleVar(value=clamp(number('audio_volume',65),0,100))
+        self.audio_enabled=tk.BooleanVar(value=not bool(self.settings.get('audio_muted',False)))
+        self.volume_text=tk.StringVar()
+        self.audio=RadioAudio(volume=self.volume.get(),muted=not self.audio_enabled.get(),enabled=not demo)
         self.status = tk.StringVar(value='Local preview · not connected' if demo else 'Connecting to race control…')
         self.config = connection_config(self.settings)
         self.ui_scale=ui_scale(root)
@@ -132,7 +138,7 @@ class DriverApp:
         tk.Label(status_row,textvariable=self.status,bg=BG,fg=MUTED,font=f(12),wraplength=u(340),justify='left',bd=0).pack(side='left')
         self.status.trace_add('write',self.update_status_colour)
         self.update_status_colour()
-        card=RoundedPanel(outer,219,self.ui_scale)
+        card=RoundedPanel(outer,330,self.ui_scale)
         card.pack(fill='x')
         content=tk.Frame(card,bg=PANEL)
         content_width=430-52-40
@@ -154,10 +160,24 @@ class DriverApp:
         self.toggle=Toggle(toggle_row,self.hide_clear,self.changed,self.ui_scale)
         self.toggle.pack(side='right')
         tk.Label(content,text='Hide when no flag is active.',bg=PANEL,fg=MUTED,font=f(11),bd=0).pack(anchor='w',pady=(u(4),0))
+        tk.Frame(content,bg='#2b3749',height=u(1)).pack(fill='x',pady=(u(17),u(14)))
+        audio_row=tk.Frame(content,bg=PANEL)
+        audio_row.pack(fill='x')
+        tk.Label(audio_row,text='Radio audio',bg=PANEL,fg=INK,font=f(13,'bold'),bd=0).pack(side='left')
+        self.audio_toggle=Toggle(audio_row,self.audio_enabled,self.audio_changed,self.ui_scale)
+        self.audio_toggle.pack(side='right')
+        tk.Label(audio_row,textvariable=self.volume_text,bg=PANEL,fg=MUTED,font=f(11),bd=0).pack(side='right',padx=u(10))
+        self.volume_slider=SizeSlider(content,self.volume,self.volume_changed,0,100,self.ui_scale)
+        self.volume_slider.pack(fill='x',pady=(u(7),0))
+        tk.Label(content,text='Flag calls, countdowns & radio clicks',bg=PANEL,fg=MUTED,font=f(10),bd=0).pack(anchor='w')
+        self.refresh_volume_label()
         help_row=tk.Frame(outer,bg=BG)
         help_row.pack(fill='x',pady=(u(20),u(20)))
+        self.audio_test_button=RoundedButton(help_row,'Test audio',self.test_audio,self.ui_scale)
+        self.audio_test_button.configure(width=u(100),height=u(36))
+        self.audio_test_button.pack(side='right',padx=(u(10),0))
         tk.Label(help_row,text='MOVE & RESIZE',bg=BG,fg='#8294ae',font=f(9,'bold'),bd=0).pack(anchor='w')
-        tk.Label(help_row,text='Drag the flag to move. Drag an edge to resize.',bg=BG,fg='#b1bfd2',font=f(11),bd=0).pack(anchor='w',pady=(u(5),0))
+        tk.Label(help_row,text='Drag to move. Drag edges to resize.',bg=BG,fg='#b1bfd2',font=f(11),bd=0).pack(anchor='w',pady=(u(5),0))
         actions=tk.Frame(outer,bg=BG)
         actions.pack(fill='x')
         actions.grid_columnconfigure(0,weight=1,uniform='action')
@@ -222,6 +242,22 @@ class DriverApp:
                 ctypes.windll.dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd),33,
                     ctypes.byref(corner),ctypes.sizeof(corner))
             except (AttributeError,OSError): pass
+
+    def refresh_volume_label(self):
+        self.volume_text.set(f'{round(self.volume.get())}%' if self.audio_enabled.get() and self.volume.get()>0 else 'Muted')
+
+    def volume_changed(self,value):
+        self.audio.set_level(value,not self.audio_enabled.get())
+        self.refresh_volume_label()
+        self.schedule_save()
+
+    def audio_changed(self):
+        self.audio.set_level(self.volume.get(),not self.audio_enabled.get())
+        self.refresh_volume_label()
+        self.schedule_save()
+
+    def test_audio(self):
+        self.audio.preview()
 
     def open_flag_website(self):
         try:
@@ -361,7 +397,8 @@ class DriverApp:
             self.root.after_cancel(self.save_job)
             self.save_job=None
         self.settings.update(width=self.width,height=self.height,x=self.overlay.winfo_x(),
-            y=self.overlay.winfo_y(),hide_clear=self.hide_clear.get())
+            y=self.overlay.winfo_y(),hide_clear=self.hide_clear.get(),
+            audio_volume=round(self.volume.get()),audio_muted=not self.audio_enabled.get())
         if self.config: self.settings['config']=self.config
         self.settings.pop('preview',None)
         try:
@@ -376,6 +413,7 @@ class DriverApp:
         while not self.events.empty():
             event=self.events.get()
             self.flag=event['flag']
+            self.signal_started=event.get('updated_at')
             self.custom_message=event.get('custom_message','')
             self.countdown_ends_at=event.get('countdown_ends_at')
             self.clock_offset=event.get('clock_offset',self.clock_offset)
@@ -387,6 +425,8 @@ class DriverApp:
         if remaining!=self.countdown_display:
             self.countdown_display=remaining
             changed=True
+        if not self.demo:self.audio.observe(self.flag,self.countdown_ends_at,self.signal_started,remaining)
+        if self.audio.error:self.volume_text.set(self.audio.error)
         if changed: self.request_draw()
         self.root.after(100,self.tick)
 
@@ -395,6 +435,7 @@ class DriverApp:
         self.save()
         self.closed=True
         self.stop.set()
+        self.audio.close()
         self.root.destroy()
 
 
@@ -443,6 +484,17 @@ def self_test(root, app):
     assert app.hide_clear.get()!=original
     app.toggle.toggle()
     assert app.hide_clear.get()==original
+    app.volume_slider.set(30)
+    root.update()
+    assert app.audio.volume==30
+    app.audio_toggle.toggle()
+    assert app.audio.muted
+    app.audio_toggle.toggle()
+    assert not app.audio.muted
+    assert app.volume_text.get()=='30%'
+    assert app.audio_test_button.winfo_ismapped()
+    assert (app.audio.folder/'green.wav').is_file()
+    assert (app.audio.folder/'prepare.wav').is_file()
     assert app.scale.winfo_width()>100
     assert app.toggle.winfo_width()>20
     assert app.close_button.winfo_y()+app.close_button.winfo_height()<=app.close_button.master.winfo_height()

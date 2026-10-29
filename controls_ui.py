@@ -24,7 +24,7 @@ def enable_dpi_awareness():
 def ui_scale(root):
     # Keep the whole controller visible even on a laptop with large text scaling.
     return max(.75, min(root.winfo_fpixels('1i') / 96,
-        (root.winfo_screenheight()-85)/650, (root.winfo_screenwidth()-48)/430))
+        (root.winfo_screenheight()-85)/800, (root.winfo_screenwidth()-48)/430))
 
 
 def font(scale, pixels, weight='normal'):

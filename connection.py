@@ -27,6 +27,7 @@ class StateTracker:
         self.message = ''
         self.countdown_ends_at = None
         self.clock_offset = 0.0
+        self.started = None
 
     def accept(self, row):
         if not isinstance(row, dict) or row.get('id') != 1 or row.get('flag') not in FLAGS:
@@ -50,6 +51,8 @@ class StateTracker:
         server=row.get('server_time')
         if server:
             self.clock_offset=datetime.fromisoformat(server.replace('Z','+00:00')).timestamp()-time.time()
+        started=row.get('updated_at')
+        self.started=datetime.fromisoformat(started.replace('Z','+00:00')).timestamp() if isinstance(started,str) else None
         self.message=' '.join(message.split())
         self.countdown_ends_at=end
         self.revision, self.flag = revision, row['flag']
@@ -69,7 +72,7 @@ async def receive_flags(config, emit, stop):
         try:
             row = payload.get('data', {}).get('record')
             if tracker.accept(row):
-                emit(dict(flag=tracker.flag,custom_message=tracker.message,countdown_ends_at=tracker.countdown_ends_at,clock_offset=tracker.clock_offset,connection='Live' if live else 'Reconnecting'))
+                emit(dict(flag=tracker.flag,custom_message=tracker.message,countdown_ends_at=tracker.countdown_ends_at,clock_offset=tracker.clock_offset,updated_at=tracker.started,connection='Live' if live else 'Reconnecting'))
         except (ValueError, TypeError):
             wake.set()
 
@@ -91,7 +94,7 @@ async def receive_flags(config, emit, stop):
             try:
                 response = await client.rpc('get_race_state').execute()
                 tracker.accept(response.data)
-                emit(dict(flag=tracker.flag,custom_message=tracker.message,countdown_ends_at=tracker.countdown_ends_at,clock_offset=tracker.clock_offset,connection='Live' if live else 'Polling fallback'))
+                emit(dict(flag=tracker.flag,custom_message=tracker.message,countdown_ends_at=tracker.countdown_ends_at,clock_offset=tracker.clock_offset,updated_at=tracker.started,connection='Live' if live else 'Polling fallback'))
             except Exception:
                 emit({'flag': 'OFFLINE', 'connection': 'Offline — signal unavailable'})
             if stop.is_set():

@@ -45,3 +45,10 @@ The driver controls title bar now shows the exact version (for example v0.1.37).
 Close all older copies before testing. Extract the complete new ZIP to a new
 folder and launch RaceFlags.exe from that folder, rather than an old shortcut.
 An older app that still prints BLUE or RED does not support Prepare to race.
+
+RADIO AUDIO
+Use Radio audio to mute/unmute. The volume slider controls this app's calls.
+Test audio plays the green-flag call. Your volume and mute choices are saved.
+A buzz/mic click precedes your league's voice calls when the flag changes.
+FCY and Prepare to race use the shared timer for the final countdown numbers.
+A newer flag interrupts older audio; muted calls are not queued for later.

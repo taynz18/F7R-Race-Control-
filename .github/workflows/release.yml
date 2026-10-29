@@ -12,6 +12,7 @@ on:
     paths:
       - 'driver.py'
       - 'controls_ui.py'
+      - 'radio_audio.py'
       - 'overlay_ui.py'
       - 'assets/**'
       - 'DRIVER-GUIDE.txt'
