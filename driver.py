@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import math
+import webbrowser
 from types import SimpleNamespace
 import tkinter as tk
 from tkinter import ttk
@@ -31,6 +32,7 @@ def application_version():
 
 
 APP_VERSION=application_version()
+FLAG_WEBSITE='https://taynz18.github.io/F7R-Race-Control-/admin.html'
 
 
 def bundled_config():
@@ -156,8 +158,16 @@ class DriverApp:
         help_row.pack(fill='x',pady=(u(20),u(20)))
         tk.Label(help_row,text='MOVE & RESIZE',bg=BG,fg='#8294ae',font=f(9,'bold'),bd=0).pack(anchor='w')
         tk.Label(help_row,text='Drag the flag to move. Drag an edge to resize.',bg=BG,fg='#b1bfd2',font=f(11),bd=0).pack(anchor='w',pady=(u(5),0))
-        self.close_button=RoundedButton(outer,'Close Race Flags',self.close,self.ui_scale)
-        self.close_button.pack(fill='x')
+        actions=tk.Frame(outer,bg=BG)
+        actions.pack(fill='x')
+        actions.grid_columnconfigure(0,weight=1,uniform='action')
+        actions.grid_columnconfigure(1,weight=1,uniform='action')
+        self.website_button=RoundedButton(actions,'Open Flag Website ↗',self.open_flag_website,self.ui_scale)
+        self.website_button.configure(width=u(178))
+        self.website_button.grid(row=0,column=0,sticky='ew',padx=(0,u(5)))
+        self.close_button=RoundedButton(actions,'Close Race Flags',self.close,self.ui_scale)
+        self.close_button.configure(width=u(178))
+        self.close_button.grid(row=0,column=1,sticky='ew',padx=(u(5),0))
         if demo:
             self.demo_flag=tk.StringVar(value='YELLOW')
             pick=ttk.Combobox(outer,textvariable=self.demo_flag,values=sorted(FLAGS),state='readonly')
@@ -212,6 +222,14 @@ class DriverApp:
                 ctypes.windll.dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd),33,
                     ctypes.byref(corner),ctypes.sizeof(corner))
             except (AttributeError,OSError): pass
+
+    def open_flag_website(self):
+        try:
+            opened=webbrowser.open_new_tab(FLAG_WEBSITE)
+        except OSError:
+            opened=False
+        if not opened:
+            self.status.set('Could not open your browser. Visit the F7R flag website.')
 
     def update_status_colour(self,*_):
         status=self.status.get().lower()
@@ -441,6 +459,17 @@ def self_test(root, app):
     assert (app.overlay.winfo_x(),app.overlay.winfo_y())==(x,y)
     app.save()
     assert json.loads(app.settings_file.read_text())['height']==170
+    assert app.website_button.winfo_ismapped()
+    assert app.website_button.winfo_width()>100*app.ui_scale
+    assert app.website_button.winfo_rootx()+app.website_button.winfo_width()<=app.close_button.winfo_rootx()
+    opened=[]
+    original_open=webbrowser.open_new_tab
+    try:
+        webbrowser.open_new_tab=lambda url:opened.append(url) or True
+        app.website_button.command()
+        assert opened==[FLAG_WEBSITE]
+    finally:
+        webbrowser.open_new_tab=original_open
     assert app.close_button.winfo_ismapped()
     assert app.close_button.winfo_rooty()+app.close_button.winfo_height() <= root.winfo_rooty()+root.winfo_height()
     close_event=SimpleNamespace(x=app.width-23,y=22,x_root=x+app.width-23,y_root=y+22)
