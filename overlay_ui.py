@@ -162,7 +162,7 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
     font = racing_font(font_size)
     box = draw.textbbox((0,0), text, font=font)
     text_width, text_height = box[2]-box[0], box[3]-box[1]
-    center_x, center_y = w/2-4*scale, h*(.34 if message else .5)
+    center_x, center_y = w/2-4*scale, h*(.25 if message else .5)
     if flag == 'CHEQUERED' and text:
         draw.rounded_rectangle((center_x-text_width/2-14*scale, center_y-text_height/2-11*scale,
             center_x+text_width/2+14*scale, center_y+text_height/2+11*scale),
@@ -171,8 +171,9 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
               fill=foreground, font=font)
     if message:
         # Fit at most three centred lines, including long names without spaces.
-        message_size=max(8*scale,min(18*scale,int(h*.15)))
-        available_message=w-42*scale
+        message_size=max(14*scale,min((36 if text else 64)*scale,int(h*(.34 if text else .56))))
+        available_message=w-88*scale
+        region_height=h*(.46 if text else .72)
         while True:
             message_font=racing_font(message_size)
             lines=['']
@@ -190,14 +191,14 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
                     candidate=(lines[-1]+' '+chunk).strip()
                     if lines[-1] and message_font.getlength(candidate)>available_message:lines.append(chunk)
                     else:lines[-1]=candidate
-            if len(lines)<=3 or message_size<=7*scale:break
+            if (len(lines)<=3 and len(lines)*message_size*1.15<=region_height) or message_size<=11*scale:break
             message_size-=scale
         if len(lines)>3:
             lines=lines[:3]
             while lines[-1] and message_font.getlength(lines[-1]+'…')>available_message:lines[-1]=lines[-1][:-1]
             lines[-1]+='…'
         line_height=message_size*1.15
-        mid=h*.72
+        mid=h*(.69 if text else .5)
         if flag=='CHEQUERED':
             label_width=max(message_font.getlength(line) for line in lines)+20*scale
             draw.rounded_rectangle((w/2-label_width/2,mid-line_height*len(lines)/2-5*scale,

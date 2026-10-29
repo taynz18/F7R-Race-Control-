@@ -43,7 +43,11 @@ jobs:
       - run: python -m pip install -r requirements.txt pyinstaller==6.22.3
       - run: python -m unittest discover -s tests
       - run: node tests/test_admin.cjs
-      - run: python -m PyInstaller --onedir --windowed --icon "assets/f7r-app.ico" --add-data "config.json;." --add-data "assets;assets" --name RaceFlags driver.py
+      - name: Embed release version
+        shell: pwsh
+        run: |
+          @{ version = $env:RELEASE_TAG } | ConvertTo-Json | Set-Content -LiteralPath app-version.json -Encoding utf8
+      - run: python -m PyInstaller --onedir --windowed --icon "assets/f7r-app.ico" --add-data "config.json;." --add-data "app-version.json;." --add-data "assets;assets" --name RaceFlags driver.py
       - name: Check packaged overlay
         shell: pwsh
         run: |

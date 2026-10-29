@@ -69,6 +69,22 @@ class ArtworkTests(unittest.TestCase):
         self.assertGreater(image.getpixel((50,90))[0],image.getpixel((50,90))[1])
         self.assertGreater(image.getpixel((350,90))[1],image.getpixel((350,90))[0])
 
+    def test_short_live_message_uses_the_main_readable_area(self):
+        from unittest.mock import patch
+        from PIL import ImageDraw
+        recorded=[]
+        original=ImageDraw.ImageDraw.text
+        def record(draw,xy,text,*args,**kwargs):
+            if text=='No overtaking':recorded.append((xy,kwargs['font'].size))
+            return original(draw,xy,text,*args,**kwargs)
+        with patch.object(ImageDraw.ImageDraw,'text',record):
+            render_flag(800,100,'BLUE',message='No overtaking')
+            render_flag(800,100,'FCY',message='No overtaking',countdown=10)
+        self.assertEqual(len(recorded),2)
+        self.assertGreaterEqual(recorded[0][1],40*3)
+        self.assertGreaterEqual(recorded[1][1],28*3)
+        self.assertAlmostEqual(recorded[0][0][1],100*3*.5)
+
     def test_bundled_racing_font_is_loaded(self):
         self.assertIn(racing_font(24).getname()[0], ('Bahnschrift', 'Racing Sans One'))
 

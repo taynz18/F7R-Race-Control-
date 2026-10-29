@@ -22,6 +22,17 @@ from controls_ui import (BG, PANEL, INK, MUTED, ACCENT, RoundedPanel,
     RoundedButton, Toggle, SizeSlider, enable_dpi_awareness, ui_scale, font as ui_font)
 
 
+def application_version():
+    folder=Path(getattr(sys,'_MEIPASS',Path(__file__).parent))
+    try:
+        return str(json.loads((folder/'app-version.json').read_text(encoding='utf-8-sig'))['version'])
+    except (OSError,ValueError,KeyError,TypeError):
+        return 'development'
+
+
+APP_VERSION=application_version()
+
+
 def bundled_config():
     folder = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
     try:
@@ -102,7 +113,7 @@ class DriverApp:
         brand=logo.copy()
         brand.thumbnail((u(108),u(28)),Image.Resampling.LANCZOS)
         self.brand_image=ImageTk.PhotoImage(brand,master=root)
-        root.title('F7R · Driver controls')
+        root.title(f'F7R · Driver controls · {APP_VERSION}')
         root.configure(bg=BG)
         root.resizable(False,False)
         outer=tk.Frame(root,bg=BG,padx=u(26),pady=u(24))
@@ -110,7 +121,7 @@ class DriverApp:
         header=tk.Frame(outer,bg=BG)
         header.pack(fill='x')
         tk.Label(header,image=self.brand_image,bg=BG,bd=0).pack(side='left')
-        tk.Label(header,text='DRIVER DISPLAY',bg=BG,fg='#8392a8',font=f(10,'bold')).pack(side='right',pady=u(7))
+        tk.Label(header,text=f'DRIVER DISPLAY  /  {APP_VERSION}',bg=BG,fg='#8392a8',font=f(10,'bold')).pack(side='right',pady=u(7))
         tk.Label(outer,text='Your race. Your view.',bg=BG,fg=INK,font=f(27,'bold')).pack(anchor='w',pady=(u(24),u(8)))
         status_row=tk.Frame(outer,bg=BG)
         status_row.pack(fill='x',pady=(0,u(23)))
@@ -371,6 +382,8 @@ class DriverApp:
 
 def self_test(root, app):
     root.update()
+    assert APP_VERSION in root.title()
+    if getattr(sys,'frozen',False):assert APP_VERSION.startswith('v')
     for flag in COLORS:
         app.set_demo(flag)
         root.update()

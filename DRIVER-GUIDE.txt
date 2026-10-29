@@ -39,3 +39,9 @@ FCY 00:20 -> FCY ACTIVE (yellow stays active).
 PREPARE TO RACE 00:10 (half yellow / half green) -> plain GREEN.
 Keep this app updated so it recognizes the new Prepare to race signal.
 Plain colour flags intentionally show their colour without a colour-name label.
+
+CHECK YOU OPENED THE UPDATED APP
+The driver controls title bar now shows the exact version (for example v0.1.37).
+Close all older copies before testing. Extract the complete new ZIP to a new
+folder and launch RaceFlags.exe from that folder, rather than an old shortcut.
+An older app that still prints BLUE or RED does not support Prepare to race.

@@ -112,6 +112,13 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(e['flag']=='RED' for e in events))
         self.assertTrue(all(e['connection']=='Live' for e in events))
 
+    async def test_prepare_to_race_is_delivered_instead_of_offline(self):
+        event=dict(row('PREPARE TO RACE',5),custom_message='Ready',countdown_ends_at='2026-10-29T14:00:00Z')
+        events=await self.run_transport(FakeClient(event))
+        self.assertEqual(events[-1]['flag'],'PREPARE TO RACE')
+        self.assertEqual(events[-1]['custom_message'],'Ready')
+        self.assertIsNotNone(events[-1]['countdown_ends_at'])
+
     async def test_offline_is_visible_when_state_cannot_be_read(self):
         events = await self.run_transport(FakeClient(fail=True))
         self.assertEqual(events[-1]['flag'],'OFFLINE')
@@ -126,3 +133,4 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
 
 
 if __name__=='__main__': unittest.main()
+
