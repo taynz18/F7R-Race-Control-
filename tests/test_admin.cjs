@@ -37,7 +37,7 @@ async function evaluate(code){return await vm.runInContext(code,context);}
 (async()=>{
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(get('sign-in').disabled,false);
-  assert.equal(get('flag-grid').children.length,10);
+  assert.equal(get('flag-grid').children.length,11);
   get('email').value='test@example.invalid';get('password').value='local-test-only';
   await get('login-form').onsubmit({preventDefault(){}});
   assert.equal(get('console').hidden,true);
@@ -68,9 +68,18 @@ async function evaluate(code){return await vm.runInContext(code,context);}
   await evaluate('updateDuration(Date.parse(state.countdown_ends_at)+5000)');
   assert.equal(get('flag-duration').textContent,'00:00:00');
   assert.equal(saved.flag,'FCY'); // The browser never invents a GREEN signal.
-  assert.equal(get('duration-label').textContent,'AWAITING GREEN');
+  assert.equal(get('duration-label').textContent,'ACTIVATING FCY');
   await get('cancel-countdown').onclick();
   assert.equal(saved.flag,'FCY');assert.equal(saved.countdown_ends_at,null);
+  get('green-countdown-seconds').value='20';await get('start-green-countdown').onclick();
+  assert.equal(saved.flag,'PREPARE TO RACE');
+  await evaluate('updateDuration(Date.parse(state.countdown_ends_at)-20000)');
+  assert.equal(get('duration-label').textContent,'GREEN IN');
+  await evaluate('updateDuration(Date.parse(state.countdown_ends_at)+1000)');
+  assert.equal(get('duration-label').textContent,'AWAITING GREEN');
+  assert.equal(saved.flag,'PREPARE TO RACE');
+  await get('cancel-countdown').onclick();
+  assert.equal(saved.flag,'PREPARE TO RACE');assert.equal(saved.countdown_ends_at,null);
   const before=calls;
   for(const bad of ['0','-5','1.5','abc','2147483648']){
     get('countdown-seconds').value=bad;await get('start-countdown').onclick();
@@ -82,4 +91,5 @@ async function evaluate(code){return await vm.runInContext(code,context);}
   await get('sign-out').onclick();assert.equal(get('console').hidden,true);
   console.log('Admin flow checks passed: sign-in setup, unapproved account blocked, all primary flags, revision ordering, sign-out.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
 

@@ -6,7 +6,7 @@ from datetime import datetime
 from supabase import acreate_client, AsyncClientOptions
 
 FLAGS = {'CLEAR', 'YELLOW', 'SAFETY CAR', 'FCY', 'RED', 'GREEN', 'BLUE',
-         'WHITE', 'BLACK', 'CHEQUERED'}
+         'WHITE', 'BLACK', 'CHEQUERED', 'PREPARE TO RACE'}
 
 
 def validate_config(config):
@@ -45,8 +45,8 @@ class StateTracker:
                 end=datetime.fromisoformat(end.replace('Z','+00:00')).timestamp()
             except (ValueError,TypeError,AttributeError):
                 raise ValueError('Invalid countdown deadline')
-            if row['flag']!='FCY':
-                raise ValueError('Countdown is only valid for FCY')
+            if row['flag'] not in ('FCY','PREPARE TO RACE'):
+                raise ValueError('Countdown is only valid for FCY and Prepare to race')
         server=row.get('server_time')
         if server:
             self.clock_offset=datetime.fromisoformat(server.replace('Z','+00:00')).timestamp()-time.time()
@@ -103,3 +103,4 @@ async def receive_flags(config, emit, stop):
     finally:
         await client.remove_all_channels()
         await client.realtime.close()
+

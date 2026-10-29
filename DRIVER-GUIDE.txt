@@ -28,7 +28,14 @@ Its license and font information are included in _internal/assets.
 LIVE MESSAGES AND FCY COUNTDOWN
 Race control can show a short message below any active flag.
 During a timed FCY, the remaining time appears beside FCY. All drivers use
-one server deadline. At expiry the server sends GREEN automatically.
+one server deadline. FCY reaches FCY ACTIVE and stays yellow. A separate PREPARE TO RACE
+countdown is half yellow/half green and becomes full GREEN when it expires.
 If the connection is lost, the app shows OFFLINE; it never assumes GREEN.
 At 00:00 it waits for the confirmed server signal, so a later RED always wins.
 The current Windows download is required to see messages and countdowns.
+
+COUNTDOWN PHASES
+FCY 00:20 -> FCY ACTIVE (yellow stays active).
+PREPARE TO RACE 00:10 (half yellow / half green) -> plain GREEN.
+Keep this app updated so it recognizes the new Prepare to race signal.
+Plain colour flags intentionally show their colour without a colour-name label.

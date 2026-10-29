@@ -444,3 +444,8 @@ header, main, footer { position: relative; z-index: 1; }
 #cancel-countdown:disabled { display: none; }
 .race-tools button:disabled { cursor: default; }
 @media (max-width: 700px) { .race-tools { grid-template-columns: 1fr; gap: 16px; } .race-tools section { padding: 23px; } }
+
+
+.restart-tool { grid-column: 1 / -1; }
+#start-green-countdown { border-color: #49dc8b66; color: #88efb7; }
+.flag[data-flag='PREPARE TO RACE']::before { background: var(--fabric-weave),linear-gradient(105deg,#0005,#fff4 25%,#0003 50%,#fff4 72%,#0003),linear-gradient(90deg,#ffda36 50%,#49dc8b 50%); }

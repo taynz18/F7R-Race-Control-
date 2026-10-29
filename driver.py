@@ -354,7 +354,7 @@ class DriverApp:
             if event['connection']=='Polling fallback': text='Connected · checking for updates'
             self.status.set(text)
             changed=True
-        remaining=max(0,math.ceil(self.countdown_ends_at-time.time()-self.clock_offset)) if self.flag=='FCY' and self.countdown_ends_at is not None else None
+        remaining=max(0,math.ceil(self.countdown_ends_at-time.time()-self.clock_offset)) if self.flag in ('FCY','PREPARE TO RACE') and self.countdown_ends_at is not None else None
         if remaining!=self.countdown_display:
             self.countdown_display=remaining
             changed=True
@@ -450,3 +450,4 @@ if __name__ == '__main__':
         self_test(root,app)
         if callback_errors:raise RuntimeError(f'UI callback failed: {callback_errors}')
     else: root.mainloop()
+

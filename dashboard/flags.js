@@ -1,11 +1,11 @@
-export const FLAG_LABELS={CLEAR:'Clear flags',YELLOW:'Yellow','SAFETY CAR':'Safety car',FCY:'Full course yellow',RED:'Red',GREEN:'Green',BLUE:'Blue',WHITE:'White',BLACK:'Black',CHEQUERED:'Chequered'};
-export const FLAG_COLORS={CLEAR:'#8b96ab',YELLOW:'#ffd84d','SAFETY CAR':'#ffd84d',FCY:'#ffd84d',RED:'#ff5267',GREEN:'#70deac',BLUE:'#6baaff',WHITE:'#f5f5ef',BLACK:'#9aa4b5',CHEQUERED:'#f5f5ef'};
+export const FLAG_LABELS={CLEAR:'Clear flags',YELLOW:'Yellow','SAFETY CAR':'Safety car',FCY:'Full course yellow','PREPARE TO RACE':'Prepare to race',RED:'Red',GREEN:'Green',BLUE:'Blue',WHITE:'White',BLACK:'Black',CHEQUERED:'Chequered'};
+export const FLAG_COLORS={CLEAR:'#8b96ab',YELLOW:'#ffd84d','SAFETY CAR':'#ffd84d',FCY:'#ffd84d','PREPARE TO RACE':'#ffd84d',RED:'#ff5267',GREEN:'#70deac',BLUE:'#6baaff',WHITE:'#f5f5ef',BLACK:'#9aa4b5',CHEQUERED:'#f5f5ef'};
 export function flagTimer(state,now){
- if(!state||state.flag==='CLEAR')return {label:'NO FLAG ACTIVE',value:'—'};
- const end=state.flag==='FCY'&&state.countdown_ends_at?Date.parse(state.countdown_ends_at):null;
+ if(!state||state.flag==='CLEAR')return {label:'NO FLAG ACTIVE',value:'â€”'};
+ const end=['FCY','PREPARE TO RACE'].includes(state.flag)&&state.countdown_ends_at?Date.parse(state.countdown_ends_at):null;
  const sec=Math.max(0,end?Math.ceil((end-now)/1000):Math.floor((now-Date.parse(state.updated_at))/1000));
- if(!Number.isFinite(sec))return {label:'TIME UNAVAILABLE',value:'—'};
- return {label:end?(sec===0?'AWAITING GREEN':'GREEN IN'):'LIVE FOR',value:[Math.floor(sec/3600),Math.floor(sec/60)%60,sec%60].map(n=>String(n).padStart(2,'0')).join(':')};
+ if(!Number.isFinite(sec))return {label:'TIME UNAVAILABLE',value:'â€”'};
+ return {label:end?(state.flag==='FCY'?(sec===0?'ACTIVATING FCY':'FCY ACTIVE IN'):(sec===0?'AWAITING GREEN':'GREEN IN')):'LIVE FOR',value:[Math.floor(sec/3600),Math.floor(sec/60)%60,sec%60].map(n=>String(n).padStart(2,'0')).join(':')};
 }
 export class FlagController{
  constructor({client,isAdmin=false,userId=null,onChange=()=>{},onMessage=()=>{},now=()=>Date.now()}){
@@ -55,7 +55,7 @@ export class FlagController{
  }
  async send(flag,message='',seconds=null){
    if(!(flag in FLAG_LABELS)||typeof message!=='string'||message.length>120){this.onMessage('Choose a valid flag and a message up to 120 characters.');return false}
-   if(seconds!==null&&(flag!=='FCY'||!Number.isSafeInteger(seconds)||seconds<1||seconds>2147483647)){this.onMessage('Enter a whole number of seconds from 1 to 2147483647.');return false}
+   if(seconds!==null&&(!['FCY','PREPARE TO RACE'].includes(flag)||!Number.isSafeInteger(seconds)||seconds<1||seconds>2147483647)){this.onMessage('Enter a whole number of seconds from 1 to 2147483647.');return false}
    return this.write('set_race_signal',{requested_flag:flag,requested_message:flag==='CLEAR'?'':message.trim(),countdown_seconds:seconds,expected_revision:this.state?.revision??null});
  }
  async updateMessage(message,expectedRevision){
@@ -63,8 +63,9 @@ export class FlagController{
    return this.write('update_flag_message',{requested_message:message.trim(),expected_revision:expectedRevision});
  }
  async cancelCountdown(){
-   if(this.state?.flag!=='FCY'||!this.state.countdown_ends_at)return false;
-   return this.send('FCY',this.state.custom_message||'',null);
+   if(!['FCY','PREPARE TO RACE'].includes(this.state?.flag)||!this.state.countdown_ends_at)return false;
+   return this.send(this.state.flag,this.state.custom_message||'',null);
  }
 }
+
 

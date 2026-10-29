@@ -10,7 +10,7 @@ TRANSPARENT = '#010203'
 MIN_WIDTH, MAX_WIDTH, MIN_HEIGHT, MAX_HEIGHT = 240, 1200, 90, 480
 COLORS = {
     'YELLOW': ('#ffda36', '#9c7600'), 'SAFETY CAR': ('#ffda36', '#9c7600'),
-    'FCY': ('#ffda36', '#9c7600'), 'RED': ('#ff5558', '#971824'),
+    'FCY': ('#ffda36', '#9c7600'), 'PREPARE TO RACE': ('#ffda36','#166d40'), 'RED': ('#ff5558', '#971824'),
     'GREEN': ('#49dc8b', '#166d40'), 'BLUE': ('#579aff', '#234d94'),
     'WHITE': ('#f4f4ef', '#92958c'), 'BLACK': ('#252b30', '#080b0c'),
     'CHEQUERED': ('#efefed', '#565c60'),
@@ -115,8 +115,12 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
     top, bottom = blend(fill, (255,255,255), .11), blend(fill, (0,0,0), .09)
     for y in range(h):
         panel_draw.line((0, y, w, y), fill=blend(top, bottom, y/max(1,h-1)))
+    if flag == 'PREPARE TO RACE':
+        green=rgb(COLORS['GREEN'][0])
+        for y in range(h):
+            panel_draw.line((w//2,y,w,y),fill=blend(blend(green,(255,255,255),.11),blend(green,(0,0,0),.09),y/max(1,h-1)))
     if flag == 'CHEQUERED':
-        cell = max(14, width//16)*scale
+        cell = max(6, width//40)*scale
         for row, y in enumerate(range(0, h, cell)):
             for col, x in enumerate(range(0, w, cell)):
                 panel_draw.rectangle((x,y,x+cell-1,y+cell-1),
@@ -144,10 +148,12 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
     draw = ImageDraw.Draw(image)
     foreground = (243,247,255) if flag in ('BLACK','CHEQUERED','OFFLINE','CONNECTING','SETUP','CLEAR') else (16,23,32)
     text = 'NO ACTIVE FLAG' if flag == 'CLEAR' else 'CONNECTING' if flag == 'SETUP' else flag
-    if flag=='FCY' and countdown is not None:
+    if flag in COLORS and flag not in ('SAFETY CAR','FCY','PREPARE TO RACE'):text=''
+    if flag=='FCY' and countdown is None:text='FCY ACTIVE'
+    if flag in ('FCY','PREPARE TO RACE') and countdown is not None:
         seconds=max(0,int(countdown))
         timer=f'{seconds//60:02d}:{seconds%60:02d}' if seconds<3600 else f'{seconds//3600:02d}:{seconds//60%60:02d}:{seconds%60:02d}'
-        text=f'FCY   {timer}'
+        text=f'{flag}   {timer}'
     message=' '.join(str(message).split())[:120] if flag not in ('OFFLINE','CONNECTING','SETUP','CLEAR') else ''
     font_size = max(16*scale, min(int(h*(.33 if message else .43)), int(w*.14)))
     available = w-88*scale
@@ -157,7 +163,7 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
     box = draw.textbbox((0,0), text, font=font)
     text_width, text_height = box[2]-box[0], box[3]-box[1]
     center_x, center_y = w/2-4*scale, h*(.34 if message else .5)
-    if flag == 'CHEQUERED':
+    if flag == 'CHEQUERED' and text:
         draw.rounded_rectangle((center_x-text_width/2-14*scale, center_y-text_height/2-11*scale,
             center_x+text_width/2+14*scale, center_y+text_height/2+11*scale),
             radius=10*scale, fill='#131b27')
@@ -221,3 +227,4 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
     result = Image.new('RGB',(width,height),rgb(TRANSPARENT))
     result.paste(artwork.convert('RGB'),(0,0),silhouette)
     return result
+

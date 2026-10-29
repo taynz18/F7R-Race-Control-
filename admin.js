@@ -4,6 +4,7 @@ const FLAGS = {
   CLEAR: ['Clear flags','Hide driver overlays','#d8e2df','#81938c'],
   YELLOW: ['Yellow','Caution','#ffda36','#9c7600'],
   'SAFETY CAR': ['Safety car','SC deployed','#ffda36','#9c7600'],
+  'PREPARE TO RACE': ['Prepare to race','Countdown to green','#ffda36','#166d40'],
   FCY: ['FCY','Full course yellow','#ffda36','#9c7600'],
   RED: ['Red','Session stopped','#ff5558','#971824'],
   GREEN: ['Green','Track clear','#49dc8b','#166d40'],
@@ -14,7 +15,7 @@ const FLAGS = {
 };
 let client, channel, user, state, changing=false, verified=false, checkGeneration=0, messageDirty=false, clockOffset=0;
 function message(text='') { $('message').textContent=text; }
-function buttons() { $('custom-message').disabled=changing || !verified; $('countdown-seconds').disabled=changing || !verified; $('update-message').disabled=changing || !verified || !state || state.flag==='CLEAR'; $('start-countdown').disabled=changing || !verified; $('cancel-countdown').disabled=changing || !verified || !state?.countdown_ends_at || state.flag!=='FCY'; document.querySelectorAll('.flag').forEach(b => {b.disabled=changing || !verified; b.setAttribute('aria-pressed', String(b.dataset.flag===state?.flag));}); }
+function buttons() { $('green-countdown-seconds').disabled=changing || !verified; $('start-green-countdown').disabled=changing || !verified; $('custom-message').disabled=changing || !verified; $('countdown-seconds').disabled=changing || !verified; $('update-message').disabled=changing || !verified || !state || state.flag==='CLEAR'; $('start-countdown').disabled=changing || !verified; $('cancel-countdown').disabled=changing || !verified || !state?.countdown_ends_at || !['FCY','PREPARE TO RACE'].includes(state.flag); document.querySelectorAll('.flag').forEach(b => {b.disabled=changing || !verified; b.setAttribute('aria-pressed', String(b.dataset.flag===state?.flag));}); }
 function formatDuration(milliseconds) {
   if (!Number.isFinite(milliseconds)) return '—';
   const seconds=Math.max(0,Math.floor(milliseconds/1000));
@@ -23,9 +24,9 @@ function formatDuration(milliseconds) {
 }
 function updateDuration(now=Date.now()+clockOffset) {
   const active=state && state.flag!=='CLEAR';
-  const countdown=active && state.flag==='FCY' && state.countdown_ends_at;
+  const countdown=active && ['FCY','PREPARE TO RACE'].includes(state.flag) && state.countdown_ends_at;
   const remaining=countdown?Math.max(0,Math.ceil((Date.parse(state.countdown_ends_at)-now)/1000)):null;
-  $('duration-label').textContent=countdown?(remaining===0?'AWAITING GREEN':'GREEN IN'):active?'LIVE FOR':'NO FLAG ACTIVE';
+  $('duration-label').textContent=countdown?(state.flag==='FCY'?(remaining===0?'ACTIVATING FCY':'FCY ACTIVE IN'):(remaining===0?'AWAITING GREEN':'GREEN IN')):active?'LIVE FOR':'NO FLAG ACTIVE';
   $('flag-duration').textContent=countdown?formatDuration(remaining*1000):active?formatDuration(now-Date.parse(state.updated_at)):'—';
 }
 function applyState(next) {
@@ -38,7 +39,7 @@ function applyState(next) {
   updateDuration();
   const halo=next.flag==='CLEAR'?'#657c92':next.flag==='BLACK'?'#748197':FLAGS[next.flag][2];
   $('race-atmosphere').style.cssText=`--halo:${halo};--deep:${FLAGS[next.flag][3]}`;
-  $('active-flag').textContent=next.flag==='CLEAR'?'No active flag':FLAGS[next.flag][0];
+  $('active-flag').textContent=next.flag==='CLEAR'?'No active flag':next.flag==='FCY'&&!next.countdown_ends_at?'FCY active':FLAGS[next.flag][0];
   $('changed-at').textContent=(next.flag==='CLEAR'?'Cleared ':'Live since ')+new Date(next.updated_at).toLocaleString();
   document.querySelector('.current').style.cssText=`--current-signal:${FLAGS[next.flag][2]};--current-edge:${FLAGS[next.flag][3]}`;buttons();
 }
@@ -51,7 +52,7 @@ async function history() {
   if(error) throw error;
   $('history').replaceChildren();
   if(!data.length){const li=document.createElement('li');li.textContent='No signals sent yet.';$('history').append(li);}
-  for(const row of data){const li=document.createElement('li'),label=document.createElement('strong'),time=document.createElement('time');label.textContent=(FLAGS[row.flag]?.[0]||row.flag)+(row.reason==='countdown'?' · Automatic restart':row.reason==='message'?' · Message updated':'')+(row.custom_message?' — '+row.custom_message:'');time.dateTime=row.changed_at;time.textContent=new Date(row.changed_at).toLocaleString();li.append(label,time);$('history').append(li);}
+  for(const row of data){const li=document.createElement('li'),label=document.createElement('strong'),time=document.createElement('time');label.textContent=(FLAGS[row.flag]?.[0]||row.flag)+(row.reason==='fcy_active'?' · FCY active':row.reason==='countdown'?' · Automatic restart':row.reason==='message'?' · Message updated':'')+(row.custom_message?' — '+row.custom_message:'');time.dateTime=row.changed_at;time.textContent=new Date(row.changed_at).toLocaleString();li.append(label,time);$('history').append(li);}
 }
 async function changeFlag(flag, countdown=null) {
   if(changing || !verified)return;
@@ -103,13 +104,18 @@ $('start-countdown').onclick=()=>{
   if(!/^\d+$/.test(value) || !Number.isSafeInteger(seconds) || seconds<1 || seconds>2147483647){message('Enter a whole number of seconds, from 1 to 2147483647.');return;}
   return changeFlag('FCY',seconds);
 };
+$('start-green-countdown').onclick=()=>{
+  const value=$('green-countdown-seconds').value.trim(),seconds=Number(value);
+  if(!/^\d+$/.test(value)||!Number.isSafeInteger(seconds)||seconds<1||seconds>2147483647){message('Enter a positive whole number of seconds for Prepare to race.');return;}
+  return changeFlag('PREPARE TO RACE',seconds);
+};
 $('cancel-countdown').onclick=async()=>{
-  if(changing || !verified || state?.flag!=='FCY' || !state.countdown_ends_at)return;
+  if(changing || !verified || !['FCY','PREPARE TO RACE'].includes(state?.flag) || !state.countdown_ends_at)return;
   changing=true;buttons();
   try {
-    const {data,error}=await client.rpc('set_race_signal',{requested_flag:'FCY',requested_message:state.custom_message||'',countdown_seconds:null,expected_revision:state.revision});
+    const {data,error}=await client.rpc('set_race_signal',{requested_flag:state.flag,requested_message:state.custom_message||'',countdown_seconds:null,expected_revision:state.revision});
     if(error)throw error;
-    applyState(Array.isArray(data)?data[0]:data);message('Countdown cancelled. FCY remains live.');await history();
+    applyState(Array.isArray(data)?data[0]:data);message('Countdown cancelled. The current flag remains live.');await history();
   } catch(error){message('Could not cancel the timer. '+error.message);await refreshState().catch(()=>{});}
   finally{changing=false;buttons();}
 };
@@ -133,3 +139,4 @@ async function start(){
 }
 setInterval(()=>{if(verified)updateDuration();},1000);
 start();
+

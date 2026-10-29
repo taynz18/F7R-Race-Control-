@@ -51,6 +51,24 @@ class ArtworkTests(unittest.TestCase):
                 self.assertNotEqual(image.getpixel((200,2)),(1,2,3))
                 self.assertGreater(sum(image.getpixel((200,2))),sum(image.getpixel((200,6))))
 
+    def test_prepare_art_is_half_yellow_half_green_and_plain_flags_have_no_colour_text(self):
+        from unittest.mock import patch
+        from PIL import ImageDraw
+        recorded=[]
+        original=ImageDraw.ImageDraw.text
+        def record(draw,xy,text,*args,**kwargs):
+            recorded.append(text)
+            return original(draw,xy,text,*args,**kwargs)
+        with patch.object(ImageDraw.ImageDraw,'text',record):
+            for flag in ('RED','YELLOW','GREEN','BLUE','WHITE','BLACK','CHEQUERED'):
+                recorded.clear();render_flag(400,140,flag)
+                self.assertNotIn(flag,recorded)
+            recorded.clear();render_flag(400,140,'FCY')
+            self.assertIn('FCY ACTIVE',recorded)
+        image=render_flag(400,140,'PREPARE TO RACE',countdown=20)
+        self.assertGreater(image.getpixel((50,90))[0],image.getpixel((50,90))[1])
+        self.assertGreater(image.getpixel((350,90))[1],image.getpixel((350,90))[0])
+
     def test_bundled_racing_font_is_loaded(self):
         self.assertIn(racing_font(24).getname()[0], ('Bahnschrift', 'Racing Sans One'))
 
@@ -72,3 +90,4 @@ class ArtworkTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+

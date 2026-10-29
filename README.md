@@ -1,4 +1,4 @@
-# F7R Race Control — combined dashboard
+# F7R Race Control â€” combined dashboard
 
 **Start here: [Combined dashboard setup](F7R-DASHBOARD-SETUP.md).**
 
@@ -8,7 +8,7 @@ The home page now combines driver telemetry and live flag viewing. Approved race
 
 # F7R Race Control
 
-**[Download the Windows driver app](https://github.com/taynz18/F7R-Race-Control-/releases/latest/download/RaceFlags-Windows.zip)** · **[Open the admin portal](https://taynz18.github.io/F7R-Race-Control-/)**
+**[Download the Windows driver app](https://github.com/taynz18/F7R-Race-Control-/releases/latest/download/RaceFlags-Windows.zip)** Â· **[Open the admin portal](https://taynz18.github.io/F7R-Race-Control-/)**
 
 Drivers: download the ZIP, select **Extract All**, open the **RaceFlags** folder and run **RaceFlags.exe**. Keep the `_internal` folder alongside it. The connection to race control is included.
 
@@ -24,7 +24,7 @@ A Windows driver overlay and a browser admin portal. Supabase provides email/pas
 
 1. Open https://supabase.com/dashboard and create a project named **Race Flags**. Choose your preferred region and save the database password privately. Wait until the project is ready.
 2. Open **SQL Editor**, paste the contents of `supabase/01-setup.sql`, and run it. This creates the tables, access policies, control function and Realtime publication. You can rerun the script without resetting flags or removing admins.
-3. Open **Authentication → Users** and create your admin user with your email and a strong password. If available, mark the email confirmed. Keep the password private. Disable public user sign-ups in Authentication settings; driver accounts are not needed.
+3. Open **Authentication â†’ Users** and create your admin user with your email and a strong password. If available, mark the email confirmed. Keep the password private. Disable public user sign-ups in Authentication settings; driver accounts are not needed.
 4. Copy `supabase/02-add-admin.sql` into a new SQL Editor query, replace the email placeholder with the email you just created, and run it. This approves the account to send flags.
 
 5. Open the project's **Connect** dialog and copy its Project URL and **publishable key**. Put them in `config.json`:
@@ -83,15 +83,15 @@ Create a GitHub repository and upload this folder's **contents**, including the 
 
 ### Admin portal on GitHub Pages
 
-1. Open repository **Settings → Pages** and choose **GitHub Actions** as the source.
-2. Open **Actions → Publish admin portal → Run workflow**.
+1. Open repository **Settings â†’ Pages** and choose **GitHub Actions** as the source.
+2. Open **Actions â†’ Publish admin portal â†’ Run workflow**.
 3. Open the URL from the completed deployment, adding `/admin.html`.
 
 This workflow publishes only the five website/configuration files. The sign-in page is public; account authentication and database permissions protect flag controls. The admin page loads a pinned Supabase client from jsDelivr and optional fonts from Google Fonts.
 
 ### Windows driver releases
 
-Open **Actions → Windows driver release → Run workflow**, enter a new version such as `v1.0.0`, and run it. Pushing a version tag also starts the build. The release workflow installs the pinned dependencies, runs connection tests, builds a Windows app folder, and attaches `RaceFlags-Windows.zip` to a GitHub Release. Drivers download it from **Releases**. Configuration is bundled at build time. GitHub Actions needs permission to write repository contents. The executable is unsigned; Windows may show an unsigned-app notice.
+Open **Actions â†’ Windows driver release â†’ Run workflow**, enter a new version such as `v1.0.0`, and run it. Pushing a version tag also starts the build. The release workflow installs the pinned dependencies, runs connection tests, builds a Windows app folder, and attaches `RaceFlags-Windows.zip` to a GitHub Release. Drivers download it from **Releases**. Configuration is bundled at build time. GitHub Actions needs permission to write repository contents. The executable is unsigned; Windows may show an unsigned-app notice.
 
 Manual source run and build:
 
@@ -128,7 +128,7 @@ message without resetting the live timer or FCY deadline. Blank removes the mess
 
 For a timed restart enter a positive whole number of seconds and click Start FCY
 countdown. The server stores a single deadline and a Cron job checks it every
-second. At expiry it atomically replaces FCY with GREEN, clears the message,
+second. At FCY expiry it stays yellow and becomes FCY ACTIVE; Prepare to race expires to GREEN, clears the message,
 and records an Automatic restart in history. Delivery can follow by up to one
 scheduler tick plus network delay; clients wait for the confirmed GREEN signal.
 Closing the admin browser does not cancel the countdown. Choosing any other
@@ -141,3 +141,17 @@ Older driver versions still receive flag changes, including automatic GREEN.
 Run `supabase/test-live-messages.sql` for rollback-only verification of messages,
 automatic GREEN, cancellation, validation and access controls.
 
+
+
+## FCY activation and Prepare to race countdowns
+Run `supabase/upgrade-countdown-phases.sql` after the live-messages upgrade on an existing project.
+The applied hosted migration is also saved under `supabase/migrations/20261029115307_split_fcy_activation_and_prepare_restart.sql`.
+
+* FCY countdown: yellow FCY and seconds remaining, then yellow FCY ACTIVE. It stays yellow.
+* Prepare to race countdown: half yellow, half green with PREPARE TO RACE and seconds remaining, then fully green.
+* Both timers run on the server and work with the browser closed. A new flag cancels a pending timer.
+* Cancel timer keeps the current signal and removes its deadline. Messages can be edited without restarting a timer.
+* Driver colour names are removed. Safety Car, FCY and Prepare to race retain their labels. Custom messages still appear.
+* Chequered flags use smaller squares.
+
+All drivers must update their Windows flag overlay to display Prepare to race correctly; older clients cannot display this new signal.
