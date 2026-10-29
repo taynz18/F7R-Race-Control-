@@ -18,72 +18,8 @@ from connection import FLAGS, receive_flags, validate_config
 from overlay_ui import (COLORS, TRANSPARENT, MIN_WIDTH, MAX_WIDTH, MIN_HEIGHT, MAX_HEIGHT,
                         clamp, hit_zone, resize_from_edge, visible_on_monitors, render_flag)
 
-BG, PANEL, INK, MUTED, ACCENT = '#0c111b', '#151e2b', '#f0f5fc', '#96a5bb', '#d9ff79'
-
-
-def rounded_box(canvas, x1, y1, x2, y2, radius, **kwargs):
-    r = min(radius, (x2-x1)/2, (y2-y1)/2)
-    return canvas.create_polygon(x1+r,y1,x2-r,y1,x2,y1,x2,y1+r,x2,y2-r,x2,y2,
-        x2-r,y2,x1+r,y2,x1,y2,x1,y2-r,x1,y1+r,x1,y1,
-        smooth=True, splinesteps=24, **kwargs)
-
-
-class RoundedButton(tk.Canvas):
-    def __init__(self, parent, text, command):
-        super().__init__(parent, height=44, bg=BG, bd=0, highlightthickness=0,
-                         cursor='hand2', takefocus=True)
-        self.text, self.command, self.hover = text, command, False
-        self.bind('<Configure>', lambda _: self.draw())
-        self.bind('<Enter>', lambda _: self.set_hover(True))
-        self.bind('<Leave>', lambda _: self.set_hover(False))
-        self.bind('<Button-1>', lambda _: self.focus_set())
-        self.bind('<ButtonRelease-1>', self.activate)
-        self.bind('<Return>', lambda _: command())
-        self.bind('<space>', lambda _: command())
-        self.bind('<FocusIn>', lambda _: self.draw())
-        self.bind('<FocusOut>', lambda _: self.draw())
-
-    def set_hover(self, value):
-        self.hover = value
-        self.draw()
-
-    def activate(self, event):
-        if 0 <= event.x < self.winfo_width() and 0 <= event.y < self.winfo_height():
-            self.command()
-
-    def draw(self):
-        self.delete('all')
-        width = max(10, self.winfo_width())
-        rounded_box(self,1,1,width-1,43,12,fill='#283547' if self.hover else '#1b2737',
-                    outline=ACCENT if self.focus_get() == self else '#354459')
-        self.create_text(width/2,22,text=self.text,fill=INK,font=('Segoe UI',10,'bold'))
-
-
-class Toggle(tk.Canvas):
-    def __init__(self, parent, variable, command):
-        super().__init__(parent, width=46, height=26, bg=PANEL, bd=0,
-                         highlightthickness=0, cursor='hand2', takefocus=True)
-        self.variable, self.command = variable, command
-        self.bind('<Button-1>', lambda _: self.toggle())
-        self.bind('<space>', lambda _: self.toggle())
-        self.bind('<Return>', lambda _: self.toggle())
-        self.bind('<FocusIn>', lambda _: self.draw())
-        self.bind('<FocusOut>', lambda _: self.draw())
-        self.draw()
-
-    def toggle(self):
-        self.focus_set()
-        self.variable.set(not self.variable.get())
-        self.draw()
-        self.command()
-
-    def draw(self):
-        self.delete('all')
-        on = self.variable.get()
-        rounded_box(self,1,1,45,25,12,fill=ACCENT if on else '#3b4b61',
-                    outline=INK if self.focus_get() == self else '')
-        x = 33 if on else 13
-        self.create_oval(x-8,5,x+8,21,fill='#192419' if on else '#dae2ef',outline='')
+from controls_ui import (BG, PANEL, INK, MUTED, ACCENT, RoundedPanel,
+    RoundedButton, Toggle, SizeSlider, enable_dpi_awareness, ui_scale, font as ui_font)
 
 
 def bundled_config():
@@ -141,6 +77,13 @@ class DriverApp:
         def number(name, default):
             try: return int(self.settings.get(name,default))
             except (ValueError,TypeError): return default
+        # Older releases were DPI-virtualized by Windows. Convert saved logical
+        # placement once so a DPI-aware update preserves the on-screen footprint.
+        if self.settings and number('geometry_version',1)<2:
+            ratio=root.winfo_fpixels('1i')/96 if sys.platform=='win32' else 1
+            for key in ('width','height','x','y'):
+                if key in self.settings:self.settings[key]=round(number(key,0)*ratio)
+        self.settings['geometry_version']=2
         self.width = clamp(number('width',380),MIN_WIDTH,MAX_WIDTH)
         self.height = clamp(number('height',int(self.width*.33)),MIN_HEIGHT,MAX_HEIGHT)
         self.hide_clear = tk.BooleanVar(value=bool(self.settings.get('hide_clear',True)))
@@ -148,58 +91,71 @@ class DriverApp:
         self.size_text = tk.StringVar()
         self.status = tk.StringVar(value='Local preview · not connected' if demo else 'Connecting to race control…')
         self.config = connection_config(self.settings)
-        assets = Path(getattr(sys, '_MEIPASS', Path(__file__).parent)) / 'assets'
-        logo = Image.open(BytesIO((assets / 'f7r-logo.png').read_bytes())).convert('RGBA')
-        self.app_icon = ImageTk.PhotoImage(logo, master=root)
-        root.iconphoto(True, self.app_icon)
-        brand = logo.copy()
-        brand.thumbnail((124, 36), Image.Resampling.LANCZOS)
-        self.brand_image = ImageTk.PhotoImage(brand, master=root)
+        self.ui_scale=ui_scale(root)
+        u=lambda value: max(1,round(value*self.ui_scale))
+        f=lambda pixels,weight='normal':ui_font(self.ui_scale,pixels,weight)
+        assets=Path(getattr(sys,'_MEIPASS',Path(__file__).parent))/'assets'
+        logo=Image.open(BytesIO((assets/'f7r-logo.png').read_bytes())).convert('RGBA')
+        icon=Image.open(BytesIO((assets/'f7r-app.ico').read_bytes())).convert('RGBA')
+        self.app_icon=ImageTk.PhotoImage(icon,master=root)
+        root.iconphoto(True,self.app_icon)
+        brand=logo.copy()
+        brand.thumbnail((u(108),u(28)),Image.Resampling.LANCZOS)
+        self.brand_image=ImageTk.PhotoImage(brand,master=root)
         root.title('F7R · Driver controls')
         root.configure(bg=BG)
-        root.geometry('400x500')
         root.resizable(False,False)
-        outer = tk.Frame(root,bg=BG,padx=24,pady=22)
+        outer=tk.Frame(root,bg=BG,padx=u(26),pady=u(24))
         outer.pack(fill='both',expand=True)
-        header = tk.Frame(outer,bg=BG)
+        header=tk.Frame(outer,bg=BG)
         header.pack(fill='x')
-        tk.Label(header,image=self.brand_image,bg=BG).pack(side='left')
-        tk.Label(header,text='  DRIVER OVERLAY',bg=BG,fg=MUTED,font=('Segoe UI',9,'bold')).pack(side='left',padx=8)
-        tk.Label(outer,text='Make it yours.',bg=BG,fg=INK,font=('Segoe UI',20,'bold')).pack(anchor='w',pady=(14,3))
-        tk.Label(outer,textvariable=self.status,bg=BG,fg=MUTED,font=('Segoe UI',9),wraplength=348).pack(anchor='w',pady=(0,18))
-        card = tk.Canvas(outer,height=159,bg=BG,bd=0,highlightthickness=0)
+        tk.Label(header,image=self.brand_image,bg=BG,bd=0).pack(side='left')
+        tk.Label(header,text='DRIVER DISPLAY',bg=BG,fg='#8392a8',font=f(10,'bold')).pack(side='right',pady=u(7))
+        tk.Label(outer,text='Your race. Your view.',bg=BG,fg=INK,font=f(27,'bold')).pack(anchor='w',pady=(u(24),u(8)))
+        status_row=tk.Frame(outer,bg=BG)
+        status_row.pack(fill='x',pady=(0,u(23)))
+        self.status_dot=tk.Label(status_row,text='●',bg=BG,fg='#e6bb63',font=f(10),bd=0)
+        self.status_dot.pack(side='left',padx=(0,u(7)))
+        tk.Label(status_row,textvariable=self.status,bg=BG,fg=MUTED,font=f(12),wraplength=u(340),justify='left',bd=0).pack(side='left')
+        self.status.trace_add('write',self.update_status_colour)
+        self.update_status_colour()
+        card=RoundedPanel(outer,219,self.ui_scale)
         card.pack(fill='x')
-        card.bind('<Configure>',lambda e:(card.delete('panel'),rounded_box(card,0,0,e.width,158,18,
-            fill=PANEL,outline='#253347',tags='panel'),card.tag_lower('panel')))
-        content = tk.Frame(card,bg=PANEL)
-        card.create_window(18,15,window=content,anchor='nw',width=314)
-        size_row = tk.Frame(content,bg=PANEL)
+        content=tk.Frame(card,bg=PANEL)
+        content_width=430-52-40
+        card.create_window(u(20),u(20),window=content,anchor='nw',width=u(content_width))
+        size_row=tk.Frame(content,bg=PANEL)
         size_row.pack(fill='x')
-        tk.Label(size_row,text='Size',bg=PANEL,fg=INK,font=('Segoe UI',10,'bold')).pack(side='left')
-        tk.Label(size_row,textvariable=self.size_text,bg=PANEL,fg=MUTED,font=('Segoe UI',9)).pack(side='right')
-        self.scale = tk.Scale(content,from_=MIN_WIDTH,to=MAX_WIDTH,variable=self.size,orient='horizontal',
-            showvalue=False,command=self.slider_resize,bg=PANEL,fg=INK,troughcolor='#0b121e',
-            activebackground=ACCENT,sliderrelief='flat',sliderlength=20,highlightthickness=0,bd=0,
-            width=7,takefocus=True)
-        self.scale.pack(fill='x',pady=(8,8))
-        tk.Frame(content,bg='#273448',height=1).pack(fill='x',pady=(2,12))
-        toggle_row = tk.Frame(content,bg=PANEL)
+        tk.Label(size_row,text='Overlay size',bg=PANEL,fg=INK,font=f(13,'bold'),bd=0).pack(side='left')
+        tk.Label(size_row,textvariable=self.size_text,bg='#202c3d',fg='#bdcbe0',font=f(11),padx=u(9),pady=u(5)).pack(side='right')
+        self.scale=SizeSlider(content,self.size,self.slider_resize,MIN_WIDTH,MAX_WIDTH,self.ui_scale)
+        self.scale.pack(fill='x',pady=(u(8),0))
+        endpoints=tk.Frame(content,bg=PANEL)
+        endpoints.pack(fill='x')
+        tk.Label(endpoints,text='Small',bg=PANEL,fg='#75869e',font=f(10),bd=0).pack(side='left')
+        tk.Label(endpoints,text='Large',bg=PANEL,fg='#75869e',font=f(10),bd=0).pack(side='right')
+        tk.Frame(content,bg='#2b3749',height=u(1)).pack(fill='x',pady=(u(19),u(17)))
+        toggle_row=tk.Frame(content,bg=PANEL)
         toggle_row.pack(fill='x')
-        tk.Label(toggle_row,text='Transparent mode',bg=PANEL,fg=INK,font=('Segoe UI',10,'bold')).pack(side='left')
-        self.toggle = Toggle(toggle_row,self.hide_clear,self.changed)
+        tk.Label(toggle_row,text='Transparent mode',bg=PANEL,fg=INK,font=f(13,'bold'),bd=0).pack(side='left')
+        self.toggle=Toggle(toggle_row,self.hide_clear,self.changed,self.ui_scale)
         self.toggle.pack(side='right')
-        tk.Label(content,text='Hide the overlay when no flag is active.',bg=PANEL,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',pady=(2,0))
-        tk.Label(outer,text='Drag centre to move · drag edges to resize',bg=BG,fg=MUTED,font=('Segoe UI',8)).pack(pady=(13,11))
-        self.close_button = RoundedButton(outer,'Close Race Flags',self.close)
+        tk.Label(content,text='Hide when no flag is active.',bg=PANEL,fg=MUTED,font=f(11),bd=0).pack(anchor='w',pady=(u(4),0))
+        help_row=tk.Frame(outer,bg=BG)
+        help_row.pack(fill='x',pady=(u(20),u(20)))
+        tk.Label(help_row,text='MOVE & RESIZE',bg=BG,fg='#8294ae',font=f(9,'bold'),bd=0).pack(anchor='w')
+        tk.Label(help_row,text='Drag the flag to move. Drag an edge to resize.',bg=BG,fg='#b1bfd2',font=f(11),bd=0).pack(anchor='w',pady=(u(5),0))
+        self.close_button=RoundedButton(outer,'Close Race Flags',self.close,self.ui_scale)
         self.close_button.pack(fill='x')
         if demo:
-            self.demo_flag = tk.StringVar(value='YELLOW')
-            pick = ttk.Combobox(outer,textvariable=self.demo_flag,values=sorted(FLAGS),state='readonly')
-            pick.pack(fill='x',pady=7)
-            pick.bind('<<ComboboxSelected>>',lambda _: self.set_demo(self.demo_flag.get()))
+            self.demo_flag=tk.StringVar(value='YELLOW')
+            pick=ttk.Combobox(outer,textvariable=self.demo_flag,values=sorted(FLAGS),state='readonly')
+            pick.pack(fill='x',pady=u(7))
+            pick.bind('<<ComboboxSelected>>',lambda _:self.set_demo(self.demo_flag.get()))
         root.update_idletasks()
-        control_height=max(440,root.winfo_reqheight())
-        root.geometry(f'400x{control_height}+{max(0,(root.winfo_screenwidth()-400)//2)}+{max(0,(root.winfo_screenheight()-control_height)//2)}')
+        control_width=u(430)
+        control_height=root.winfo_reqheight()
+        root.geometry(f'{control_width}x{control_height}+{max(0,(root.winfo_screenwidth()-control_width)//2)}+{max(0,(root.winfo_screenheight()-control_height)//2)}')
         self.overlay = tk.Toplevel(root)
         self.overlay.title('F7R · Flag overlay')
         self.overlay.withdraw()
@@ -241,7 +197,15 @@ class DriverApp:
                 value = ctypes.c_int(1)
                 ctypes.windll.dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd),20,
                     ctypes.byref(value),ctypes.sizeof(value))
+                corner=ctypes.c_int(2)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd),33,
+                    ctypes.byref(corner),ctypes.sizeof(corner))
             except (AttributeError,OSError): pass
+
+    def update_status_colour(self,*_):
+        status=self.status.get().lower()
+        colour='#6ee5a5' if status.startswith('connected') else '#ff7b87' if 'lost' in status or 'not configured' in status else '#e6bb63'
+        self.status_dot.configure(fg=colour)
 
     def set_demo(self, flag):
         self.flag = flag
@@ -432,6 +396,26 @@ def self_test(root, app):
     app.hide_clear.set(False)
     app.draw()
     assert app.canvas.find_all()
+    # Custom controls still resize, toggle and remain wholly inside the window.
+    before=app.width
+    app.scale.step(10)
+    root.update()
+    assert app.width==min(MAX_WIDTH,before+10)
+    app.scale.set(MIN_WIDTH)
+    root.update()
+    assert app.width==MIN_WIDTH
+    app.scale.set(MAX_WIDTH)
+    root.update()
+    assert app.width==MAX_WIDTH
+    original=app.hide_clear.get()
+    app.toggle.toggle()
+    assert app.hide_clear.get()!=original
+    app.toggle.toggle()
+    assert app.hide_clear.get()==original
+    assert app.scale.winfo_width()>100
+    assert app.toggle.winfo_width()>20
+    assert app.close_button.winfo_y()+app.close_button.winfo_height()<=app.close_button.master.winfo_height()
+    assert root.winfo_height()<=root.winfo_screenheight()-40
     x,y=app.overlay.winfo_x(),app.overlay.winfo_y()
     app.set_geometry((x,y,520,170))
     root.update()
@@ -456,7 +440,13 @@ if __name__ == '__main__':
     if getattr(sys,'frozen',False):
         os.environ['TCL_LIBRARY']=os.path.relpath(Path(sys._MEIPASS)/'_tcl_data')
         os.environ['TK_LIBRARY']=os.path.relpath(Path(sys._MEIPASS)/'_tk_data')
+    enable_dpi_awareness()
     root=tk.Tk()
+    callback_errors=[]
+    if '--self-test' in sys.argv:
+        root.report_callback_exception=lambda *error:callback_errors.append(error)
     app=DriverApp(root,demo='--demo' in sys.argv or '--self-test' in sys.argv)
-    if '--self-test' in sys.argv: self_test(root,app)
+    if '--self-test' in sys.argv:
+        self_test(root,app)
+        if callback_errors:raise RuntimeError(f'UI callback failed: {callback_errors}')
     else: root.mainloop()

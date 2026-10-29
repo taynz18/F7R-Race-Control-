@@ -11,6 +11,7 @@ on:
     tags: ['v*']
     paths:
       - 'driver.py'
+      - 'controls_ui.py'
       - 'overlay_ui.py'
       - 'assets/**'
       - 'DRIVER-GUIDE.txt'
