@@ -12,7 +12,7 @@ from tkinter import ttk
 import webbrowser
 
 DASHBOARD = "https://taynz18.github.io/F7R-Race-Control-/?v=0.7.0"
-BG, CARD, TEXT, MUTED, RED = "#0b0d12", "#161b26", "#f2f4f8", "#a1adbf", "#ed2944"
+BG, CARD, TEXT, MUTED, RED = "#0b0e16", "#141b29", "#f2f5fc", "#99a8c0", "#ef3153"
 
 def resources():
     return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
@@ -27,15 +27,23 @@ class ReceiverApp:
         self.events, self.generation, self.races = queue.Queue(), 0, []
         self.closed = False
         self.last_error = ""
-        root.title("F7R Receiver · 0.1.11")
-        root.geometry(f"{min(650, root.winfo_screenwidth()-60)}x{min(740, root.winfo_screenheight()-100)}")
-        root.minsize(500, 500)
+        root.title("F7R Receiver · 0.1.12")
+        root.geometry(f"{min(980, root.winfo_screenwidth()-80)}x{min(820, root.winfo_screenheight()-100)}")
+        root.minsize(720, 620)
         root.configure(bg=BG)
         try: root.iconbitmap(str(resources() / "assets" / "f7r-app.ico"))
         except tk.TclError: pass
         style = ttk.Style(root)
         style.theme_use("clam")
-        style.configure("TCombobox", fieldbackground=CARD, background=CARD, foreground=TEXT)
+        style.configure("TCombobox", fieldbackground="#101725", background="#202c40", foreground=TEXT,
+                        arrowcolor="#d4def0", bordercolor="#2c3a52", lightcolor="#2c3a52", darkcolor="#2c3a52", padding=10, font=("Segoe UI", 10))
+        style.map("TCombobox", fieldbackground=[("readonly", "#101725"), ("disabled", "#111725")],
+                  foreground=[("disabled", "#66758d"), ("readonly", TEXT)], selectbackground=[("readonly", "#25344d")])
+        style.configure("Vertical.TScrollbar", background="#29354a", troughcolor=BG, borderwidth=0, arrowsize=10)
+        root.option_add("*TCombobox*Listbox.background", "#172133")
+        root.option_add("*TCombobox*Listbox.foreground", TEXT)
+        root.option_add("*TCombobox*Listbox.selectBackground", "#394b69")
+        root.option_add("*TCombobox*Listbox.font", ("Segoe UI", 11))
         viewport = tk.Frame(root, bg=BG)
         viewport.pack(fill="both", expand=True)
         canvas = tk.Canvas(viewport, bg=BG, highlightthickness=0)
@@ -43,67 +51,121 @@ class ReceiverApp:
         canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
-        outer = tk.Frame(canvas, bg=BG, padx=24, pady=20)
+        outer = tk.Frame(canvas, bg=BG, padx=28, pady=24)
         content = canvas.create_window((0, 0), window=outer, anchor="nw")
         outer.bind("<Configure>", lambda _: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda event: canvas.itemconfigure(content, width=event.width))
         root.bind("<MouseWheel>", lambda event: canvas.yview_scroll(int(-event.delta/120), "units"))
-        tk.Label(outer, text="F7R", font=("Segoe UI", 30, "bold"), bg=BG, fg=TEXT).pack(anchor="w")
-        tk.Label(outer, text="LIVE TELEMETRY RECEIVER", font=("Segoe UI", 10, "bold"), bg=BG, fg=RED).pack(anchor="w", pady=(0, 18))
+        header = tk.Frame(outer, bg=BG)
+        header.pack(fill="x", pady=(0, 20))
+        try:
+            self.logo = tk.PhotoImage(file=str(resources() / "assets" / "f7r-logo.png"))
+            self.logo = self.logo.subsample(max(1, (self.logo.width()+219)//220))
+            tk.Label(header, image=self.logo, bg=BG).pack(side="left", anchor="w")
+        except tk.TclError:
+            tk.Label(header, text="F7R", font=("Segoe UI", 28, "bold"), bg=BG, fg=TEXT).pack(side="left")
+        title = tk.Frame(header, bg=BG)
+        title.pack(side="right", anchor="e")
+        tk.Label(title, text="RACE CONTROL", font=("Segoe UI", 9, "bold"), bg=BG, fg=RED).pack(anchor="e")
+        tk.Label(title, text="Live telemetry receiver", font=("Segoe UI", 18, "bold"), bg=BG, fg=TEXT).pack(anchor="e")
         self.status = tk.StringVar(value="Sign in to connect your race.")
         tk.Label(outer, textvariable=self.status, bg=CARD, fg=TEXT, wraplength=535,
                  justify="left", padx=15, pady=14, font=("Segoe UI", 11)).pack(fill="x", pady=(0, 18))
-        self.email = self.field(outer, "Receiver email", "formula7racing@gmail.com")
-        self.password = self.field(outer, "F7R password", "", secret=True)
+        columns = tk.Frame(outer, bg=BG)
+        columns.pack(fill="x")
+        columns.columnconfigure(0, weight=4, uniform="panels")
+        columns.columnconfigure(1, weight=5, uniform="panels")
+        account = self.panel(columns, "01  /  ACCOUNT", "Your F7R connection", 0)
+        connection = self.panel(columns, "02  /  TELEMETRY", "Choose your source", 1)
+        self.email = self.field(account, "Receiver email", "formula7racing@gmail.com")
+        self.password = self.field(account, "F7R password", "", secret=True)
         self.password.bind("<Return>", lambda _: self.sign_in())
-        self.login = self.button(outer, "Sign in", self.sign_in, RED)
+        self.login = self.button(account, "Sign in", self.sign_in, RED)
         self.login.pack(fill="x", pady=(5, 16))
-        tk.Label(outer, text="Assigned live race", bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
-        self.race = ttk.Combobox(outer, state="disabled")
+        tk.Label(account, text="Assigned live race", bg=CARD, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
+        self.race = ttk.Combobox(account, state="disabled")
         self.race.pack(fill="x", pady=(6, 12))
-        self.ip = self.field(outer, "Source device IP (optional — normally leave blank)", "")
-        tk.Label(outer, text="Telemetry connection", bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
-        self.mode = ttk.Combobox(outer, state="readonly", values=["F1 Broadcast", "F1 Direct IP / Port", "RLT Forwarding"])
+        self.ip = self.field(connection, "Source device IP (optional — normally leave blank)", "")
+        tk.Label(connection, text="Telemetry connection", bg=CARD, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
+        self.mode = ttk.Combobox(connection, state="readonly", values=["F1 Broadcast", "F1 Direct IP / Port", "RLT Forwarding"])
         self.mode.current(0)
         self.mode.pack(fill="x", pady=(6, 12))
         self.mode.bind("<<ComboboxSelected>>", self.change_mode)
-        self.port = self.field(outer, "F7R listening port", "20777")
+        self.port = self.field(connection, "F7R listening port", "20777")
         self.port.bind("<KeyRelease>", self.update_connection_hint)
         self.local_addresses = []
         self.address_hint = tk.StringVar(value="This laptop’s IP addresses appear after sign-in.")
-        tk.Label(outer, textvariable=self.address_hint, bg=BG, fg="#8bd7e0", justify="left",
-                 wraplength=535, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 10))
+        tk.Label(connection, textvariable=self.address_hint, bg=CARD, fg="#8bd7e0", justify="left",
+                 wraplength=345, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 10))
         self.port_hint = tk.StringVar()
-        tk.Label(outer, textvariable=self.port_hint, bg=BG, fg=MUTED, justify="left",
-                 wraplength=535, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 12))
+        tk.Label(connection, textvariable=self.port_hint, bg=CARD, fg=MUTED, justify="left",
+                 wraplength=345, font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 12))
         self.change_mode()
-        self.connect = self.button(outer, "Connect receiver", self.start_receiver, "#25374a")
+        actions = tk.Frame(outer, bg=BG)
+        actions.pack(fill="x", pady=(18, 0))
+        self.connect = self.button(actions, "Connect receiver", self.start_receiver, "#25374a")
         self.connect.configure(state="disabled")
         self.connect.pack(fill="x", pady=(4, 10))
-        self.disconnect = self.button(outer, "Disconnect / sign out", self.stop, "#252b38")
+        self.disconnect = self.button(actions, "Disconnect / sign out", self.stop, "#252b38")
         self.disconnect.configure(state="disabled")
-        self.disconnect.pack(fill="x")
-        self.button(outer, "Open F7R dashboard", lambda: webbrowser.open(DASHBOARD), "#252b38").pack(fill="x", pady=(10, 14))
-        tk.Label(outer, text="Same network as the game • F1 UDP format 2026\n"
+        self.disconnect.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        self.button(actions, "Open F7R dashboard", lambda: webbrowser.open(DASHBOARD), "#252b38").pack(side="right", fill="x", expand=True, padx=(6, 0))
+        footer = tk.Frame(outer, bg=BG)
+        footer.pack(fill="x", pady=(18, 0))
+        tk.Label(footer, text="Same network as the game • F1 UDP format 2026\n"
                  "Choose a connection mode and follow its settings above.\n"
                  "Use Start / Stop live telemetry in the admin dashboard.\n"
                  "Keep this app open while racing. Passwords are never saved.",
-                 bg=BG, fg=MUTED, justify="left", wraplength=535, font=("Segoe UI", 9)).pack(anchor="w")
+                 bg=BG, fg=MUTED, justify="left", wraplength=345, font=("Segoe UI", 9)).pack(anchor="w")
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.after(100, self.poll)
 
+    def panel(self, parent, eyebrow, title, column):
+        panel = tk.Frame(parent, bg=CARD, highlightbackground="#263147", highlightthickness=1, padx=20, pady=20)
+        panel.grid(row=0, column=column, sticky="nsew", padx=(0, 8) if column == 0 else (8, 0))
+        tk.Label(panel, text=eyebrow, bg=CARD, fg="#849bbd", font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        tk.Label(panel, text=title, bg=CARD, fg=TEXT, font=("Segoe UI", 16, "bold")).pack(anchor="w", pady=(6, 20))
+        return panel
+
     def field(self, parent, label, default, secret=False):
-        tk.Label(parent, text=label, bg=BG, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
-        entry = tk.Entry(parent, bg=CARD, fg=TEXT, insertbackground=TEXT, relief="flat",
-                         font=("Segoe UI", 11), show="•" if secret else "")
+        background = parent.cget("bg")
+        tk.Label(parent, text=label, bg=background, fg=MUTED, font=("Segoe UI", 10)).pack(anchor="w")
+        border = tk.Frame(parent, bg="#2c3a52", padx=1, pady=1)
+        border.pack(fill="x", pady=(7, 16))
+        entry = tk.Entry(border, bg="#101725", fg=TEXT, insertbackground=TEXT, relief="flat",
+                         disabledbackground="#101725", disabledforeground="#6d7d96", selectbackground="#394b69",
+                         font=("Segoe UI", 11), show="•" if secret else "", highlightthickness=0)
         entry.insert(0, default)
-        entry.pack(fill="x", ipady=9, pady=(6, 12))
+        entry.pack(fill="x", padx=10, ipady=9)
+        entry.bind("<FocusIn>", lambda _: border.configure(bg="#ef5270"))
+        entry.bind("<FocusOut>", lambda _: border.configure(bg="#2c3a52"))
         return entry
 
     def button(self, parent, label, command, color):
-        return tk.Button(parent, text=label, command=command, bg=color, fg=TEXT,
-                         activebackground=RED, activeforeground=TEXT, relief="flat",
-                         padx=12, pady=10, font=("Segoe UI", 10, "bold"), cursor="hand2")
+        button = tk.Button(parent, text=label, command=command, bg=color, fg=TEXT,
+                           activebackground="#f34b69", activeforeground=TEXT, relief="flat", borderwidth=0,
+                           disabledforeground="#708098", highlightthickness=1, highlightbackground="#35445e",
+                           padx=16, pady=11, font=("Segoe UI", 10, "bold"), cursor="hand2", takefocus=True)
+        button._fade = None
+        def animate(target):
+            if button._fade:
+                button.after_cancel(button._fade)
+            if str(button.cget("state")) == "disabled":
+                return
+            start = button.winfo_rgb(button.cget("bg"))
+            end = button.winfo_rgb(target)
+            def step(frame=1):
+                if not button.winfo_exists(): return
+                t = 1 - (1-frame/8)**3
+                rgb = [round((a+(b-a)*t)/257) for a,b in zip(start,end)]
+                button.configure(bg="#%02x%02x%02x" % tuple(rgb))
+                button._fade = button.after(16, lambda: step(frame+1)) if frame < 8 else None
+            step()
+        button.bind("<Enter>", lambda _: animate("#fc4b6b" if color == RED else "#354a67"))
+        button.bind("<Leave>", lambda _: animate(color))
+        button.bind("<FocusIn>", lambda _: button.configure(highlightbackground="#f17490"))
+        button.bind("<FocusOut>", lambda _: button.configure(highlightbackground="#35445e"))
+        return button
 
     def sign_in(self):
         email, password = self.email.get().strip(), self.password.get()
@@ -298,3 +360,4 @@ def self_test():
 if __name__ == "__main__":
     if "--self-test" in sys.argv: self_test()
     else: ReceiverApp(tk.Tk()).root.mainloop()
+

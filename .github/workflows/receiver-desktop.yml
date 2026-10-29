@@ -42,7 +42,7 @@ jobs:
             Invoke-WebRequest https://raw.githubusercontent.com/nodejs/node/v24.22.1/LICENSE -OutFile runtime/NODE-LICENSE.txt
           }
       - name: Package receiver window
-        run: python -m PyInstaller --noconfirm --onedir --windowed --icon assets/f7r-app.ico --add-data "config.json;." --add-data "receiver;receiver" --add-data "runtime;runtime" --add-data "assets/f7r-app.ico;assets" --name "F7R Receiver" receiver-desktop/app.py
+        run: python -m PyInstaller --noconfirm --onedir --windowed --icon assets/f7r-app.ico --add-data "config.json;." --add-data "receiver;receiver" --add-data "runtime;runtime" --add-data "assets/f7r-app.ico;assets" --add-data "assets/f7r-logo.png;assets" --name "F7R Receiver" receiver-desktop/app.py
       - name: Check packaged receiver
         shell: pwsh
         run: |
