@@ -1,0 +1,5 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {parseNames,validateNames,makeDraw,randomIndex,csvCell,GRID_TEAMS} from '../dashboard/grid-model.js';
+const names=Array.from({length:22},(_,i)=>'Driver '+(i+1));
+test('draw fills all eleven teams with two unique drivers without changing input',()=>{const result=makeDraw(names,()=>0);assert.equal(result.length,11);assert.deepEqual(result.map(r=>r.team),GRID_TEAMS);assert.ok(result.every(r=>r.drivers.length===2));assert.deepEqual(result.flatMap(r=>r.drivers).sort(),[...names].sort());assert.equal(names[0],'Driver 1');});
+test('names require 22 distinct drivers and ignore blank lines',()=>{assert.equal(parseNames(' A\r\n\nB ').join(','),'A,B');assert.match(validateNames(names.slice(1)),/22/);assert.match(validateNames([...names.slice(1),'driver 2']),/unique/);assert.throws(()=>makeDraw([]),/22/);});
+test('random choice rejects modulo bias and exported names cannot become formulas',()=>{let n=0;assert.equal(randomIndex(22,{getRandomValues(a){a[0]=n++===0?0xffffffff:21;}}),21);assert.equal(n,2);assert.equal(csvCell('=1+1'),'"\'=1+1"');assert.equal(csvCell('A"B'),'"A""B"');});
