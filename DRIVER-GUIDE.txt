@@ -5,6 +5,11 @@ Extract the whole ZIP, then open RaceFlags.exe. Keep the _internal folder beside
 The app connects to race control automatically.
 
 POSITION AND SIZE
+Choose Single flag or Dual flags with the Flag layout button.
+Dual flags show the identical live signal, message and countdown together.
+Move and resize each flag independently; both placements are remembered.
+Transparent mode applies to both. Radio audio plays once, not twice.
+Switching back to Single flag keeps your second flag placement for next time.
 Drag the centre of the flag to move it.
 Drag any edge or corner to resize it.
 The Size slider scales the flag while keeping its current proportions.
@@ -52,3 +57,4 @@ Test audio plays the green-flag call. Your volume and mute choices are saved.
 A buzz/mic click precedes your league's voice calls when the flag changes.
 FCY and Prepare to race use the shared timer for the final countdown numbers.
 A newer flag interrupts older audio; muted calls are not queued for later.
+

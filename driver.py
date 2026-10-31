@@ -138,11 +138,18 @@ class DriverApp:
         tk.Label(status_row,textvariable=self.status,bg=BG,fg=MUTED,font=f(12),wraplength=u(340),justify='left',bd=0).pack(side='left')
         self.status.trace_add('write',self.update_status_colour)
         self.update_status_colour()
-        card=RoundedPanel(outer,330,self.ui_scale)
+        card=RoundedPanel(outer,390,self.ui_scale)
         card.pack(fill='x')
         content=tk.Frame(card,bg=PANEL)
         content_width=430-52-40
         card.create_window(u(20),u(20),window=content,anchor='nw',width=u(content_width))
+        layout_row=tk.Frame(content,bg=PANEL)
+        layout_row.pack(fill='x',pady=(0,u(15)))
+        tk.Label(layout_row,text='Flag layout',bg=PANEL,fg=INK,font=f(13,'bold'),bd=0).pack(side='left')
+        self.dual_flags=tk.BooleanVar(value=bool(self.settings.get('dual_flags',False)))
+        self.layout_button=RoundedButton(layout_row,'Dual flags' if self.dual_flags.get() else 'Single flag',self.toggle_layout,self.ui_scale)
+        self.layout_button.configure(width=u(130),height=u(36),bg=PANEL)
+        self.layout_button.pack(side='right')
         size_row=tk.Frame(content,bg=PANEL)
         size_row.pack(fill='x')
         tk.Label(size_row,text='Overlay size',bg=PANEL,fg=INK,font=f(13,'bold'),bd=0).pack(side='left')
@@ -222,6 +229,8 @@ class DriverApp:
             position=(80,80,self.width,self.height)
         self.set_geometry(position)
         self.overlay.deiconify()
+        self.second_overlay=SecondFlag(self)
+        self.apply_layout()
         self.update_size_text()
         root.protocol('WM_DELETE_WINDOW',self.close)
         root.after(100,self.dark_titlebar)
@@ -242,6 +251,20 @@ class DriverApp:
                 ctypes.windll.dwmapi.DwmSetWindowAttribute(ctypes.c_void_p(hwnd),33,
                     ctypes.byref(corner),ctypes.sizeof(corner))
             except (AttributeError,OSError): pass
+
+    def toggle_layout(self):
+        self.dual_flags.set(not self.dual_flags.get())
+        self.apply_layout()
+        self.save()
+
+    def apply_layout(self):
+        self.layout_button.text='Dual flags' if self.dual_flags.get() else 'Single flag'
+        self.layout_button.draw()
+        if self.dual_flags.get():
+            self.second_overlay.overlay.deiconify()
+            self.second_overlay.draw()
+        else:
+            self.second_overlay.overlay.withdraw()
 
     def refresh_volume_label(self):
         self.volume_text.set(f'{round(self.volume.get())}%' if self.audio_enabled.get() and self.volume.get()>0 else 'Muted')
@@ -375,6 +398,8 @@ class DriverApp:
 
     def draw(self):
         if self.closed: return
+        if 'second_overlay' in self.__dict__ and self.dual_flags.get():
+            self.second_overlay.draw()
         if self.draw_job is not None:
             self.root.after_cancel(self.draw_job)
             self.draw_job=None
@@ -399,6 +424,11 @@ class DriverApp:
         self.settings.update(width=self.width,height=self.height,x=self.overlay.winfo_x(),
             y=self.overlay.winfo_y(),hide_clear=self.hide_clear.get(),
             audio_volume=round(self.volume.get()),audio_muted=not self.audio_enabled.get())
+        self.settings['dual_flags']=self.dual_flags.get()
+        if 'second_overlay' in self.__dict__:
+            second=self.second_overlay
+            self.settings['second_flag']={'x':second.overlay.winfo_x(),'y':second.overlay.winfo_y(),
+                'width':second.width,'height':second.height}
         if self.config: self.settings['config']=self.config
         self.settings.pop('preview',None)
         try:
@@ -439,6 +469,64 @@ class DriverApp:
         self.root.destroy()
 
 
+class SecondFlag(DriverApp):
+    """Independent window geometry; shared signal, timer, transparency and close action."""
+    def __init__(self, parent):
+        self.parent=parent
+        self.root=parent.root
+        self.demo=parent.demo
+        self.closed=False
+        self.gesture=self.draw_job=None
+        self.hover_close=self.show_handles=False
+        self.hide_clear=parent.hide_clear
+        self.size=tk.DoubleVar()
+        self.size_text=tk.StringVar()
+        saved=parent.settings.get('second_flag',{})
+        if not isinstance(saved,dict):saved={}
+        def number(key,default):
+            try:return int(saved.get(key,default))
+            except (TypeError,ValueError):return default
+        self.width=clamp(number('width',parent.width),MIN_WIDTH,MAX_WIDTH)
+        self.height=clamp(number('height',parent.height),MIN_HEIGHT,MAX_HEIGHT)
+        self.overlay=tk.Toplevel(self.root)
+        self.overlay.title('F7R · Second flag overlay')
+        self.overlay.withdraw()
+        self.overlay.overrideredirect(True)
+        self.overlay.attributes('-topmost',True)
+        self.overlay.configure(bg=TRANSPARENT)
+        try:self.overlay.wm_attributes('-transparentcolor',TRANSPARENT)
+        except tk.TclError:pass
+        self.canvas=tk.Canvas(self.overlay,bd=0,highlightthickness=0,bg=TRANSPARENT)
+        self.canvas.pack(fill='both',expand=True)
+        for event,handler in (('<Configure>',self.configured),('<Motion>',self.pointer_motion),
+            ('<Enter>',self.pointer_motion),('<Leave>',self.pointer_leave),
+            ('<Button-1>',self.pointer_down),('<B1-Motion>',self.pointer_drag),
+            ('<ButtonRelease-1>',self.pointer_up)):
+            self.canvas.bind(event,handler)
+        self.overlay.bind('<Alt-F4>',lambda _:self.close())
+        self.overlay.geometry(f'{self.width}x{self.height}+80+80')
+        self.overlay.update_idletasks()
+        rect=(number('x',parent.overlay.winfo_x()),
+            number('y',parent.overlay.winfo_y()+parent.height+20),self.width,self.height)
+        monitors=monitor_rectangles(self.root)
+        if not visible_on_monitors(rect,monitors):
+            left,top,right,bottom=monitors[0]
+            rect=(left+20,max(top,min(top+80,bottom-self.height)),self.width,self.height)
+        self.set_geometry(rect)
+
+    def draw(self):
+        if self.parent.closed:return
+        for name in ('flag','custom_message','countdown_display'):
+            setattr(self,name,getattr(self.parent,name))
+        super().draw()
+
+    def save(self):
+        self.parent.save()
+
+    def close(self):
+        self.parent.close()
+
+
 def self_test(root, app):
     root.update()
     assert APP_VERSION in root.title()
@@ -460,14 +548,41 @@ def self_test(root, app):
     root.update()
     assert app.flag=='GREEN' and app.countdown_display is None
     assert app.custom_message=='Track clear'
+    # Both windows follow one state, but gestures affect only their own geometry.
+    app.dual_flags.set(True)
+    app.apply_layout()
+    root.update()
+    second=app.second_overlay
+    assert second.overlay.winfo_ismapped()
+    assert second.flag==app.flag and second.custom_message==app.custom_message
+    primary=(app.width,app.height,app.overlay.winfo_x(),app.overlay.winfo_y())
+    second.set_geometry((140,240,480,160))
+    root.update()
+    second.pointer_down(SimpleNamespace(x=475,y=80,x_root=615,y_root=320))
+    second.pointer_drag(SimpleNamespace(x_root=695,y_root=320))
+    root.update()
+    second.pointer_up(SimpleNamespace(x=555,y=80))
+    assert (second.width,second.height)==(560,160)
+    assert primary==(app.width,app.height,app.overlay.winfo_x(),app.overlay.winfo_y())
+    app.save()
+    saved=json.loads(app.settings_file.read_text())
+    assert saved['dual_flags'] and saved['second_flag']['width']==560
+    app.toggle_layout()
+    root.update()
+    assert not second.overlay.winfo_ismapped()
+    app.toggle_layout()
+    root.update()
+    assert second.overlay.winfo_ismapped() and second.width==560
     app.custom_message=''
     app.flag='CLEAR'
     app.hide_clear.set(True)
     app.draw()
     assert not app.canvas.find_all()
+    assert not second.canvas.find_all()
     app.hide_clear.set(False)
     app.draw()
     assert app.canvas.find_all()
+    assert second.canvas.find_all()
     # Custom controls still resize, toggle and remain wholly inside the window.
     before=app.width
     app.scale.step(10)
@@ -544,4 +659,5 @@ if __name__ == '__main__':
         self_test(root,app)
         if callback_errors:raise RuntimeError(f'UI callback failed: {callback_errors}')
     else: root.mainloop()
+
 
