@@ -1,5 +1,7 @@
 """Crisp, keyboard-accessible local controls. Racing artwork is kept separate."""
 import tkinter as tk
+import math
+from functools import lru_cache
 from PIL import Image, ImageDraw, ImageTk
 
 BG, PANEL, INK, MUTED, ACCENT = '#0c111b', '#151e2b', '#f0f5fc', '#96a5bb', '#d9ff79'
@@ -24,7 +26,7 @@ def enable_dpi_awareness():
 def ui_scale(root):
     # Keep the whole controller visible even on a laptop with large text scaling.
     return max(.75, min(root.winfo_fpixels('1i') / 96,
-        (root.winfo_screenheight()-85)/860, (root.winfo_screenwidth()-48)/430))
+        (root.winfo_screenheight()-85)/930, (root.winfo_screenwidth()-48)/430))
 
 
 def font(scale, pixels, weight='normal'):
@@ -46,6 +48,48 @@ def present(canvas, image):
     canvas.tag_lower(canvas.art_item)
 
 
+@lru_cache(maxsize=3)
+def background_art(width,height):
+    """Cached gradient and deterministic fine grain; no animation or redraw noise."""
+    sw,sh=max(1,width//4),max(1,height//4)
+    pixels=bytearray(sw*sh*3)
+    for row in range(sh):
+        fy=row/max(1,sh-1)
+        for col in range(sw):
+            fx=col/max(1,sw-1)
+            blue=math.exp(-((fx-.95)**2*3+(fy-.05)**2*4))
+            teal=math.exp(-((fx-.05)**2*4+(fy-.85)**2*5))
+            offset=(row*sw+col)*3
+            pixels[offset:offset+3]=bytes(round(v) for v in
+                (11+5*blue+2*teal,16+10*blue+6*teal,25+21*blue+5*teal))
+    image=Image.frombytes('RGB',(sw,sh),bytes(pixels)).resize((width,height),Image.Resampling.BILINEAR)
+    texture=Image.new('RGBA',(width,height),(0,0,0,0))
+    draw=ImageDraw.Draw(texture)
+    for x in range(-height,width,6):
+        draw.line((x,0,x+height,height),fill=(175,196,225,5))
+    for y in range(0,height,4):draw.line((0,y,width,y),fill=(0,0,0,8))
+    return Image.alpha_composite(image.convert('RGBA'),texture).convert('RGB')
+
+
+def control_background(width,height,x=0,y=0,total_width=None,total_height=None):
+    image=background_art(max(1,total_width or width),max(1,total_height or height))
+    return image.crop((x,y,x+width,y+height))
+
+
+class GradientCanvas(tk.Canvas):
+    def __init__(self,parent,scale=1,**kwargs):
+        super().__init__(parent,bg=BG,bd=0,highlightthickness=0,**kwargs)
+        self.bind('<Configure>',lambda _:self.draw_background())
+
+    def draw_background(self):
+        w,h=self.winfo_width(),self.winfo_height()
+        if w<2 or h<2:return
+        root=self.winfo_toplevel()
+        image=control_background(w,h,self.winfo_rootx()-root.winfo_rootx(),
+            self.winfo_rooty()-root.winfo_rooty(),root.winfo_width(),root.winfo_height())
+        present(self,image)
+
+
 class RoundedPanel(tk.Canvas):
     def __init__(self,parent,height,scale):
         self.scale=scale
@@ -56,6 +100,10 @@ class RoundedPanel(tk.Canvas):
         w,h=self.winfo_width(),self.winfo_height()
         if w<round(30*self.scale) or h<8:return
         im,d,s=surface(w,h,BG)
+        root=self.winfo_toplevel()
+        backdrop=control_background(w,h,self.winfo_rootx()-root.winfo_rootx(),
+            self.winfo_rooty()-root.winfo_rooty(),root.winfo_width(),root.winfo_height())
+        im.paste(backdrop.resize(im.size,Image.Resampling.BILINEAR))
         margin=max(1,round(self.scale*s))
         d.rounded_rectangle((margin,margin,w*s-margin-1,h*s-margin-1),
             radius=round(20*self.scale*s),fill=PANEL,outline='#2b3749',width=margin)
@@ -90,7 +138,7 @@ class RoundedButton(tk.Canvas):
     def draw(self):
         w,h=self.winfo_width(),self.winfo_height()
         if w<round(30*self.scale) or h<8:return
-        im,d,s=surface(w,h,BG)
+        im,d,s=surface(w,h,self.cget('bg'))
         p=max(1,round(self.scale*s))
         d.rounded_rectangle((p,p,w*s-p-1,h*s-p-1),radius=round(13*self.scale*s),
             fill='#253347' if self.hover else '#192535',
@@ -192,4 +240,5 @@ class SizeSlider(tk.Canvas):
         knob=7*self.scale*s
         d.ellipse((x-knob,y-knob,x+knob,y+knob),fill=INK,outline=ACCENT,width=max(1,round(2*self.scale*s)))
         present(self,im)
+
 

@@ -37,9 +37,11 @@ def close_bounds(width):
     return width-36, 9, width-10, 35
 
 
-def hit_zone(x, y, width, height):
-    left, top, right, bottom = close_bounds(width)
-    if left <= x <= right and top <= y <= bottom:
+def hit_zone(x, y, width, height, rotation=0):
+    angle=rotation%360
+    px,py,bw=(y,width-1-x,height) if angle==90 else (width-1-x,height-1-y,width) if angle==180 else (height-1-y,x,height) if angle==270 else (x,y,width)
+    left, top, right, bottom = close_bounds(bw)
+    if left <= px <= right and top <= py <= bottom:
         return 'close'
     if not 0 <= x <= width or not 0 <= y <= height:
         return 'move'
@@ -49,21 +51,22 @@ def hit_zone(x, y, width, height):
     return vertical+horizontal or 'move'
 
 
-def resize_from_edge(rect, edge, dx, dy):
+def resize_from_edge(rect, edge, dx, dy, rotation=0):
     if edge not in ('n','s','e','w','ne','nw','se','sw'):
         raise ValueError('Unknown resize edge')
     x, y, width, height = rect
+    min_w,max_w,min_h,max_h=(MIN_HEIGHT,MAX_HEIGHT,MIN_WIDTH,MAX_WIDTH) if rotation%180 else (MIN_WIDTH,MAX_WIDTH,MIN_HEIGHT,MAX_HEIGHT)
     right, bottom = x+width, y+height
     if 'w' in edge:
-        width = clamp(width-dx, MIN_WIDTH, MAX_WIDTH)
+        width = clamp(width-dx, min_w, max_w)
         x = right-width
     elif 'e' in edge:
-        width = clamp(width+dx, MIN_WIDTH, MAX_WIDTH)
+        width = clamp(width+dx, min_w, max_w)
     if 'n' in edge:
-        height = clamp(height-dy, MIN_HEIGHT, MAX_HEIGHT)
+        height = clamp(height-dy, min_h, max_h)
         y = bottom-height
     elif 's' in edge:
-        height = clamp(height+dy, MIN_HEIGHT, MAX_HEIGHT)
+        height = clamp(height+dy, min_h, max_h)
     return x, y, width, height
 
 
@@ -95,9 +98,15 @@ def font_bytes():
     return asset_path('RacingSansOne-Regular.ttf').read_bytes()
 
 
-def render_flag(width, height, flag, hover_close=False, handles=False, demo=False, message='', countdown=None):
+def render_flag(width, height, flag, hover_close=False, handles=False, demo=False, message='', countdown=None, rotation=0):
     """Render clean, textured flags with an illuminated rim and colour-key-safe edges."""
     width, height = int(width), int(height)
+    angle=rotation%360
+    if angle:
+        turns={90:Image.Transpose.ROTATE_270,180:Image.Transpose.ROTATE_180,270:Image.Transpose.ROTATE_90}
+        if angle not in turns:raise ValueError('Rotation must be a multiple of 90 degrees')
+        bw,bh=(height,width) if angle%180 else (width,height)
+        return render_flag(bw,bh,flag,hover_close,handles,demo,message,countdown).transpose(turns[angle])
     scale = 3
     w, h = width*scale, height*scale
     fill_hex, border_hex = COLORS.get(flag, ('#263447', '#111925'))
@@ -228,4 +237,5 @@ def render_flag(width, height, flag, hover_close=False, handles=False, demo=Fals
     result = Image.new('RGB',(width,height),rgb(TRANSPARENT))
     result.paste(artwork.convert('RGB'),(0,0),silhouette)
     return result
+
 

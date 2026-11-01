@@ -4,6 +4,12 @@ from overlay_ui import (COLORS, rgb, render_flag, hit_zone, resize_from_edge,
 
 
 class ResizeTests(unittest.TestCase):
+    def test_rotated_close_hit_targets_and_edge_limits(self):
+        for angle,x,y,w,h in [(0,377,22,400,160),(90,137,377,160,400),
+                              (180,22,137,400,160),(270,22,22,160,400)]:
+            self.assertEqual(hit_zone(x,y,w,h,angle),'close')
+        self.assertEqual(resize_from_edge((10,20,160,400),'nw',999,999,90),(80,180,90,240))
+        self.assertEqual(resize_from_edge((10,20,160,400),'se',9999,9999,270),(10,20,480,1200))
     def test_all_edges_and_corners_preserve_opposite_edges(self):
         rect=(100,200,400,160)
         expected={
@@ -41,6 +47,13 @@ class ResizeTests(unittest.TestCase):
 
 
 class ArtworkTests(unittest.TestCase):
+    def test_rotation_preserves_full_artwork_and_message(self):
+        from PIL import Image
+        base=render_flag(400,140,'PREPARE TO RACE',message='Hold position',countdown=8)
+        for angle,transpose in [(90,Image.Transpose.ROTATE_270),(180,Image.Transpose.ROTATE_180),(270,Image.Transpose.ROTATE_90)]:
+            w,h=(140,400) if angle%180 else (400,140)
+            actual=render_flag(w,h,'PREPARE TO RACE',message='Hold position',countdown=8,rotation=angle)
+            self.assertEqual(actual.tobytes(),base.transpose(transpose).tobytes())
     def test_flags_have_transparent_corners_and_matching_dark_borders(self):
         for flag,(_,border) in COLORS.items():
             with self.subTest(flag=flag):
@@ -106,4 +119,5 @@ class ArtworkTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+
 

@@ -21,7 +21,7 @@ from overlay_ui import (COLORS, TRANSPARENT, MIN_WIDTH, MAX_WIDTH, MIN_HEIGHT, M
                         clamp, hit_zone, resize_from_edge, visible_on_monitors, render_flag)
 
 from controls_ui import (BG, PANEL, INK, MUTED, ACCENT, RoundedPanel,
-    RoundedButton, Toggle, SizeSlider, enable_dpi_awareness, ui_scale, font as ui_font)
+    RoundedButton, Toggle, SizeSlider, GradientCanvas, enable_dpi_awareness, ui_scale, font as ui_font)
 
 
 def application_version():
@@ -99,8 +99,10 @@ class DriverApp:
             for key in ('width','height','x','y'):
                 if key in self.settings:self.settings[key]=round(number(key,0)*ratio)
         self.settings['geometry_version']=2
-        self.width = clamp(number('width',380),MIN_WIDTH,MAX_WIDTH)
-        self.height = clamp(number('height',int(self.width*.33)),MIN_HEIGHT,MAX_HEIGHT)
+        self.rotation=(number('rotation',0)//90*90)%360
+        min_w,max_w,min_h,max_h=(MIN_HEIGHT,MAX_HEIGHT,MIN_WIDTH,MAX_WIDTH) if self.rotation%180 else (MIN_WIDTH,MAX_WIDTH,MIN_HEIGHT,MAX_HEIGHT)
+        self.width = clamp(number('width',380),min_w,max_w)
+        self.height = clamp(number('height',int(self.width*.33)),min_h,max_h)
         self.hide_clear = tk.BooleanVar(value=bool(self.settings.get('hide_clear',True)))
         self.size = tk.DoubleVar(value=self.width)
         self.size_text = tk.StringVar()
@@ -124,21 +126,25 @@ class DriverApp:
         root.title(f'F7R · Driver controls · {APP_VERSION}')
         root.configure(bg=BG)
         root.resizable(False,False)
-        outer=tk.Frame(root,bg=BG,padx=u(26),pady=u(24))
-        outer.pack(fill='both',expand=True)
-        header=tk.Frame(outer,bg=BG)
+        self.backdrop=GradientCanvas(root,self.ui_scale)
+        self.backdrop.place(x=0,y=0,relwidth=1,relheight=1)
+        outer=GradientCanvas(root,self.ui_scale)
+        outer.pack(fill='both',expand=True,padx=u(26),pady=u(24))
+        header=GradientCanvas(outer,self.ui_scale,height=u(32))
         header.pack(fill='x')
-        tk.Label(header,image=self.brand_image,bg=BG,bd=0).pack(side='left')
-        tk.Label(header,text=f'DRIVER DISPLAY  /  {APP_VERSION}',bg=BG,fg='#8392a8',font=f(10,'bold')).pack(side='right',pady=u(7))
-        tk.Label(outer,text='Your race. Your view.',bg=BG,fg=INK,font=f(27,'bold')).pack(anchor='w',pady=(u(24),u(8)))
-        status_row=tk.Frame(outer,bg=BG)
+        header.create_image(0,u(16),image=self.brand_image,anchor='w')
+        self.version_label=header.create_text(u(376),u(16),text=f'DRIVER DISPLAY  /  {APP_VERSION}',fill='#8392a8',font=f(10,'bold'),anchor='e')
+        title=GradientCanvas(outer,self.ui_scale,height=u(40))
+        title.pack(fill='x',pady=(u(24),u(8)))
+        title.create_text(0,u(20),text='Your race. Your view.',fill=INK,font=f(27,'bold'),anchor='w')
+        status_row=GradientCanvas(outer,self.ui_scale,height=u(32))
         status_row.pack(fill='x',pady=(0,u(23)))
-        self.status_dot=tk.Label(status_row,text='●',bg=BG,fg='#e6bb63',font=f(10),bd=0)
-        self.status_dot.pack(side='left',padx=(0,u(7)))
-        tk.Label(status_row,textvariable=self.status,bg=BG,fg=MUTED,font=f(12),wraplength=u(340),justify='left',bd=0).pack(side='left')
+        self.status_canvas=status_row
+        self.status_dot=status_row.create_text(0,u(14),text='●',fill='#e6bb63',font=f(10),anchor='w')
+        self.status_label=status_row.create_text(u(16),u(14),text=self.status.get(),fill=MUTED,font=f(12),width=u(340),anchor='w')
         self.status.trace_add('write',self.update_status_colour)
         self.update_status_colour()
-        card=RoundedPanel(outer,390,self.ui_scale)
+        card=RoundedPanel(outer,448,self.ui_scale)
         card.pack(fill='x')
         content=tk.Frame(card,bg=PANEL)
         content_width=430-52-40
@@ -150,6 +156,14 @@ class DriverApp:
         self.layout_button=RoundedButton(layout_row,'Dual flags' if self.dual_flags.get() else 'Single flag',self.toggle_layout,self.ui_scale)
         self.layout_button.configure(width=u(130),height=u(36),bg=PANEL)
         self.layout_button.pack(side='right')
+        rotation_row=tk.Frame(content,bg=PANEL)
+        rotation_row.pack(fill='x',pady=(0,u(15)))
+        tk.Label(rotation_row,text='Rotate 90°',bg=PANEL,fg=INK,font=f(13,'bold'),bd=0).pack(side='left')
+        self.rotate_second=RoundedButton(rotation_row,'Flag 2 · 0°',lambda:self.second_overlay.rotate_flag(),self.ui_scale)
+        self.rotate_second.configure(width=u(104),height=u(36),bg=PANEL)
+        self.rotate_primary=RoundedButton(rotation_row,f'Flag 1 · {self.rotation}°',self.rotate_flag,self.ui_scale)
+        self.rotate_primary.configure(width=u(104),height=u(36),bg=PANEL)
+        self.rotate_primary.pack(side='right')
         size_row=tk.Frame(content,bg=PANEL)
         size_row.pack(fill='x')
         tk.Label(size_row,text='Overlay size',bg=PANEL,fg=INK,font=f(13,'bold'),bd=0).pack(side='left')
@@ -261,9 +275,11 @@ class DriverApp:
         self.layout_button.text='Dual flags' if self.dual_flags.get() else 'Single flag'
         self.layout_button.draw()
         if self.dual_flags.get():
+            self.rotate_second.pack(side='right',before=self.rotate_primary,padx=(max(1,round(5*self.ui_scale)),0))
             self.second_overlay.overlay.deiconify()
             self.second_overlay.draw()
         else:
+            self.rotate_second.pack_forget()
             self.second_overlay.overlay.withdraw()
 
     def refresh_volume_label(self):
@@ -293,7 +309,26 @@ class DriverApp:
     def update_status_colour(self,*_):
         status=self.status.get().lower()
         colour='#6ee5a5' if status.startswith('connected') else '#ff7b87' if 'lost' in status or 'not configured' in status else '#e6bb63'
-        self.status_dot.configure(fg=colour)
+        self.status_canvas.itemconfigure(self.status_dot,fill=colour)
+        self.status_canvas.itemconfigure(self.status_label,text=self.status.get())
+
+    def rotate_flag(self):
+        if self.gesture:return
+        x,y=self.overlay.winfo_x(),self.overlay.winfo_y()
+        width,height=self.height,self.width
+        self.rotation=(self.rotation+90)%360
+        # Keep the centre steady and the rotated flag within the nearest monitor.
+        x+=round((self.width-width)/2)
+        y+=round((self.height-height)/2)
+        monitors=monitor_rectangles(self.root)
+        left,top,right,bottom=min(monitors,key=lambda r:max(r[0]-x,0,x-r[2])**2+max(r[1]-y,0,y-r[3])**2)
+        x=max(left,min(x,right-width));y=max(top,min(y,bottom-height))
+        self.set_geometry((x,y,width,height))
+        owner=self.parent if isinstance(self,SecondFlag) else self
+        button=owner.rotate_second if isinstance(self,SecondFlag) else owner.rotate_primary
+        button.text=f'Flag {2 if isinstance(self,SecondFlag) else 1} · {self.rotation}°'
+        button.draw()
+        self.save()
 
     def set_demo(self, flag):
         self.flag = flag
@@ -322,7 +357,7 @@ class DriverApp:
             ctypes.windll.user32.SetWindowPos(ctypes.c_void_p(hwnd),None,x,y,width,height,0x0004 | 0x0010)
         else:
             self.overlay.geometry(f'{width}x{height}+{max(0,x)}+{max(0,y)}')
-        self.size.set(width)
+        self.size.set(height if self.rotation%180 else width)
         self.update_size_text()
         self.request_draw()
 
@@ -331,12 +366,18 @@ class DriverApp:
 
     def configured(self, event):
         self.width,self.height = event.width,event.height
-        self.size.set(self.width)
+        self.size.set(self.height if self.rotation%180 else self.width)
         self.update_size_text()
         self.request_draw()
 
     def slider_resize(self, value):
         if not hasattr(self,'overlay') or self.gesture: return
+        if self.rotation%180:
+            height=clamp(float(value),MIN_WIDTH,MAX_WIDTH)
+            width=clamp(round(self.width*height/max(1,self.height)),MIN_HEIGHT,MAX_HEIGHT)
+            self.set_geometry((self.overlay.winfo_x(),self.overlay.winfo_y(),width,height))
+            self.schedule_save()
+            return
         width = clamp(float(value),MIN_WIDTH,MAX_WIDTH)
         if width == self.width: return
         height = clamp(round(self.height*width/max(1,self.width)),MIN_HEIGHT,MAX_HEIGHT)
@@ -345,7 +386,7 @@ class DriverApp:
 
     def pointer_motion(self, event):
         if self.gesture: return
-        zone = hit_zone(event.x,event.y,self.width,self.height)
+        zone = hit_zone(event.x,event.y,self.width,self.height,self.rotation)
         cursors={'close':'hand2','move':'fleur','n':'size_ns','s':'size_ns','w':'size_we',
                  'e':'size_we','nw':'size_nw_se','se':'size_nw_se','ne':'size_ne_sw','sw':'size_ne_sw'}
         try: self.canvas.configure(cursor=cursors[zone])
@@ -361,7 +402,7 @@ class DriverApp:
             self.request_draw()
 
     def pointer_down(self, event):
-        self.gesture={'zone':hit_zone(event.x,event.y,self.width,self.height),
+        self.gesture={'zone':hit_zone(event.x,event.y,self.width,self.height,self.rotation),
             'origin':(event.x_root,event.y_root),
             'rect':(self.overlay.winfo_x(),self.overlay.winfo_y(),self.width,self.height)}
         self.canvas.grab_set()
@@ -376,14 +417,14 @@ class DriverApp:
             x,y,w,h=gesture['rect']
             rect=x+dx,y+dy,w,h
         else:
-            rect=resize_from_edge(gesture['rect'],zone,dx,dy)
+            rect=resize_from_edge(gesture['rect'],zone,dx,dy,self.rotation)
         self.set_geometry(rect)
 
     def pointer_up(self, event):
         gesture,self.gesture=self.gesture,None
         try: self.canvas.grab_release()
         except tk.TclError: pass
-        if gesture and gesture['zone']=='close' and hit_zone(event.x,event.y,self.width,self.height)=='close':
+        if gesture and gesture['zone']=='close' and hit_zone(event.x,event.y,self.width,self.height,self.rotation)=='close':
             self.close()
             return
         self.save()
@@ -408,7 +449,7 @@ class DriverApp:
             self.last_render=None
             return
         self.last_render=render_flag(self.width,self.height,self.flag,self.hover_close,self.show_handles,self.demo,
-            message=self.custom_message,countdown=self.countdown_display)
+            message=self.custom_message,countdown=self.countdown_display,rotation=self.rotation)
         self.flag_image=ImageTk.PhotoImage(self.last_render,master=self.overlay)
         self.canvas.create_image(0,0,image=self.flag_image,anchor='nw')
 
@@ -425,10 +466,11 @@ class DriverApp:
             y=self.overlay.winfo_y(),hide_clear=self.hide_clear.get(),
             audio_volume=round(self.volume.get()),audio_muted=not self.audio_enabled.get())
         self.settings['dual_flags']=self.dual_flags.get()
+        self.settings['rotation']=self.rotation
         if 'second_overlay' in self.__dict__:
             second=self.second_overlay
             self.settings['second_flag']={'x':second.overlay.winfo_x(),'y':second.overlay.winfo_y(),
-                'width':second.width,'height':second.height}
+                'width':second.width,'height':second.height,'rotation':second.rotation}
         if self.config: self.settings['config']=self.config
         self.settings.pop('preview',None)
         try:
@@ -486,8 +528,11 @@ class SecondFlag(DriverApp):
         def number(key,default):
             try:return int(saved.get(key,default))
             except (TypeError,ValueError):return default
-        self.width=clamp(number('width',parent.width),MIN_WIDTH,MAX_WIDTH)
-        self.height=clamp(number('height',parent.height),MIN_HEIGHT,MAX_HEIGHT)
+        self.rotation=(number('rotation',0)//90*90)%360
+        min_w,max_w,min_h,max_h=(MIN_HEIGHT,MAX_HEIGHT,MIN_WIDTH,MAX_WIDTH) if self.rotation%180 else (MIN_WIDTH,MAX_WIDTH,MIN_HEIGHT,MAX_HEIGHT)
+        self.width=clamp(number('width',380),min_w,max_w)
+        self.height=clamp(number('height',125),min_h,max_h)
+        parent.rotate_second.text=f'Flag 2 · {self.rotation}°'
         self.overlay=tk.Toplevel(self.root)
         self.overlay.title('F7R · Second flag overlay')
         self.overlay.withdraw()
@@ -529,6 +574,8 @@ class SecondFlag(DriverApp):
 
 def self_test(root, app):
     root.update()
+    # Keep the existing size/gesture checks independent of saved orientation.
+    while app.rotation:app.rotate_flag();root.update()
     assert APP_VERSION in root.title()
     if getattr(sys,'frozen',False):assert APP_VERSION.startswith('v')
     for flag in COLORS:
@@ -573,6 +620,21 @@ def self_test(root, app):
     app.toggle_layout()
     root.update()
     assert second.overlay.winfo_ismapped() and second.width==560
+    original=(app.width,app.height)
+    app.rotate_primary.command()
+    root.update()
+    assert app.rotation==90 and (app.width,app.height)==original[::-1]
+    assert app.last_render.size==(app.width,app.height)
+    assert second.rotation==0
+    app.rotate_second.command()
+    root.update()
+    assert second.rotation==90 and (second.width,second.height)==(160,560)
+    app.save()
+    saved=json.loads(app.settings_file.read_text())
+    assert saved['rotation']==90 and saved['second_flag']['rotation']==90
+    for _ in range(3):app.rotate_flag();second.rotate_flag();root.update()
+    assert app.rotation==second.rotation==0
+    assert (app.width,app.height)==original
     app.custom_message=''
     app.flag='CLEAR'
     app.hide_clear.set(True)
@@ -659,5 +721,6 @@ if __name__ == '__main__':
         self_test(root,app)
         if callback_errors:raise RuntimeError(f'UI callback failed: {callback_errors}')
     else: root.mainloop()
+
 
 

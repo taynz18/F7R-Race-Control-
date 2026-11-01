@@ -5,6 +5,9 @@ Extract the whole ZIP, then open RaceFlags.exe. Keep the _internal folder beside
 The app connects to race control automatically.
 
 POSITION AND SIZE
+Use Rotate 90 degrees to cycle 0, 90, 180 and 270 degrees clockwise.
+Flag 1 and Flag 2 rotate independently. Rotation is saved for next time.
+The full flag and its text rotate together; drag its visible edges to resize.
 Choose Single flag or Dual flags with the Flag layout button.
 Dual flags show the identical live signal, message and countdown together.
 Move and resize each flag independently; both placements are remembered.
@@ -57,4 +60,5 @@ Test audio plays the green-flag call. Your volume and mute choices are saved.
 A buzz/mic click precedes your league's voice calls when the flag changes.
 FCY and Prepare to race use the shared timer for the final countdown numbers.
 A newer flag interrupts older audio; muted calls are not queued for later.
+
 
