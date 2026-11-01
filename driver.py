@@ -324,6 +324,8 @@ class DriverApp:
         left,top,right,bottom=min(monitors,key=lambda r:max(r[0]-x,0,x-r[2])**2+max(r[1]-y,0,y-r[3])**2)
         x=max(left,min(x,right-width));y=max(top,min(y,bottom-height))
         self.set_geometry((x,y,width,height))
+        self.overlay.update_idletasks()
+        self.draw()
         owner=self.parent if isinstance(self,SecondFlag) else self
         button=owner.rotate_second if isinstance(self,SecondFlag) else owner.rotate_primary
         button.text=f'Flag {2 if isinstance(self,SecondFlag) else 1} · {self.rotation}°'
@@ -716,11 +718,19 @@ if __name__ == '__main__':
     callback_errors=[]
     if '--self-test' in sys.argv:
         root.report_callback_exception=lambda *error:callback_errors.append(error)
-    app=DriverApp(root,demo='--demo' in sys.argv or '--self-test' in sys.argv)
     if '--self-test' in sys.argv:
-        self_test(root,app)
-        if callback_errors:raise RuntimeError(f'UI callback failed: {callback_errors}')
-    else: root.mainloop()
+        try:
+            app=DriverApp(root,demo=True)
+            self_test(root,app)
+            if callback_errors:raise RuntimeError(f'UI callback failed: {callback_errors}')
+        except Exception:
+            # A windowed executable otherwise waits on an invisible error dialog in CI.
+            import traceback
+            Path('self-test-error.txt').write_text(traceback.format_exc(),encoding='utf-8')
+            sys.exit(1)
+    else:
+        app=DriverApp(root,demo='--demo' in sys.argv)
+        root.mainloop()
 
 
 
