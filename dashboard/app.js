@@ -135,7 +135,8 @@ async function openAccount(user,g=++generation){
     $('login').hidden=true;$('dashboard').hidden=false;$('welcome').textContent='Welcome, '+member.display_name+'. You are watching the shared F7R race feed.';
     await startFlags(client,isFlagAdmin,user.id);
     if(g!==generation){await stopFlags();return}
-    if(window.location?.search&&new URLSearchParams(window.location.search).get('next')==='history'){window.location.assign('./history.html');return}
+    const nextPage=window.location?.search ? new URLSearchParams(window.location.search).get('next') : null;
+    if(nextPage==='history'||nextPage==='race-data'){window.location.assign('./'+nextPage+'.html');return}
     await refreshRaces();
 }
 $('login-form').onsubmit=async e=>{

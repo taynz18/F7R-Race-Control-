@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>F7R · Race Data</title><link rel="icon" href="./assets/f7r-logo.png">
+<link rel="stylesheet" href="./dashboard/style.css?v=official1">
+<link rel="stylesheet" href="./dashboard/race-data.css?v=1">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script type="module" src="./dashboard/race-data.js?v=1"></script>
+</head><body><aside><img src="./assets/f7r-logo.png" alt="F7R"><small>RACE CONTROL</small><a class="control-room-link" href="./index.html">◉ Live telemetry</a><a class="control-room-link" href="./history.html">◷ Previous sessions</a><a class="control-room-link active" href="./race-data.html" aria-current="page">▥ Race Data</a><a class="control-room-link" href="./admin.html" target="_blank" rel="noopener">⚑ Flag control room ↗</a><a class="control-room-link" href="./grid.html">⇄ Grid randomiser</a><a class="control-room-link" href="./tournament.html">♜ F7R Tournament</a><a class="official-site-card" href="https://www.f7r.co.uk/" target="_blank" rel="noopener noreferrer" aria-label="F7R official website — opens in a new tab"><img src="./assets/f7r-logo.png" alt=""><span><strong>Official website ↗</strong><span>www.f7r.co.uk</span></span></a></aside>
+<main><header><span>F7R / RACE INTELLIGENCE</span></header>
+<div class="heading"><div><div class="eyebrow">THE NUMBERS BEHIND THE GRID</div><h1>Race Data</h1><p>Explore saved sessions, recorded results and lap-by-lap pace.</p></div></div>
+<p id="archive-status" role="status">Checking your driver account…</p>
+<div id="archive" hidden>
+<section class="data-panel" aria-labelledby="overview-title">
+<h2 id="overview-title">Archive overview</h2>
+<div class="data-controls"><label>Circuit <select id="circuit"></select></label><label>Session type <select id="kind"></select></label><button id="load-more" hidden>Load older sessions</button></div>
+<div id="archive-metrics" class="data-metrics"></div>
+<h3>Driver race records</h3><p>Across the loaded race sessions matching these filters. Wins, podiums and average finish use recorded finishers only. Drivers are grouped by their recorded name.</p>
+<div id="driver-records"></div>
+</section>
+<section class="data-panel" aria-labelledby="explorer-title">
+<h2 id="explorer-title">Session explorer</h2>
+<div class="data-controls"><label>Saved session <select id="session"></select></label><button id="analyse" disabled>Analyse session</button></div>
+<p id="session-status" role="status">Choose a recording to see the classification snapshot and observed lap times.</p>
+<div id="session-detail"></div>
+</section>
+<p>These are telemetry records. Official results, points and steward adjustments belong in a separately reviewed championship record.</p>
+</div></main></body></html>
