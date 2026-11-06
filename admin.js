@@ -187,8 +187,41 @@ async function discordAction(action, details = {}) {
           item.append(logo);
         }
         item.append(' ' + team.name + (team.ids.length ? ' · Role matched' : ' · Role missing'));
+        const picker = document.createElement('select');
+        picker.setAttribute('aria-label', 'Discord emoji for ' + team.name);
+        picker.add(new Option('No Discord emoji', ''));
+        for (const emoji of data.emojis) picker.add(new Option(':' + emoji.name + ':', emoji.id));
+        const key = 'f7r-attendance-emoji:' + details.game + ':' + team.name;
+        let saved = null;
+        try { saved = localStorage.getItem(key); } catch {}
+        const normalizeEmoji = name => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const aliases = [normalizeEmoji(team.name), normalizeEmoji(team.logo || team.name)];
+        const suggested = data.emojis.filter(emoji => aliases.includes(normalizeEmoji(emoji.name)));
+        const selected = saved === null && suggested.length === 1 ? suggested[0].id : saved;
+        if (data.emojis.some(emoji => emoji.id === selected)) picker.value = selected;
+        const icon = document.createElement('img');
+        icon.alt = '';
+        icon.width = icon.height = 24;
+        function updateEmoji() {
+          const emoji = data.emojis.find(emoji => emoji.id === picker.value);
+          icon.hidden = !emoji;
+          if (emoji) {
+            icon.src = 'https://cdn.discordapp.com/emojis/' + emoji.id + (emoji.animated ? '.gif' : '.png');
+            details.emojiIds[team.name] = emoji.id;
+          } else {
+            delete details.emojiIds[team.name];
+          }
+        }
+        picker.onchange = () => {
+          updateEmoji();
+          try { localStorage.setItem(key, picker.value); } catch {}
+        };
+        picker.disabled = !data.emojis.length;
+        updateEmoji();
+        item.append(' ', picker, icon);
         teams.append(item);
       }
+      $('attendance-emoji-help').textContent = data.emojiAvailable ? 'Choose a server emoji for each team. Choices are remembered in this browser.' : 'Discord emoji could not be loaded. You can still post the check-in.';
       $('attendance-preview').hidden = false;
       status.textContent = 'Preview ready. Nothing has been posted.';
     } else if (action === 'post') {
@@ -267,6 +300,7 @@ $('attendance-form').onsubmit = event => {
     game, track, new Date(startsAt).toLocaleString(), channel.selectedOptions[0].text,
     game === 'F1' ? tier : game === 'Le Mans Ultimate' ? series : '', notes
   ].filter(Boolean).join(' · ');
+  attendanceDraft.emojiIds = Object.create(null);
   discordAction('preview', attendanceDraft);
 };
 $('attendance-send').onclick = () => {

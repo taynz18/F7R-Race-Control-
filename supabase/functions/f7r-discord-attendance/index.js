@@ -1,7 +1,8 @@
 const f1Teams = [
-  ["Alpine","alpine"], ["Aston Martin","aston-martin"], ["Audi","audi"], ["Cadillac","cadillac"],
-  ["Ferrari","ferrari"], ["Haas","haas"], ["McLaren","mclaren"], ["Mercedes","mercedes"],
-  ["Racing Bulls","racing-bulls"], ["Red Bull Racing","red-bull"], ["Williams","williams"]
+  ["Mercedes","mercedes"], ["Ferrari","ferrari"], ["Red Bull Racing","red-bull"],
+  ["McLaren","mclaren"], ["Alpine","alpine"], ["Aston Martin","aston-martin"],
+  ["Racing Bulls","racing-bulls"], ["Cadillac","cadillac"], ["Haas","haas"],
+  ["Williams","williams"], ["Audi","audi"]
 ];
 const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 function teamRoles(roles, game, tier) {
@@ -111,14 +112,29 @@ Deno.serve(async (request) => {
       game === "Le Mans Ultimate" ? series + " Full Time Driver" : "ACC Full Time Driver";
     const fullTimeRoles = roles.filter(role=>normalize(role.name)===normalize(fullTimeRole));
     if (fullTimeRoles.length !== 1) return reply({error:"Expected one Discord role named " + fullTimeRole + "."},400);
-    if (input.action === "preview") return reply({teams,fullTimeRole});
+    const emojiResponse = await fetch(guildPath + "/emojis", {headers:discordHeaders});
+    const emojis = emojiResponse.ok
+      ? (await emojiResponse.json()).filter(emoji=>emoji.available!==false && !emoji.roles?.length && snowflake(emoji.id) && /^[a-zA-Z0-9_]+$/.test(emoji.name))
+        .map(({id,name,animated})=>({id,name,animated}))
+      : [];
+    if (input.action === "preview") return reply({teams,fullTimeRole,emojis,emojiAvailable:emojiResponse.ok});
+    const emojiIds = input.emojiIds ?? {};
+    if (!emojiIds || typeof emojiIds !== "object" || Array.isArray(emojiIds) ||
+        Object.values(emojiIds).some(id=>!emojis.some(emoji=>emoji.id===id))) {
+      return reply({error:"A selected emoji is no longer available. Preview the check-in again."},400);
+    }
+    const teamField = (team) => {
+      const emoji = emojis.find(emoji=>emoji.id===emojiIds[team.name]);
+      const prefix = emoji ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+"> " : "";
+      return {name:team.name,value:prefix+team.ids.map(id=>"<@&"+id+">").join(" ")};
+    };
     const time = Math.floor(startsAt/1000);
     const message = await fetch(api + "/channels/" + channel.id + "/messages", {
       method:"POST", headers:discordHeaders,
       body:JSON.stringify({
         content:"**F7R race check-in**\n" + game + " · " + track.trim() + "\nRace starts <t:" + time + ":F>" + (game === "F1" ? "\nTier: " + tier : "") + (game === "Le Mans Ultimate" ? "\nSeries: " + series : "") + "\nA matching team and full-time role are required for a seat. Other check-ins go to reserves." + (notes.trim()?"\n"+notes.trim():""),
         allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
-        embeds:[{title:"Team roles",footer:{text:game},fields:mapped.map(team=>({name:team.name,value:team.ids.map(id=>"<@&"+id+">").join(" ")}))},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
+        embeds:[{title:"Team roles",footer:{text:game},fields:mapped.map(teamField)},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
         components:[{type:1,components:[{type:2,style:3,label:"Check in",custom_id:"f7r-team-rsvp:"+time}]}]
       })
     });
