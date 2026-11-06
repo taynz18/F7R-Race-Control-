@@ -28,7 +28,7 @@ Deno.serve(async (request) => {
       return reply({error: "Approved race admin access required."}, 403);
     }
     const input = await request.json().catch(() => null);
-    if (!["check", "post"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
+    if (!["check", "post", "register"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
     const token = Deno.env.get("F7R_DISCORD_BOT_TOKEN");
     const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
     const channel = Deno.env.get("F7R_DISCORD_ATTENDANCE_CHANNEL_ID");
@@ -44,6 +44,25 @@ Deno.serve(async (request) => {
       return reply({error: "Choose a text channel in the configured F7R server."}, 400);
     }
     if (input.action === "check") return reply({channel: target.name});
+    if (input.action === "register") {
+      const choices = (name, description, labels) => ({
+        type: 3, name, description, required: true,
+        choices: labels.map((label) => ({name: label, value: label}))
+      });
+      const command = await fetch("https://discord.com/api/v10/applications/1004676760815796334/guilds/" + guild + "/commands", {
+        method: "POST", headers: discordHeaders,
+        body: JSON.stringify({
+          name: "start_check_in", description: "Set up an F7R race attendance poll",
+          type: 1, default_member_permissions: "32",
+          options: [
+            choices("game", "Choose a game", ["F1 25", "F1 2026 Season Pack", "F2 2025", "F2 2026", "ACC", "LMU"]),
+            choices("lineup", "Choose a driver lineup or tier", ["Open lineup", "T1 Full Time", "T2 Full Time", "T3 Full Time", "T4 Full Time", "Realistic F1", "F2", "ACC", "LMU"])
+          ]
+        })
+      });
+      if (!command.ok) return reply({error: "Discord rejected registration. Check that the F7R app is installed in this server."}, 502);
+      return reply({registered: true});
+    }
     const {title, startsAt, hours, notes} = input;
     if (typeof title !== "string" || !title.trim() || title.length > 100 ||
         !Number.isSafeInteger(startsAt) || startsAt <= Date.now() || startsAt > 8640000000000000 ||

@@ -145,11 +145,12 @@ async function discordAction(action, details = {}) {
   if (!verified) return;
   const check = $('discord-check');
   const send = $('attendance-send');
+  const register = $('discord-register');
   const status = $('discord-status');
   const link = $('attendance-link');
-  check.disabled = send.disabled = true;
+  check.disabled = register.disabled = send.disabled = true;
   link.hidden = true;
-  status.textContent = action === 'check' ? 'Checking Discord…' : 'Posting attendance poll…';
+  status.textContent = action === 'check' ? 'Checking Discord…' : action === 'register' ? 'Enabling the Discord command…' : 'Posting attendance poll…';
   try {
     const { data, error } = await client.functions.invoke('f7r-discord-attendance', {
       body: { action, ...details }
@@ -158,7 +159,7 @@ async function discordAction(action, details = {}) {
       const body = await error.context?.json?.().catch(() => null);
       throw Error(body?.error || 'Discord service is unavailable.');
     }
-    status.textContent = action === 'check' ? 'Connected to #' + data.channel : 'Attendance poll posted.';
+    status.textContent = action === 'check' ? 'Connected to #' + data.channel : action === 'register' ? 'Discord command enabled. Use /start_check_in in your server.' : 'Attendance poll posted.';
     if (data.url) {
       link.href = data.url;
       link.hidden = false;
@@ -166,10 +167,11 @@ async function discordAction(action, details = {}) {
   } catch (error) {
     status.textContent = error.message;
   } finally {
-    check.disabled = send.disabled = false;
+    check.disabled = register.disabled = send.disabled = false;
   }
 }
 $('discord-check').onclick = () => discordAction('check');
+$('discord-register').onclick = () => discordAction('register');
 $('attendance-form').onsubmit = event => {
   event.preventDefault();
   const startsAt = new Date($('attendance-time').value).getTime();
