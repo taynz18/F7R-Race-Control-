@@ -27,7 +27,7 @@ function teamRoles(roles, game, tier) {
     if (!ending) continue;
     const brand = raw.slice(0, ending.index)
       .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
-    if (!normalize(brand)) continue;
+    if (!normalize(brand) || /^f7r?\s*esports$/i.test(normalize(brand))) continue;
     const key = normalize(brand);
     if (!teams.has(key)) teams.set(key, {
       name: brand, logo: f1Teams.find(([name]) => normalize(name) === key)?.[1], ids: []
@@ -146,9 +146,12 @@ Deno.serve(async (request) => {
     }
     const fullTimeRole = game === "F1" ? tier + " Full Time" :
       game === "Le Mans Ultimate" ? series + " Full Time Driver" : "ACC Full Time Driver";
-    const fullTimeRoles = roles.filter(role=>normalize(role.name)===normalize(fullTimeRole));
+    const compactRole = name => normalize(name).replaceAll(" ", "");
+    const eligibilityName = compactRole(fullTimeRole);
+    const preferred = game === "Le Mans Ultimate" ? roles.filter(role=>compactRole(role.name)===compactRole(series+" Full Time")) : [];
+    const fullTimeRoles = preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
     if (fullTimeRoles.length !== 1) return reply({error:"Expected one Discord role named " + fullTimeRole + "."},400);
-    if (input.action === "preview") return reply({teams,fullTimeRole,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
+    if (input.action === "preview") return reply({teams,fullTimeRole:fullTimeRoles[0].name,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
     const emojiIds = input.emojiIds ?? savedEmojis;
     if (!validEmojiIds(emojiIds)) return reply({error:"A selected emoji is no longer available. Preview the check-in again."},400);
     const teamField = (team) => {
