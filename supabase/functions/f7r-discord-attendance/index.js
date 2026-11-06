@@ -62,7 +62,7 @@ Deno.serve(async (request) => {
       return reply({error: "Approved race admin access required."}, 403);
     }
     const input = await request.json().catch(() => null);
-    if (!["options", "preview", "post", "roster"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
+    if (!["options", "preview", "post", "roster", "emoji_setup", "emoji_save"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
     const token = Deno.env.get("F7R_DISCORD_BOT_TOKEN");
     const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
     if (!token || !snowflake(guild)) return reply({error: "Set the bot token and F7R server ID in Supabase."}, 503);
@@ -71,7 +71,7 @@ Deno.serve(async (request) => {
     if (input.action === "roster") {
       if (!snowflake(input.messageId)) return reply({error: "Enter a valid Discord message ID."}, 400);
       const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-      const query = new URLSearchParams({select:"driver_name,placement,team",guild_id:"eq."+guild,message_id:"eq."+input.messageId,order:"driver_name"});
+      const query = new URLSearchParams({select:"driver_name,placement,team,seat,checked_in_at,checked_out_at",guild_id:"eq."+guild,message_id:"eq."+input.messageId,order:"driver_name"});
       const result = await fetch(url + "/rest/v1/f7r_discord_check_ins?" + query, {headers:{apikey:service,Authorization:"Bearer "+service}});
       if (!result.ok) return reply({error:"Could not load the check-in roster."},502);
       const drivers = await result.json();
@@ -98,6 +98,33 @@ Deno.serve(async (request) => {
     const roles = (await roleResponse.json()).filter(r=>r.id!==guild && !r.managed).map(({id,name})=>({id,name}));
     if (input.action === "options") return reply({channels});
     const {channelId, tier, series, game, track, startsAt, notes, nonce} = input;
+    if (!["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game)) return reply({error:"Choose a game first."},400);
+    const emojiResponse = await fetch(guildPath + "/emojis", {headers:discordHeaders});
+    const emojis = emojiResponse.ok
+      ? (await emojiResponse.json()).filter(emoji=>emoji.available!==false && !emoji.roles?.length && snowflake(emoji.id) && /^[a-zA-Z0-9_]+$/.test(emoji.name))
+        .map(({id,name,animated})=>({id,name,animated}))
+      : [];
+    const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const settingsUrl = url + "/rest/v1/f7r_discord_team_emojis";
+    const settingsHeaders = {apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"};
+    const query = new URLSearchParams({select:"team,emoji_id",guild_id:"eq."+guild,game:"eq."+game});
+    const saved = await fetch(settingsUrl+"?"+query,{headers:settingsHeaders});
+    if (!saved.ok) return reply({error:"Could not load saved team emojis."},502);
+    const savedEmojis = Object.fromEntries((await saved.json()).map(row=>[row.team,row.emoji_id]));
+    const validEmojiIds = values => values && typeof values==="object" && !Array.isArray(values) &&
+      Object.values(values).every(id=>id==="" || emojis.some(emoji=>emoji.id===id));
+    if (input.action === "emoji_setup" || input.action === "emoji_save") {
+      const teams = teamRoles(roles,game,"");
+      if (input.action === "emoji_setup") return reply({teams,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
+      if (!emojiResponse.ok || !validEmojiIds(input.emojiIds) ||
+          Object.keys(input.emojiIds).some(name=>!teams.some(team=>team.name===name))) return reply({error:"Invalid team emoji selection."},400);
+      const rows = Object.entries(input.emojiIds).map(([team,emoji_id])=>({guild_id:guild,game,team,emoji_id}));
+      if (rows.length) {
+        const result = await fetch(settingsUrl,{method:"POST",headers:{...settingsHeaders,Prefer:"resolution=merge-duplicates"},body:JSON.stringify(rows)});
+        if (!result.ok) return reply({error:"Could not save team emojis."},502);
+      }
+      return reply({saved:true});
+    }
     const channel = channels.find(c=>c.id===channelId);
     if (!channel || (game === "Le Mans Ultimate" && !["WEC","ELMS"].includes(series)) || (game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
         typeof track!=="string" || !track.trim() || track.length>100 || typeof notes!=="string" || notes.length>500 ||
@@ -112,17 +139,9 @@ Deno.serve(async (request) => {
       game === "Le Mans Ultimate" ? series + " Full Time Driver" : "ACC Full Time Driver";
     const fullTimeRoles = roles.filter(role=>normalize(role.name)===normalize(fullTimeRole));
     if (fullTimeRoles.length !== 1) return reply({error:"Expected one Discord role named " + fullTimeRole + "."},400);
-    const emojiResponse = await fetch(guildPath + "/emojis", {headers:discordHeaders});
-    const emojis = emojiResponse.ok
-      ? (await emojiResponse.json()).filter(emoji=>emoji.available!==false && !emoji.roles?.length && snowflake(emoji.id) && /^[a-zA-Z0-9_]+$/.test(emoji.name))
-        .map(({id,name,animated})=>({id,name,animated}))
-      : [];
-    if (input.action === "preview") return reply({teams,fullTimeRole,emojis,emojiAvailable:emojiResponse.ok});
-    const emojiIds = input.emojiIds ?? {};
-    if (!emojiIds || typeof emojiIds !== "object" || Array.isArray(emojiIds) ||
-        Object.values(emojiIds).some(id=>!emojis.some(emoji=>emoji.id===id))) {
-      return reply({error:"A selected emoji is no longer available. Preview the check-in again."},400);
-    }
+    if (input.action === "preview") return reply({teams,fullTimeRole,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
+    const emojiIds = input.emojiIds ?? savedEmojis;
+    if (!validEmojiIds(emojiIds)) return reply({error:"A selected emoji is no longer available. Preview the check-in again."},400);
     const teamField = (team) => {
       const emoji = emojis.find(emoji=>emoji.id===emojiIds[team.name]);
       const prefix = emoji ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+"> " : "";
@@ -135,7 +154,7 @@ Deno.serve(async (request) => {
         content:"**F7R race check-in**\n" + game + " · " + track.trim() + "\nRace starts <t:" + time + ":F>" + (game === "F1" ? "\nTier: " + tier : "") + (game === "Le Mans Ultimate" ? "\nSeries: " + series : "") + "\nA matching team and full-time role are required for a seat. Other check-ins go to reserves." + (notes.trim()?"\n"+notes.trim():""),
         allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
         embeds:[{title:"Team roles",footer:{text:game},fields:mapped.map(teamField)},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
-        components:[{type:1,components:[{type:2,style:3,label:"Check in",custom_id:"f7r-team-rsvp:"+time}]}]
+        components:[{type:1,components:[{type:2,style:3,label:"Check in",custom_id:"f7r-team-rsvp:"+time},{type:2,style:2,label:"Check out",custom_id:"f7r-team-out:"+time}]}]
       })
     });
     if (!message.ok) return reply({error:message.status===429?"Discord is rate limiting requests. Try again shortly.":"Could not post. Check the bot's View Channel and Send Messages permissions."},502);

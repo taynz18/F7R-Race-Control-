@@ -22,15 +22,16 @@ Deno.serve(async (req) => {
 
   const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
   if (!guild || interaction.guild_id !== guild) return privateReply("This check-in is only available in the F7R server.");
-  const rsvp = /^f7r-team-rsvp:(\d{10,13})$/.exec(interaction.data?.custom_id ?? "");
+  const rsvp = /^f7r-team-(rsvp|out):(\d{10,13})$/.exec(interaction.data?.custom_id ?? "");
   if (interaction.type !== 3 || !rsvp || interaction.message?.author?.id !== appId || !interaction.member?.user?.id) {
     return privateReply("Create your race check-in from the Race Control admin dashboard.");
   }
-  if (Date.now() >= Number(rsvp[1]) * 1000) return privateReply("Check-in closed when the race started.");
+  if (Date.now() >= Number(rsvp[2]) * 1000) return privateReply("Check-in closed when the race started.");
+  const checkingOut = rsvp[1] === "out";
   const member = interaction.member;
   const mapped = interaction.message.embeds?.find(embed=>embed.title==="Team roles")?.fields ?? [];
   const matches = mapped.filter(field => [...field.value.matchAll(/<@&(\d{17,20})>/g)].some(([,id])=>member.roles.includes(id)));
-  if (matches.length > 1) return privateReply("You have more than one matching team role. Ask an F7R admin to check your roles.");
+  if (!checkingOut && matches.length > 1) return privateReply("You have more than one matching team role. Ask an F7R admin to check your roles.");
   const team = matches[0]?.name ?? null;
   const eligibility = interaction.message.embeds?.find(embed=>embed.title==="Full-time eligibility");
   const fullTimeId = /^<@&(\d{17,20})>$/.exec(eligibility?.description ?? "")?.[1];
@@ -39,15 +40,20 @@ Deno.serve(async (req) => {
     let content = "Could not save your check-in. Please try again.";
     try {
       const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-      const result = await fetch(Deno.env.get("SUPABASE_URL") + "/rest/v1/f7r_discord_check_ins", {
+      const result = await fetch(Deno.env.get("SUPABASE_URL") + "/rest/v1/rpc/f7r_record_discord_check_in", {
         method:"POST",
-        headers:{apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},
+        headers:{apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"},
         body:JSON.stringify({
-          guild_id:guild, message_id:interaction.message.id, driver_id:member.user.id,
-          driver_name:member.nick || member.user.global_name || member.user.username, placement, team
+          p_guild:guild,p_message:interaction.message.id,p_driver:member.user.id,
+          p_name:member.nick || member.user.global_name || member.user.username,p_team:team,
+          p_full_time:placement==="Full-time",p_f1:interaction.message.embeds?.some(embed=>embed.title==="Team roles" && embed.footer?.text==="F1") ?? false,
+          p_out:checkingOut
         })
       });
-      if (result.ok) content = "You're checked in as **" + placement + "**" + (team ? " · " + team : "") + ".";
+      if (result.ok) {
+        const outcome = await result.json();
+        content = checkingOut ? outcome + "." : "You're checked in as **" + outcome + "**" + (team ? " · " + team : "") + ".";
+      }
     } finally {
       await fetch(api+"/webhooks/"+appId+"/"+interaction.token+"/messages/@original", {
         method:"PATCH",headers:{"Content-Type":"application/json"},

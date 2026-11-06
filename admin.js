@@ -143,6 +143,8 @@ start();
 
 const attendanceBrandLogos = new Map([['bmw', 'bmw'], ['porsche', 'porsche'], ['mercedes', 'mercedes']]);
 let attendanceDraft;
+let emojiDraft;
+let activeRoster;
 let discordBusy = false;
 function fillDiscordOptions(id, rows, prefix) {
   const select = $(id);
@@ -158,7 +160,7 @@ async function discordAction(action, details = {}) {
   discordBusy = true;
   const status = $('discord-status');
   const generation = checkGeneration;
-  status.textContent = 'Contacting Discord attendance service…';
+  if (action !== 'roster' || !activeRoster) status.textContent = 'Contacting Discord attendance service…';
   try {
     const { data, error } = await client.functions.invoke('f7r-discord-attendance', {
       body: { action, ...details }
@@ -171,9 +173,15 @@ async function discordAction(action, details = {}) {
     if (action === 'options') {
       fillDiscordOptions('attendance-channel', data.channels, '#');
       status.textContent = 'Discord channels loaded.';
-    } else if (action === 'preview') {
-      if (attendanceDraft !== details) return;
-      $('attendance-eligibility').textContent = 'Full-time seats require ' + data.fullTimeRole + ' and a team role.';
+    } else if (action === 'preview' || action === 'emoji_setup') {
+      const isPreview = action === 'preview';
+      if (isPreview && attendanceDraft !== details) return;
+      if ($('attendance-game').value !== details.game) return;
+      emojiDraft = details;
+      $('attendance-send').hidden = !isPreview;
+      $('attendance-emoji-save').disabled = !data.emojiAvailable;
+      $('attendance-eligibility').textContent = isPreview ? 'Full-time seats require ' + data.fullTimeRole + ' and a team role.' : 'Saved defaults for ' + details.game;
+      if (!isPreview) $('attendance-summary').textContent = '';
       const teams = $('attendance-teams');
       teams.replaceChildren();
       for (const team of data.teams) {
@@ -186,7 +194,7 @@ async function discordAction(action, details = {}) {
           logo.alt = '';
           item.append(logo);
         }
-        item.append(' ' + team.name + (team.ids.length ? ' · Role matched' : ' · Role missing'));
+        item.append(' ' + team.name + (isPreview ? (team.ids.length ? ' · Role matched' : ' · Role missing') : ''));
         const picker = document.createElement('select');
         picker.setAttribute('aria-label', 'Discord emoji for ' + team.name);
         picker.add(new Option('No Discord emoji', ''));
@@ -197,7 +205,8 @@ async function discordAction(action, details = {}) {
         const normalizeEmoji = name => name.toLowerCase().replace(/[^a-z0-9]/g, '');
         const aliases = [normalizeEmoji(team.name), normalizeEmoji(team.logo || team.name)];
         const suggested = data.emojis.filter(emoji => aliases.includes(normalizeEmoji(emoji.name)));
-        const selected = saved === null && suggested.length === 1 ? suggested[0].id : saved;
+        const configured = Object.hasOwn(data.savedEmojis, team.name) ? data.savedEmojis[team.name] : saved;
+        const selected = configured === null && suggested.length === 1 ? suggested[0].id : configured;
         if (data.emojis.some(emoji => emoji.id === selected)) picker.value = selected;
         const icon = document.createElement('img');
         icon.alt = '';
@@ -209,7 +218,7 @@ async function discordAction(action, details = {}) {
             icon.src = 'https://cdn.discordapp.com/emojis/' + emoji.id + (emoji.animated ? '.gif' : '.png');
             details.emojiIds[team.name] = emoji.id;
           } else {
-            delete details.emojiIds[team.name];
+            details.emojiIds[team.name] = '';
           }
         }
         picker.onchange = () => {
@@ -222,12 +231,17 @@ async function discordAction(action, details = {}) {
         teams.append(item);
       }
       $('attendance-emoji-help').textContent = data.emojiAvailable ? 'Choose a server emoji for each team. Choices are remembered in this browser.' : 'Discord emoji could not be loaded. You can still post the check-in.';
+      $('attendance-emoji-help').textContent = data.emojiAvailable ? 'Save team emojis to reuse them across browsers.' : 'Discord emoji could not be loaded.';
       $('attendance-preview').hidden = false;
-      status.textContent = 'Preview ready. Nothing has been posted.';
+      status.textContent = isPreview ? 'Preview ready. Nothing has been posted.' : 'Choose emojis, then save your mappings.';
+    } else if (action === 'emoji_save') {
+      status.textContent = 'Team emojis saved for all Race Control admins.';
     } else if (action === 'post') {
       $('attendance-link').href = data.url;
       $('attendance-link').hidden = false;
       $('attendance-message').value = data.url;
+      const [, channelId, messageId] = new URL(data.url).pathname.split('/').slice(2);
+      activeRoster = {channelId, messageId};
       $('attendance-drivers').textContent = '';
       $('attendance-preview').hidden = true;
       attendanceDraft = null;
@@ -235,9 +249,14 @@ async function discordAction(action, details = {}) {
     } else {
       const roster = $('attendance-drivers');
       roster.replaceChildren();
-      const groups = [...data.teams, {name: 'Reserves'}];
+      activeRoster = details;
+      const groups = [...data.teams, {name: 'Reserves'}, {name: 'Checked out'}];
       for (const group of groups) {
-        const drivers = data.drivers.filter(row => group.name === 'Reserves' ? row.placement === 'Reserve' : row.placement === 'Full-time' && row.team === group.name);
+        const drivers = data.drivers.filter(row => {
+          if (group.name === 'Checked out') return Boolean(row.checked_out_at);
+          if (row.checked_out_at) return false;
+          return group.name === 'Reserves' ? row.placement === 'Reserve' : row.placement === 'Full-time' && row.team === group.name;
+        });
         const heading = document.createElement('h4');
         const brandLogo = group.logo || attendanceBrandLogos.get(group.name.toLowerCase());
         if (brandLogo) {
@@ -249,12 +268,23 @@ async function discordAction(action, details = {}) {
         }
         heading.append(' ' + group.name + ' · ' + drivers.length);
         const list = document.createElement('ul');
-        const f1Team = data.f1 && group.name !== 'Reserves';
+        const f1Team = data.f1 && !['Reserves','Checked out'].includes(group.name);
         const total = f1Team ? Math.max(2, drivers.length) : drivers.length;
         for (let index = 0; index < total; index++) {
           const item = document.createElement('li');
           const label = f1Team ? (index < 2 ? 'Seat ' + (index + 1) + ' · ' : 'Additional check-in · ') : '';
-          item.textContent = label + (drivers[index]?.driver_name || 'Awaiting check-in');
+          const driver = f1Team ? drivers.find(row => row.seat === index + 1) ?? drivers.filter(row => row.seat == null)[index] : drivers[index];
+          item.textContent = label + (driver?.driver_name || 'Awaiting check-in');
+          for (const [caption, value] of [['In', driver?.checked_in_at], ['Out', driver?.checked_out_at]]) {
+            if (!value) continue;
+            const stamp = document.createElement('time');
+            stamp.dateTime = value;
+            stamp.className = 'secondary';
+            stamp.textContent = caption + ' ' + new Intl.DateTimeFormat('en-GB', {
+              timeZone:'Europe/London', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23'
+            }).format(new Date(value)).replace(',', '');
+            item.append(' ', stamp);
+          }
           list.append(item);
         }
         roster.append(heading, list);
@@ -276,6 +306,7 @@ $('attendance-form').oninput = () => {
   $('attendance-series-field').hidden = !lmu;
   $('attendance-series').required = lmu;
   attendanceDraft = null;
+  emojiDraft = null;
   $('attendance-preview').hidden = true;
 };
 $('attendance-form').onsubmit = event => {
@@ -308,6 +339,17 @@ $('attendance-send').onclick = () => {
     discordAction('post', attendanceDraft);
   }
 };
+$('attendance-emoji-setup').onclick = () => {
+  const game = $('attendance-game').value;
+  if (!game) {
+    $('discord-status').textContent = 'Choose a game before setting up team emojis.';
+    return;
+  }
+  discordAction('emoji_setup', {game, emojiIds:Object.create(null)});
+};
+$('attendance-emoji-save').onclick = () => {
+  if (emojiDraft) discordAction('emoji_save', {game:emojiDraft.game, emojiIds:emojiDraft.emojiIds});
+};
 $('attendance-roster').onclick = () => {
   const value = $('attendance-message').value.trim();
   const channelId = value.match(/^https:\/\/discord\.com\/channels\/\d+\/(\d{17,20})\//)?.[1];
@@ -318,3 +360,6 @@ $('attendance-roster').onclick = () => {
   }
   discordAction('roster', {messageId, channelId});
 };
+
+$('attendance-message').oninput = () => { activeRoster = null; };
+setInterval(() => { if (activeRoster && verified) discordAction('roster', activeRoster); }, 5000);
