@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#0c111b">
 
 <title>F7R Race Control · Flags</title><link rel="stylesheet" href="admin.css?v=8">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=10"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=11"></script>
 <link rel="icon" type="image/png" href="./assets/f7r-logo.png?v=f7r1"></head><body>
 <div id="race-atmosphere" aria-hidden="true"></div>
 <header><a class="brand" href="./admin.html"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL<span class="brand-caption">Your grid. In sync.</span></span></a><span class="tag"><span class="tag-dot" aria-hidden="true"></span> FLAG OPERATIONS</span></header>
@@ -21,23 +21,37 @@
 <section class="card countdown-tool restart-tool"><p class="eyebrow">PREPARE THE GRID</p><h2>Prepare to race</h2><label for="green-countdown-seconds">Countdown to green · seconds</label><input id="green-countdown-seconds" type="number" min="1" max="2147483647" step="1" inputmode="numeric" placeholder="e.g. 10"><p class="small muted">Shows half yellow, half green with PREPARE TO RACE and the countdown. Becomes fully green at zero.</p><button id="start-green-countdown" class="secondary" disabled>Start Prepare to race ↗</button></section></div>
 <div class="section-heading"><div><p class="eyebrow">MAKE THE CALL</p><h2>Choose a signal</h2></div><p class="muted">Your next selection replaces the active flag.</p></div><div id="flag-grid" class="flag-grid" role="group" aria-label="Race flag controls"></div>
 <section class="card" id="discord-bot">
-<p class="eyebrow">DISCORD BOT</p><h2>Driver attendance</h2>
-<p class="small muted">Post an RSVP poll to the configured Discord channel. Drivers vote in Discord.</p>
+<p class="eyebrow">DISCORD BOT DASHBOARD</p><h2>Driver attendance</h2>
+<p class="small muted">Prepare a check-in, preview it here and post only when you're ready. Check-in closes when the race starts.</p>
+<button class="secondary" id="discord-check" type="button">Load Discord channels and roles</button>
 <form id="attendance-form">
-<label for="attendance-event">Race or event name</label>
-<input id="attendance-event" maxlength="100" required placeholder="e.g. Tier 1 · Silverstone">
+<label for="attendance-game">Game</label>
+<select id="attendance-game" required><option value="">Choose a game</option><option>F1</option><option>Le Mans Ultimate</option><option>Assetto Corsa</option><option>Assetto Corsa Competizione</option></select>
+<label for="attendance-track">Track</label>
+<input id="attendance-track" maxlength="100" required placeholder="e.g. Silverstone">
 <label for="attendance-time">Race date and time (your local time)</label>
 <input id="attendance-time" type="datetime-local" required>
-<label for="attendance-hours">Voting window in hours</label>
-<input id="attendance-hours" type="number" min="1" max="168" value="24" required>
+<label for="attendance-channel">Discord channel</label>
+<select id="attendance-channel" required><option value="">Load Discord channels first</option></select>
+<div id="attendance-tier-field" hidden>
+<label for="attendance-tier">F1 tier</label>
+<select id="attendance-tier"><option value="">Choose a tier</option><option>T1</option><option>T2</option><option>T3</option><option>T4</option></select>
+</div>
+<p class="small muted">Matching Discord team roles assign a driver to a team. Drivers without a matching role go on the reserve list.</p>
 <label for="attendance-notes">Notes (optional)</label>
 <input id="attendance-notes" maxlength="500" placeholder="e.g. Lobby opens 15 minutes early">
-<p class="small muted">Poll options: Attending, Reserve / unsure, Unavailable.</p>
-<button class="secondary" id="discord-check" type="button">Check connection</button>
-<button class="secondary" id="discord-register" type="button">Enable Discord check-in command</button>
-<button class="primary" id="attendance-send" type="submit">Post attendance poll ↗</button>
+<button class="secondary" id="attendance-preview-button" type="submit">Preview check-in</button>
 </form>
-<p id="discord-status" role="status"></p><a id="attendance-link" hidden target="_blank" rel="noopener noreferrer">Open poll in Discord ↗</a>
+<div id="attendance-preview" hidden>
+<h3>Check-in preview</h3><p id="attendance-summary"></p><ul id="attendance-teams"></ul>
+<button class="primary" id="attendance-send" type="button">Post to Discord ↗</button>
+</div>
+<p id="discord-status" role="status"></p><a id="attendance-link" hidden target="_blank" rel="noopener noreferrer">Open check-in in Discord ↗</a>
+<h3>Check-in roster</h3>
+<label for="attendance-message">Discord message link or ID</label>
+<input id="attendance-message" placeholder="Paste the Discord message link">
+<button class="secondary" id="attendance-roster" type="button">Load roster</button>
+<div id="attendance-drivers" aria-live="polite"></div>
 </section>
 <div class="history-heading"><div><p class="eyebrow">THE LATEST CALLS</p><h2>Recent signals</h2></div><button id="refresh-history" class="secondary"><span aria-hidden="true">↻</span> Refresh history</button></div><ol id="history" class="card history" aria-label="Recent flag changes"></ol>
 </section><p id="message" role="status" aria-live="polite"></p>

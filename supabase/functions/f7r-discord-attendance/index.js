@@ -1,3 +1,36 @@
+const f1Teams = [
+  ["Alpine","alpine"], ["Aston Martin","aston-martin"], ["Audi","audi"], ["Cadillac","cadillac"],
+  ["Ferrari","ferrari"], ["Haas","haas"], ["McLaren","mclaren"], ["Mercedes","mercedes"],
+  ["Racing Bulls","racing-bulls"], ["Red Bull Racing","red-bull"], ["Williams","williams"]
+];
+const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+function teamRoles(roles, game, tier) {
+  if (game === "F1") {
+    const prefix = tier.toLowerCase() + " full time ";
+    return f1Teams.map(([name, logo]) => ({
+      name, logo, ids: roles.filter(role => {
+        const label = normalize(role.name);
+        const suffix = label.slice(prefix.length);
+        return label.startsWith(prefix) && (suffix === normalize(name) ||
+          (logo === "red-bull" && suffix === "redbull") || (logo === "red-bull" && suffix === "red bull"));
+      }).map(role => role.id)
+    }));
+  }
+  const suffix = game === "Le Mans Ultimate" ? "lmu" : game === "Assetto Corsa Competizione" ? "acc" : "ac";
+  const teams = new Map();
+  for (const role of roles) {
+    const label = normalize(role.name);
+    if (!label.endsWith(" " + suffix)) continue;
+    const brand = role.name.trim().replace(new RegExp("[\\s_-]+" + suffix + "$", "i"), "").trim();
+    if (!brand || brand === role.name.trim()) continue;
+    const key = normalize(brand);
+    if (!teams.has(key)) teams.set(key, {
+      name: brand, logo: f1Teams.find(([name]) => normalize(name) === key)?.[1], ids: []
+    });
+    teams.get(key).ids.push(role.id);
+  }
+  return [...teams.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}
 const origins = new Set(["https://racecontrol.f7r.co.uk", "https://taynz18.github.io"]);
 const snowflake = (value) => typeof value === "string" && /^\d{17,20}$/.test(value);
 
@@ -28,71 +61,67 @@ Deno.serve(async (request) => {
       return reply({error: "Approved race admin access required."}, 403);
     }
     const input = await request.json().catch(() => null);
-    if (!["check", "post", "register"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
+    if (!["options", "preview", "post", "roster"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
     const token = Deno.env.get("F7R_DISCORD_BOT_TOKEN");
     const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
-    const channel = Deno.env.get("F7R_DISCORD_ATTENDANCE_CHANNEL_ID");
-    if (!token || !snowflake(guild) || !snowflake(channel)) {
-      return reply({error: "Set the bot token, server ID and attendance channel ID in Supabase."}, 503);
-    }
-    const channelUrl = "https://discord.com/api/v10/channels/" + channel;
+    if (!token || !snowflake(guild)) return reply({error: "Set the bot token and F7R server ID in Supabase."}, 503);
     const discordHeaders = {Authorization: "Bot " + token, "Content-Type": "application/json"};
-    const targetResponse = await fetch(channelUrl, {headers: discordHeaders});
-    if (!targetResponse.ok) return reply({error: "Discord could not open the configured channel. Check the bot token and channel access."}, 502);
-    const target = await targetResponse.json();
-    if (target.guild_id !== guild || target.type !== 0) {
-      return reply({error: "Choose a text channel in the configured F7R server."}, 400);
+    const api = "https://discord.com/api/v10";
+    if (input.action === "roster") {
+      if (!snowflake(input.messageId)) return reply({error: "Enter a valid Discord message ID."}, 400);
+      const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      const query = new URLSearchParams({select:"driver_name,placement,team",guild_id:"eq."+guild,message_id:"eq."+input.messageId,order:"driver_name"});
+      const result = await fetch(url + "/rest/v1/f7r_discord_check_ins?" + query, {headers:{apikey:service,Authorization:"Bearer "+service}});
+      if (!result.ok) return reply({error:"Could not load the check-in roster."},502);
+      const drivers = await result.json();
+      let teams = [...new Set(drivers.map(row=>row.team).filter(Boolean))].map(name=>({name}));
+      let f1 = false;
+      if (snowflake(input.channelId)) {
+        const message = await fetch(api + "/channels/" + input.channelId + "/messages/" + input.messageId, {headers:discordHeaders});
+        if (!message.ok) return reply({error:"Could not open that check-in message. Check its link and the bot's Read Message History permission."},502);
+        const post = await message.json();
+        const embed = post.embeds?.find(item=>item.title==="Team roles");
+        if (post.author?.id !== "1004676760815796334" || !embed) return reply({error:"This link is not an F7R team check-in."},400);
+        f1 = embed.footer?.text === "F1";
+        teams = f1 ? f1Teams.map(([name,logo])=>({name,logo})) : embed.fields.map(({name})=>({name}));
+      }
+      return reply({drivers,teams,f1});
     }
-    if (input.action === "check") return reply({channel: target.name});
-    if (input.action === "register") {
-      const choices = (name, description, labels) => ({
-        type: 3, name, description, required: true,
-        choices: labels.map((label) => ({name: label, value: label}))
-      });
-      const command = await fetch("https://discord.com/api/v10/applications/1004676760815796334/guilds/" + guild + "/commands", {
-        method: "POST", headers: discordHeaders,
-        body: JSON.stringify({
-          name: "start_check_in", description: "Set up an F7R race attendance poll",
-          type: 1, default_member_permissions: "32",
-          options: [
-            choices("game", "Choose a game", ["F1 25", "F1 2026 Season Pack", "F2 2025", "F2 2026", "ACC", "LMU"]),
-            choices("lineup", "Choose a driver lineup or tier", ["Open lineup", "T1 Full Time", "T2 Full Time", "T3 Full Time", "T4 Full Time", "Realistic F1", "F2", "ACC", "LMU"])
-          ]
-        })
-      });
-      if (!command.ok) return reply({error: "Discord rejected registration. Check that the F7R app is installed in this server."}, 502);
-      return reply({registered: true});
+    const guildPath = api + "/guilds/" + guild;
+    const [channelResponse, roleResponse] = await Promise.all([
+      fetch(guildPath + "/channels", {headers:discordHeaders}),
+      fetch(guildPath + "/roles", {headers:discordHeaders})
+    ]);
+    if (!channelResponse.ok || !roleResponse.ok) return reply({error:"Could not load the server. Check that the F7R bot is installed."},502);
+    const channels = (await channelResponse.json()).filter(c=>c.type===0 || c.type===5).map(({id,name})=>({id,name}));
+    const roles = (await roleResponse.json()).filter(r=>r.id!==guild && !r.managed).map(({id,name})=>({id,name}));
+    if (input.action === "options") return reply({channels});
+    const {channelId, tier, game, track, startsAt, notes, nonce} = input;
+    const channel = channels.find(c=>c.id===channelId);
+    if (!channel || (game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
+        typeof track!=="string" || !track.trim() || track.length>100 || typeof notes!=="string" || notes.length>500 ||
+        !Number.isSafeInteger(startsAt) || startsAt<=Date.now() || startsAt>8640000000000000 ||
+        typeof nonce!=="string" || !/^[a-f0-9]{24}$/.test(nonce)) return reply({error:"Choose a channel, game, track, future race time and an F1 tier where applicable."},400);
+    const teams = teamRoles(roles, game, tier);
+    const mapped = teams.filter(team=>team.ids.length);
+    if (!mapped.length || mapped.length > 25 || mapped.some(team=>team.ids.join(",").length>1000)) {
+      return reply({error:"No usable team role mappings. Check that your Discord role names follow the game and tier format."},400);
     }
-    const {title, startsAt, hours, notes} = input;
-    if (typeof title !== "string" || !title.trim() || title.length > 100 ||
-        !Number.isSafeInteger(startsAt) || startsAt <= Date.now() || startsAt > 8640000000000000 ||
-        !Number.isInteger(hours) || hours < 1 || hours > 168 ||
-        typeof notes !== "string" || notes.length > 500) {
-      return reply({error: "Enter an event name, future race time and a voting window from 1 to 168 hours."}, 400);
-    }
-    const timestamp = Math.floor(startsAt / 1000);
-    const message = await fetch(channelUrl + "/messages", {
-      method: "POST",
-      headers: discordHeaders,
-      body: JSON.stringify({
-        content: "**F7R driver attendance**\n" + title.trim() + "\n<t:" + timestamp + ":F> (<t:" + timestamp + ":R>)" + (notes.trim() ? "\n" + notes.trim() : ""),
-        allowed_mentions: {parse: []},
-        poll: {
-          question: {text: "Can you race?"},
-          answers: ["Attending", "Reserve / unsure", "Unavailable"].map((text) => ({poll_media: {text}})),
-          duration: hours,
-          allow_multiselect: false,
-          layout_type: 1
-        }
+    if (input.action === "preview") return reply({teams});
+    const time = Math.floor(startsAt/1000);
+    const message = await fetch(api + "/channels/" + channel.id + "/messages", {
+      method:"POST", headers:discordHeaders,
+      body:JSON.stringify({
+        content:"**F7R race check-in**\n" + game + " · " + track.trim() + "\nRace starts <t:" + time + ":F>" + (game === "F1" ? "\nTier: " + tier : "") + "\nDrivers without a matching team role will be listed as reserves." + (notes.trim()?"\n"+notes.trim():""),
+        allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
+        embeds:[{title:"Team roles",footer:{text:game},fields:mapped.map(team=>({name:team.name,value:team.ids.map(id=>"<@&"+id+">").join(" ")}))}],
+        components:[{type:1,components:[{type:2,style:3,label:"Check in",custom_id:"f7r-team-rsvp:"+time}]}]
       })
     });
-    if (!message.ok) {
-      const reason = message.status === 429 ? "Discord is rate limiting requests. Try again shortly." : "Discord rejected the poll. Check Send Messages and Create Polls permissions.";
-      return reply({error: reason}, 502);
-    }
-    const posted = await message.json();
-    return reply({url: "https://discord.com/channels/" + guild + "/" + channel + "/" + posted.id});
+    if (!message.ok) return reply({error:message.status===429?"Discord is rate limiting requests. Try again shortly.":"Could not post. Check the bot's View Channel and Send Messages permissions."},502);
+    const posted=await message.json();
+    return reply({url:"https://discord.com/channels/"+guild+"/"+channel.id+"/"+posted.id, messageId:posted.id});
   } catch {
-    return reply({error: "Discord attendance service is unavailable."}, 502);
+    return reply({error:"Discord attendance service is unavailable."},502);
   }
 });

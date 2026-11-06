@@ -141,49 +141,138 @@ setInterval(()=>{if(verified)updateDuration();},1000);
 start();
 
 
+let attendanceDraft;
+let discordBusy = false;
+function fillDiscordOptions(id, rows, prefix) {
+  const select = $(id);
+  const previous = select.value;
+  select.replaceChildren(new Option('Choose an option', ''));
+  for (const row of rows.sort((a, b) => a.name.localeCompare(b.name))) {
+    select.add(new Option(prefix + row.name, row.id));
+  }
+  if (rows.some(row => row.id === previous)) select.value = previous;
+}
 async function discordAction(action, details = {}) {
-  if (!verified) return;
-  const check = $('discord-check');
-  const send = $('attendance-send');
-  const register = $('discord-register');
+  if (!verified || discordBusy) return;
+  discordBusy = true;
   const status = $('discord-status');
-  const link = $('attendance-link');
-  check.disabled = register.disabled = send.disabled = true;
-  link.hidden = true;
-  status.textContent = action === 'check' ? 'Checking Discord…' : action === 'register' ? 'Enabling the Discord command…' : 'Posting attendance poll…';
+  const generation = checkGeneration;
+  status.textContent = 'Contacting Discord attendance service…';
   try {
     const { data, error } = await client.functions.invoke('f7r-discord-attendance', {
       body: { action, ...details }
     });
+    if (generation !== checkGeneration) return;
     if (error) {
       const body = await error.context?.json?.().catch(() => null);
-      throw Error(body?.error || 'Discord service is unavailable.');
+      throw Error(body?.error || 'Discord attendance service is unavailable.');
     }
-    status.textContent = action === 'check' ? 'Connected to #' + data.channel : action === 'register' ? 'Discord command enabled. Use /start_check_in in your server.' : 'Attendance poll posted.';
-    if (data.url) {
-      link.href = data.url;
-      link.hidden = false;
+    if (action === 'options') {
+      fillDiscordOptions('attendance-channel', data.channels, '#');
+      status.textContent = 'Discord channels loaded.';
+    } else if (action === 'preview') {
+      if (attendanceDraft !== details) return;
+      const teams = $('attendance-teams');
+      teams.replaceChildren();
+      for (const team of data.teams) {
+        const item = document.createElement('li');
+        if (team.logo) {
+          const logo = document.createElement('img');
+          logo.src = 'assets/teams/' + team.logo + '.png';
+          logo.width = logo.height = 26;
+          logo.alt = '';
+          item.append(logo);
+        }
+        item.append(' ' + team.name + (team.ids.length ? ' · Role matched' : ' · Role missing'));
+        teams.append(item);
+      }
+      $('attendance-preview').hidden = false;
+      status.textContent = 'Preview ready. Nothing has been posted.';
+    } else if (action === 'post') {
+      $('attendance-link').href = data.url;
+      $('attendance-link').hidden = false;
+      $('attendance-message').value = data.url;
+      $('attendance-drivers').textContent = '';
+      $('attendance-preview').hidden = true;
+      attendanceDraft = null;
+      status.textContent = 'Check-in posted.';
+    } else {
+      const roster = $('attendance-drivers');
+      roster.replaceChildren();
+      const groups = [...data.teams, {name: 'Reserves'}];
+      for (const group of groups) {
+        const drivers = data.drivers.filter(row => group.name === 'Reserves' ? row.placement === 'Reserve' : row.team === group.name);
+        const heading = document.createElement('h4');
+        if (group.logo) {
+          const logo = document.createElement('img');
+          logo.src = 'assets/teams/' + group.logo + '.png';
+          logo.width = logo.height = 26;
+          logo.alt = '';
+          heading.append(logo);
+        }
+        heading.append(' ' + group.name + ' · ' + drivers.length);
+        const list = document.createElement('ul');
+        const f1Team = data.f1 && group.name !== 'Reserves';
+        const total = f1Team ? Math.max(2, drivers.length) : drivers.length;
+        for (let index = 0; index < total; index++) {
+          const item = document.createElement('li');
+          const label = f1Team ? (index < 2 ? 'Seat ' + (index + 1) + ' · ' : 'Additional check-in · ') : '';
+          item.textContent = label + (drivers[index]?.driver_name || 'Awaiting check-in');
+          list.append(item);
+        }
+        roster.append(heading, list);
+      }
+      status.textContent = 'Roster loaded.';
     }
   } catch (error) {
-    status.textContent = error.message;
+    if (generation === checkGeneration) status.textContent = error.message;
   } finally {
-    check.disabled = register.disabled = send.disabled = false;
+    discordBusy = false;
   }
 }
-$('discord-check').onclick = () => discordAction('check');
-$('discord-register').onclick = () => discordAction('register');
+$('discord-check').onclick = () => discordAction('options');
+$('attendance-form').oninput = () => {
+  const f1 = $('attendance-game').value === 'F1';
+  $('attendance-tier-field').hidden = !f1;
+  $('attendance-tier').required = f1;
+  attendanceDraft = null;
+  $('attendance-preview').hidden = true;
+};
 $('attendance-form').onsubmit = event => {
   event.preventDefault();
+  if (!verified || discordBusy) return;
   const startsAt = new Date($('attendance-time').value).getTime();
-  if (!Number.isFinite(startsAt) || startsAt <= Date.now()) {
-    $('discord-status').textContent = 'Choose a race time in the future.';
+  const track = $('attendance-track').value.trim();
+  if (!track || !Number.isFinite(startsAt) || startsAt <= Date.now()) {
+    $('discord-status').textContent = 'Enter a track and a race time in the future.';
     return;
   }
-  if (!window.confirm('Post this attendance poll to the configured Discord channel?')) return;
-  discordAction('post', {
-    title: $('attendance-event').value.trim(),
-    startsAt,
-    hours: Number($('attendance-hours').value),
-    notes: $('attendance-notes').value.trim()
-  });
+  const channel = $('attendance-channel');
+  const tier = $('attendance-tier').value;
+  const game = $('attendance-game').value;
+  const notes = $('attendance-notes').value.trim();
+  attendanceDraft ??= {
+    game, track, startsAt, notes, channelId: channel.value, tier,
+    nonce: crypto.randomUUID().replaceAll('-', '').slice(0, 24)
+  };
+  $('attendance-summary').textContent = [
+    game, track, new Date(startsAt).toLocaleString(), channel.selectedOptions[0].text,
+    game === 'F1' ? tier : '', notes
+  ].filter(Boolean).join(' · ');
+  discordAction('preview', attendanceDraft);
+};
+$('attendance-send').onclick = () => {
+  if (verified && attendanceDraft && !discordBusy && window.confirm('Post this check-in to the Discord channel shown in the preview?')) {
+    discordAction('post', attendanceDraft);
+  }
+};
+$('attendance-roster').onclick = () => {
+  const value = $('attendance-message').value.trim();
+  const channelId = value.match(/^https:\/\/discord\.com\/channels\/\d+\/(\d{17,20})\//)?.[1];
+  const messageId = /^(?:https:\/\/discord\.com\/channels\/\d+\/\d+\/)?(\d{17,20})\/?$/.exec(value)?.[1];
+  if (!messageId) {
+    $('discord-status').textContent = 'Enter the Discord message link or ID.';
+    return;
+  }
+  discordAction('roster', {messageId, channelId});
 };
