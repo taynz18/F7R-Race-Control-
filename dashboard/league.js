@@ -1,10 +1,12 @@
-import {POINTS, pointsFor, validateArchive} from './league-model.js?v=1';
+import {POINTS, pointsFor, validateArchive} from './league-model.js?v=2';
 import {TEAMS} from './teams.js?v=0.14.0';
 import {lapTime} from './model.js?v=0.10.1';
 
 const $ = id => document.getElementById(id);
 const storageKey = 'f7r-league-review-v1';
 let season;
+let libraryDb;
+const library = new Map();
 const node = (tag, text) => {
   const el = document.createElement(tag);
   if (text !== undefined) el.textContent = text;
@@ -17,14 +19,59 @@ const kind = session => ({0:'Qualifying',1:'Race'})[session.type] ?? 'Session';
 const position = value => value > 0 ? value : '';
 const status = message => { $('league-status').textContent = message; };
 
-function save(message) {
+function seasonKey(value) {
+  return value.id || 'name:' + value.name.trim().toLowerCase();
+}
+
+function openLibrary() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('f7r-league-library', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('seasons');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(Error('Close other League Archive tabs and retry.'));
+  });
+}
+
+function storeSeasons(values) {
+  return new Promise((resolve, reject) => {
+    const transaction = libraryDb.transaction('seasons', 'readwrite');
+    const records = transaction.objectStore('seasons');
+    for (const value of values) records.put(value, seasonKey(value));
+    transaction.oncomplete = resolve;
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
+async function save(message) {
   try {
-    localStorage.setItem(storageKey, JSON.stringify(season));
+    await storeSeasons([season]);
     status(message);
   } catch {
     status('Browser saving unavailable. Download the edited season to keep your changes.');
   }
 }
+
+function selectSeason(key) {
+  season = library.get(key);
+  if (!season) return;
+  try { localStorage.setItem('f7r-league-active-season', key); } catch {}
+  render();
+}
+
+function updatePicker(key) {
+  const picker = $('season-picker');
+  picker.replaceChildren(...[...library].map(([id, value]) => {
+    const option = node('option', value.name + (value.archived === true ? ' · Archived' : ''));
+    option.value = id;
+    return option;
+  }));
+  picker.disabled = !library.size;
+  if (library.has(key)) picker.value = key;
+  selectSeason(picker.value);
+}
+
+$('season-picker').addEventListener('change', event => selectSeason(event.target.value));
 
 function options(select, labels, value = 0) {
   select.replaceChildren(...labels.map((label, index) => {
@@ -113,7 +160,7 @@ function renderProfiles() {
 function renderResults() {
   const event = season.events[Number($('league-event').value)];
   const session = event?.sessions[Number($('league-session').value)];
-  $('points-option').hidden = session?.type !== 1 || !session.results.length;
+  $('points-option').hidden = season.scale === 'unset' || session?.type !== 1 || !session.results.length;
   $('score-session').checked = !!session?.scored;
   $('results-note').textContent = session?.results.length ? kind(session) + ' · ' + session.results.length + ' driver records' : 'No results imported for this session.';
   $('league-results').replaceChildren();
@@ -150,7 +197,7 @@ function render(eventIndex = 0, sessionIndex = 0) {
   $('backup-season').disabled = false;
   $('season-title').textContent = season.name;
   $('points-rule').value = season.scale;
-  $('season-summary').textContent = season.events.length + ' calendar entries · Points scale ' + POINTS[season.scale].join(' / ');
+  $('season-summary').textContent = season.events.length + ' calendar entries · Points scale ' + (POINTS[season.scale]?.join(' / ') ?? 'not configured');
   $('driver-champion').value = season.driverChampion ?? '';
   $('team-champion').value = season.teamChampion ?? '';
   $('honours').textContent = [season.driverChampion && '🏆 Driver · ' + season.driverChampion, season.teamChampion && '🏆 Constructor · ' + season.teamChampion].filter(Boolean).join('   ');
@@ -200,17 +247,38 @@ $('season-file').addEventListener('change', async event => {
   const input = event.target;
   const file = input.files[0];
   if (!file) return;
+  input.disabled = true;
   try {
-    if (file.size > 10_000_000) throw Error('The season file exceeds 10 MB.');
-    const incoming = validateArchive(JSON.parse(await file.text()));
-    if (season && !confirm('Replace the season in this browser? Download an edited backup first if you want to keep it.')) return;
-    season = incoming;
-    save('Season imported into this browser.');
-    render();
+    if (file.size > 30_000_000) throw Error('The season file exceeds 30 MB.');
+    const data = JSON.parse(await file.text());
+    const isLibrary = data?.format === 'f7r-library-1';
+    if (isLibrary && (!Array.isArray(data.seasons) || !data.seasons.length)) throw Error('The season library is empty or invalid.');
+    const incoming = (isLibrary ? data.seasons : [data]).map(validateArchive);
+    const pending = new Map();
+    let skipped = 0;
+    for (const value of incoming) {
+      const key = seasonKey(value);
+      const nameKey = 'name:' + value.name.trim().toLowerCase();
+      const sameName = !value.id ? [...library.values()].filter(item => 'name:' + item.name.trim().toLowerCase() === nameKey) : [];
+      const old = library.get(key) ?? library.get(nameKey) ?? (sameName.length === 1 ? sameName[0] : undefined);
+      if (isLibrary && old) { skipped++; continue; }
+      if (old && !confirm('Replace ' + old.name + ' in this browser? Download an edited backup first if needed.')) return;
+      // Replacing a legacy single-season copy keeps its existing key.
+      if (old) value.id = old.id;
+      const finalKey = seasonKey(value);
+      if (pending.has(finalKey)) throw Error('The file contains duplicate season identifiers.');
+      pending.set(finalKey, value);
+    }
+    if (!libraryDb) throw Error('Browser storage is unavailable. Try a regular browser window.');
+    await storeSeasons(pending.values());
+    for (const [key, value] of pending) library.set(key, value);
+    updatePicker(season ? seasonKey(season) : pending.keys().next().value);
+    status(pending.size + ' seasons imported. ' + skipped + ' existing seasons kept. ' + library.size + ' available in this browser.');
   } catch (error) {
     status(error.message);
   } finally {
     input.value = '';
+    input.disabled = false;
   }
 });
 $('backup-season').addEventListener('click', () => {
@@ -221,13 +289,31 @@ $('backup-season').addEventListener('click', () => {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-try {
-  const saved = localStorage.getItem(storageKey);
-  if (saved) {
-    season = validateArchive(JSON.parse(saved));
-    render();
-    status('Saved season loaded from this browser.');
+async function initLibrary() {
+  const input = $('season-file');
+  input.disabled = true;
+  try {
+    libraryDb = await openLibrary();
+    const values = await new Promise((resolve, reject) => {
+      const request = libraryDb.transaction('seasons').objectStore('seasons').getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    for (const value of values) library.set(seasonKey(value), validateArchive(value));
+    const legacy = localStorage.getItem(storageKey);
+    if (legacy && !library.size) {
+      const value = validateArchive(JSON.parse(legacy));
+      await storeSeasons([value]);
+      library.set(seasonKey(value), value);
+    }
+    if (library.size) {
+      updatePicker(localStorage.getItem('f7r-league-active-season'));
+      status(library.size + ' saved seasons available in this browser.');
+    }
+  } catch {
+    status('Could not open browser storage for the season library.');
+  } finally {
+    input.disabled = false;
   }
-} catch {
-  status('Could not restore the local season. Import a season file to continue.');
 }
+initLibrary();

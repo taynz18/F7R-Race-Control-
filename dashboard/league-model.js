@@ -4,13 +4,15 @@ export const POINTS = Object.freeze({
 });
 
 export function pointsFor(position, scale) {
+  if (scale === 'unset') return null;
   if (!Object.hasOwn(POINTS, scale)) throw Error('Choose a points scale.');
   return Number.isInteger(position) && position > 0 ? POINTS[scale][position - 1] ?? 0 : null;
 }
 
 export function validateArchive(archive) {
-  if (archive?.format !== 'f7r-season-1' || typeof archive.name !== 'string' ||
-      !Array.isArray(archive.events) || !Object.hasOwn(POINTS, archive.scale)) {
+  if (archive?.format !== 'f7r-season-1' || typeof archive.name !== 'string' || !archive.name.trim() ||
+      (archive.id != null && (typeof archive.id !== 'string' || !archive.id.trim())) ||
+      !Array.isArray(archive.events) || (archive.scale !== 'unset' && !Object.hasOwn(POINTS, archive.scale))) {
     throw Error('Choose a valid F7R season file.');
   }
   for (const event of archive.events) {
