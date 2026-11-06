@@ -140,3 +140,48 @@ async function start(){
 setInterval(()=>{if(verified)updateDuration();},1000);
 start();
 
+
+async function discordAction(action, details = {}) {
+  if (!verified) return;
+  const check = $('discord-check');
+  const send = $('attendance-send');
+  const status = $('discord-status');
+  const link = $('attendance-link');
+  check.disabled = send.disabled = true;
+  link.hidden = true;
+  status.textContent = action === 'check' ? 'Checking Discord…' : 'Posting attendance poll…';
+  try {
+    const { data, error } = await client.functions.invoke('f7r-discord-attendance', {
+      body: { action, ...details }
+    });
+    if (error) {
+      const body = await error.context?.json?.().catch(() => null);
+      throw Error(body?.error || 'Discord service is unavailable.');
+    }
+    status.textContent = action === 'check' ? 'Connected to #' + data.channel : 'Attendance poll posted.';
+    if (data.url) {
+      link.href = data.url;
+      link.hidden = false;
+    }
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    check.disabled = send.disabled = false;
+  }
+}
+$('discord-check')?.addEventListener('click', () => discordAction('check'));
+$('attendance-form')?.addEventListener('submit', event => {
+  event.preventDefault();
+  const startsAt = new Date($('attendance-time').value).getTime();
+  if (!Number.isFinite(startsAt) || startsAt <= Date.now()) {
+    $('discord-status').textContent = 'Choose a race time in the future.';
+    return;
+  }
+  if (!window.confirm('Post this attendance poll to the configured Discord channel?')) return;
+  discordAction('post', {
+    title: $('attendance-event').value.trim(),
+    startsAt,
+    hours: Number($('attendance-hours').value),
+    notes: $('attendance-notes').value.trim()
+  });
+});
