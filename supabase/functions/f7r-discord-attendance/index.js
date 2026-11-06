@@ -20,10 +20,14 @@ function teamRoles(roles, game, tier) {
   const suffix = game === "Le Mans Ultimate" ? "lmu" : "acc";
   const teams = new Map();
   for (const role of roles) {
-    const label = normalize(role.name);
-    if (!label.endsWith(" " + suffix)) continue;
-    const brand = role.name.trim().replace(new RegExp("[\\s_-]+" + suffix + "$", "i"), "").trim();
-    if (!brand || brand === role.name.trim()) continue;
+    const raw = role.name.normalize("NFKC").replace(/\p{Cf}/gu, "").trim();
+    const separated = new RegExp("([^\\p{L}\\p{N}]+)" + suffix + "[^\\p{L}\\p{N}]*$", "iu");
+    const attached = new RegExp(suffix.toUpperCase() + "[^\\p{L}\\p{N}]*$", "u");
+    const ending = raw.match(separated) ?? raw.match(attached);
+    if (!ending) continue;
+    const brand = raw.slice(0, ending.index)
+      .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    if (!normalize(brand)) continue;
     const key = normalize(brand);
     if (!teams.has(key)) teams.set(key, {
       name: brand, logo: f1Teams.find(([name]) => normalize(name) === key)?.[1], ids: []
@@ -95,7 +99,7 @@ Deno.serve(async (request) => {
     ]);
     if (!channelResponse.ok || !roleResponse.ok) return reply({error:"Could not load the server. Check that the F7R bot is installed."},502);
     const channels = (await channelResponse.json()).filter(c=>c.type===0 || c.type===5).map(({id,name})=>({id,name}));
-    const roles = (await roleResponse.json()).filter(r=>r.id!==guild && !r.managed).map(({id,name})=>({id,name}));
+    const roles = (await roleResponse.json()).filter(r=>r.id!==guild).map(({id,name})=>({id,name}));
     if (input.action === "options") return reply({channels});
     const {channelId, tier, series, game, track, startsAt, notes, nonce} = input;
     if (!["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game)) return reply({error:"Choose a game first."},400);
@@ -132,8 +136,13 @@ Deno.serve(async (request) => {
         typeof nonce!=="string" || !/^[a-f0-9]{24}$/.test(nonce)) return reply({error:"Choose a channel, game, track, future race time and an F1 tier where applicable."},400);
     const teams = teamRoles(roles, game, tier);
     const mapped = teams.filter(team=>team.ids.length);
-    if (!mapped.length || mapped.length > 25 || mapped.some(team=>team.ids.join(",").length>1000)) {
-      return reply({error:"No usable team role mappings. Check that your Discord role names follow the game and tier format."},400);
+    if (!mapped.length) {
+      const expected = game === "F1" ? "Mercedes or " + tier + " Full Time Mercedes" :
+        game === "Le Mans Ultimate" ? "Mercedes LMU" : "Porsche ACC";
+      return reply({error:"No Discord team roles matched " + game + ". Expected a role such as " + expected + "."},400);
+    }
+    if (mapped.length > 25 || mapped.some(team=>team.ids.join(",").length>950)) {
+      return reply({error:"Too many team roles to fit in one Discord check-in."},400);
     }
     const fullTimeRole = game === "F1" ? tier + " Full Time" :
       game === "Le Mans Ultimate" ? series + " Full Time Driver" : "ACC Full Time Driver";
