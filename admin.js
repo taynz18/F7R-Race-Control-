@@ -173,6 +173,7 @@ async function discordAction(action, details = {}) {
       status.textContent = 'Discord channels loaded.';
     } else if (action === 'preview') {
       if (attendanceDraft !== details) return;
+      $('attendance-eligibility').textContent = 'Full-time seats require ' + data.fullTimeRole + ' and a team role.';
       const teams = $('attendance-teams');
       teams.replaceChildren();
       for (const team of data.teams) {
@@ -203,7 +204,7 @@ async function discordAction(action, details = {}) {
       roster.replaceChildren();
       const groups = [...data.teams, {name: 'Reserves'}];
       for (const group of groups) {
-        const drivers = data.drivers.filter(row => group.name === 'Reserves' ? row.placement === 'Reserve' : row.team === group.name);
+        const drivers = data.drivers.filter(row => group.name === 'Reserves' ? row.placement === 'Reserve' : row.placement === 'Full-time' && row.team === group.name);
         const heading = document.createElement('h4');
         const brandLogo = group.logo || attendanceBrandLogos.get(group.name.toLowerCase());
         if (brandLogo) {
@@ -238,6 +239,9 @@ $('attendance-form').oninput = () => {
   const f1 = $('attendance-game').value === 'F1';
   $('attendance-tier-field').hidden = !f1;
   $('attendance-tier').required = f1;
+  const lmu = $('attendance-game').value === 'Le Mans Ultimate';
+  $('attendance-series-field').hidden = !lmu;
+  $('attendance-series').required = lmu;
   attendanceDraft = null;
   $('attendance-preview').hidden = true;
 };
@@ -252,15 +256,16 @@ $('attendance-form').onsubmit = event => {
   }
   const channel = $('attendance-channel');
   const tier = $('attendance-tier').value;
+  const series = $('attendance-series').value;
   const game = $('attendance-game').value;
   const notes = $('attendance-notes').value.trim();
   attendanceDraft ??= {
-    game, track, startsAt, notes, channelId: channel.value, tier,
+    game, track, startsAt, notes, channelId: channel.value, tier, series,
     nonce: crypto.randomUUID().replaceAll('-', '').slice(0, 24)
   };
   $('attendance-summary').textContent = [
     game, track, new Date(startsAt).toLocaleString(), channel.selectedOptions[0].text,
-    game === 'F1' ? tier : '', notes
+    game === 'F1' ? tier : game === 'Le Mans Ultimate' ? series : '', notes
   ].filter(Boolean).join(' · ');
   discordAction('preview', attendanceDraft);
 };

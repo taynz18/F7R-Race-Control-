@@ -32,7 +32,9 @@ Deno.serve(async (req) => {
   const matches = mapped.filter(field => [...field.value.matchAll(/<@&(\d{17,20})>/g)].some(([,id])=>member.roles.includes(id)));
   if (matches.length > 1) return privateReply("You have more than one matching team role. Ask an F7R admin to check your roles.");
   const team = matches[0]?.name ?? null;
-  const placement = team ? "Full-time" : "Reserve";
+  const eligibility = interaction.message.embeds?.find(embed=>embed.title==="Full-time eligibility");
+  const fullTimeId = /^<@&(\d{17,20})>$/.exec(eligibility?.description ?? "")?.[1];
+  const placement = team && (!eligibility || member.roles.includes(fullTimeId)) ? "Full-time" : "Reserve";
   EdgeRuntime.waitUntil((async () => {
     let content = "Could not save your check-in. Please try again.";
     try {

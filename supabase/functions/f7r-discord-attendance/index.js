@@ -10,13 +10,13 @@ function teamRoles(roles, game, tier) {
     return f1Teams.map(([name, logo]) => ({
       name, logo, ids: roles.filter(role => {
         const label = normalize(role.name);
-        const suffix = label.slice(prefix.length);
-        return label.startsWith(prefix) && (suffix === normalize(name) ||
-          (logo === "red-bull" && suffix === "redbull") || (logo === "red-bull" && suffix === "red bull"));
+        const suffix = label.startsWith(prefix) ? label.slice(prefix.length) : label;
+        return suffix === normalize(name) ||
+          (logo === "red-bull" && suffix === "redbull") || (logo === "red-bull" && suffix === "red bull");
       }).map(role => role.id)
     }));
   }
-  const suffix = game === "Le Mans Ultimate" ? "lmu" : game === "Assetto Corsa Competizione" ? "acc" : "ac";
+  const suffix = game === "Le Mans Ultimate" ? "lmu" : "acc";
   const teams = new Map();
   for (const role of roles) {
     const label = normalize(role.name);
@@ -96,9 +96,9 @@ Deno.serve(async (request) => {
     const channels = (await channelResponse.json()).filter(c=>c.type===0 || c.type===5).map(({id,name})=>({id,name}));
     const roles = (await roleResponse.json()).filter(r=>r.id!==guild && !r.managed).map(({id,name})=>({id,name}));
     if (input.action === "options") return reply({channels});
-    const {channelId, tier, game, track, startsAt, notes, nonce} = input;
+    const {channelId, tier, series, game, track, startsAt, notes, nonce} = input;
     const channel = channels.find(c=>c.id===channelId);
-    if (!channel || (game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
+    if (!channel || (game === "Le Mans Ultimate" && !["WEC","ELMS"].includes(series)) || (game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
         typeof track!=="string" || !track.trim() || track.length>100 || typeof notes!=="string" || notes.length>500 ||
         !Number.isSafeInteger(startsAt) || startsAt<=Date.now() || startsAt>8640000000000000 ||
         typeof nonce!=="string" || !/^[a-f0-9]{24}$/.test(nonce)) return reply({error:"Choose a channel, game, track, future race time and an F1 tier where applicable."},400);
@@ -107,14 +107,18 @@ Deno.serve(async (request) => {
     if (!mapped.length || mapped.length > 25 || mapped.some(team=>team.ids.join(",").length>1000)) {
       return reply({error:"No usable team role mappings. Check that your Discord role names follow the game and tier format."},400);
     }
-    if (input.action === "preview") return reply({teams});
+    const fullTimeRole = game === "F1" ? tier + " Full Time" :
+      game === "Le Mans Ultimate" ? series + " Full Time Driver" : "ACC Full Time Driver";
+    const fullTimeRoles = roles.filter(role=>normalize(role.name)===normalize(fullTimeRole));
+    if (fullTimeRoles.length !== 1) return reply({error:"Expected one Discord role named " + fullTimeRole + "."},400);
+    if (input.action === "preview") return reply({teams,fullTimeRole});
     const time = Math.floor(startsAt/1000);
     const message = await fetch(api + "/channels/" + channel.id + "/messages", {
       method:"POST", headers:discordHeaders,
       body:JSON.stringify({
-        content:"**F7R race check-in**\n" + game + " · " + track.trim() + "\nRace starts <t:" + time + ":F>" + (game === "F1" ? "\nTier: " + tier : "") + "\nDrivers without a matching team role will be listed as reserves." + (notes.trim()?"\n"+notes.trim():""),
+        content:"**F7R race check-in**\n" + game + " · " + track.trim() + "\nRace starts <t:" + time + ":F>" + (game === "F1" ? "\nTier: " + tier : "") + (game === "Le Mans Ultimate" ? "\nSeries: " + series : "") + "\nA matching team and full-time role are required for a seat. Other check-ins go to reserves." + (notes.trim()?"\n"+notes.trim():""),
         allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
-        embeds:[{title:"Team roles",footer:{text:game},fields:mapped.map(team=>({name:team.name,value:team.ids.map(id=>"<@&"+id+">").join(" ")}))}],
+        embeds:[{title:"Team roles",footer:{text:game},fields:mapped.map(team=>({name:team.name,value:team.ids.map(id=>"<@&"+id+">").join(" ")}))},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
         components:[{type:1,components:[{type:2,style:3,label:"Check in",custom_id:"f7r-team-rsvp:"+time}]}]
       })
     });
