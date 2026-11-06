@@ -141,6 +141,7 @@ setInterval(()=>{if(verified)updateDuration();},1000);
 start();
 
 
+const attendanceBrandLogos = new Map([['bmw', 'bmw'], ['porsche', 'porsche'], ['mercedes', 'mercedes']]);
 let attendanceDraft;
 let discordBusy = false;
 function fillDiscordOptions(id, rows, prefix) {
@@ -176,9 +177,10 @@ async function discordAction(action, details = {}) {
       teams.replaceChildren();
       for (const team of data.teams) {
         const item = document.createElement('li');
-        if (team.logo) {
+        const brandLogo = team.logo || attendanceBrandLogos.get(team.name.toLowerCase());
+        if (brandLogo) {
           const logo = document.createElement('img');
-          logo.src = 'assets/teams/' + team.logo + '.png';
+          logo.src = 'assets/teams/' + brandLogo + '.png';
           logo.width = logo.height = 26;
           logo.alt = '';
           item.append(logo);
@@ -203,9 +205,10 @@ async function discordAction(action, details = {}) {
       for (const group of groups) {
         const drivers = data.drivers.filter(row => group.name === 'Reserves' ? row.placement === 'Reserve' : row.team === group.name);
         const heading = document.createElement('h4');
-        if (group.logo) {
+        const brandLogo = group.logo || attendanceBrandLogos.get(group.name.toLowerCase());
+        if (brandLogo) {
           const logo = document.createElement('img');
-          logo.src = 'assets/teams/' + group.logo + '.png';
+          logo.src = 'assets/teams/' + brandLogo + '.png';
           logo.width = logo.height = 26;
           logo.alt = '';
           heading.append(logo);
