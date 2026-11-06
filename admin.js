@@ -169,8 +169,8 @@ async function discordAction(action, details = {}) {
     check.disabled = send.disabled = false;
   }
 }
-$('discord-check')?.addEventListener('click', () => discordAction('check'));
-$('attendance-form')?.addEventListener('submit', event => {
+$('discord-check').onclick = () => discordAction('check');
+$('attendance-form').onsubmit = event => {
   event.preventDefault();
   const startsAt = new Date($('attendance-time').value).getTime();
   if (!Number.isFinite(startsAt) || startsAt <= Date.now()) {
@@ -184,4 +184,4 @@ $('attendance-form')?.addEventListener('submit', event => {
     hours: Number($('attendance-hours').value),
     notes: $('attendance-notes').value.trim()
   });
-});
+};
