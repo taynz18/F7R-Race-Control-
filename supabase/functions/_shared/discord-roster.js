@@ -6,17 +6,49 @@ export function rosterEmbed(rows, mapped, isF1, limit) {
     return Number.isFinite(seconds) ? "<t:" + seconds + ":f>" : "";
   };
   const live = rows.filter(row=>!row.checked_out_at);
+  const totals = "**Full-time checked in:** "+live.filter(row=>row.placement==="Full-time").length+
+    "  ·  **Reserves checked in:** "+live.filter(row=>row.placement==="Reserve").length;
+  const raceClass = team => /^(Hypercar|LMGT3)(?: · |$)/.exec(team ?? "")?.[1];
+  if (mapped.some(field=>raceClass(field.name))) {
+    const active = live.filter(row=>row.placement==="Full-time" || row.confirmed_at);
+    const waiting = live.filter(row=>row.placement==="Reserve" && !row.confirmed_at);
+    const checkedOut = rows.filter(row=>row.checked_out_at);
+    if (limit < 512) return {title:"Live check-in lineup",color:0xf21b32,description:totals+"\nFull roster in Race Control."};
+    const valueLimit = Math.min(1024, Math.max(1, Math.floor((limit-totals.length-256)/4)));
+    const fieldValue = (lines) => {
+      if (!lines.length) return "None yet";
+      const value = lines.join("\n");
+      if (value.length <= valueLimit) return value;
+      const note = "More in Race Control.";
+      return value.slice(0,Math.max(0,valueLimit-note.length-1)).split("\n").slice(0,-1).concat(note).join("\n");
+    };
+    const fields = [["LMGT3","🟧"],["Hypercar","🟥"]].map(([className, icon])=>{
+      const drivers = active.filter(row=>raceClass(row.team)===className);
+      return {name:icon+" "+className+" ("+drivers.length+")",inline:true,value:fieldValue(drivers.map(driver=>{
+        const team = mapped.find(field=>field.name===driver.team);
+        const emoji = /^<a?:\w+:\d{17,20}>/.exec(team?.value ?? "")?.[0];
+        const car = clean(driver.team.slice(className.length+3));
+        return clean(driver.driver_name)+(emoji ? " · "+emoji : car ? " · "+car : "")+
+          (driver.confirmed_at ? " · Reserve" : "");
+      }))};
+    });
+    fields.push({name:"🟨 Reserves ("+waiting.length+")",inline:true,value:fieldValue(waiting.map(driver=>{
+      const className = raceClass(driver.team);
+      const time = stamp(driver.checked_in_at);
+      return clean(driver.driver_name)+(className ? " · "+className : "")+(time ? " · "+time : "");
+    }))});
+    const changes = [
+      ...active.filter(row=>row.confirmed_at).map(row=>clean(row.driver_name)+" → "+clean(row.team)),
+      ...checkedOut.map(row=>clean(row.driver_name)+(stamp(row.checked_in_at) ? " · In "+stamp(row.checked_in_at) : "")+" · Out "+stamp(row.checked_out_at))
+    ];
+    if (changes.length) fields.push({name:"Confirmed reserves and check-outs",value:fieldValue(changes)});
+    return {title:"Live check-in lineup",color:0xf21b32,description:totals,fields};
+  }
   const lines = [];
-  let previousClass = "";
   for (const field of mapped) {
-    const group = /^(Hypercar|LMGT3) · (.+)$/.exec(field.name);
-    if (group && group[1] !== previousClass) {
-      previousClass = group[1];
-      lines.push("", previousClass === "Hypercar" ? "🟥 **Hypercar**" : "🟧 **LMGT3**");
-    }
     const drivers = live.filter(row=>(row.placement==="Full-time" || row.confirmed_at) && row.team===field.name);
     const emoji = /^<a?:\w+:\d{17,20}>/.exec(field.value)?.[0];
-    lines.push("**"+(emoji ? emoji+" " : "")+clean(group?.[2] ?? field.name)+"**");
+    lines.push("**"+(emoji ? emoji+" " : "")+clean(field.name)+"**");
     if (isF1) {
       for (const seat of [1,2]) {
         const driver = drivers.find(row=>row.seat===seat) ?? drivers.filter(row=>row.seat==null)[seat-1];
@@ -30,8 +62,7 @@ export function rosterEmbed(rows, mapped, isF1, limit) {
   const reserves = live.filter(row=>row.placement==="Reserve" && !row.confirmed_at);
   if (!reserves.length) lines.push("None yet");
   for (const driver of reserves) {
-    const raceClass = /^(Hypercar|LMGT3)(?: · |$)/.exec(driver.team ?? "")?.[1];
-    lines.push("↳ "+clean(driver.driver_name)+(raceClass ? " · "+raceClass : "")+(stamp(driver.checked_in_at) ? " · In "+stamp(driver.checked_in_at) : ""));
+    lines.push("↳ "+clean(driver.driver_name)+(stamp(driver.checked_in_at) ? " · In "+stamp(driver.checked_in_at) : ""));
   }
   const confirmed = live.filter(row=>row.confirmed_at);
   if (confirmed.length) {
@@ -47,7 +78,7 @@ export function rosterEmbed(rows, mapped, isF1, limit) {
       lines.push("↳ "+clean(driver.driver_name)+(entered ? " · In "+entered : "")+" · Out "+stamp(driver.checked_out_at));
     }
   }
-  let description = ["**Full-time checked in:** "+live.filter(row=>row.placement==="Full-time").length+"  ·  **Reserves checked in:** "+live.filter(row=>row.placement==="Reserve").length,"",...lines].join("\n");
+  let description = [totals,"",...lines].join("\n");
   if (description.length > limit) {
     const note = "\nMore entries in Race Control.";
     description = description.slice(0,limit-note.length).split("\n").slice(0,-1).join("\n")+note;
