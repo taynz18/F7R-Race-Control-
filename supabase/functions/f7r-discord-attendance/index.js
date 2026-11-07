@@ -13,7 +13,10 @@ const isFormula = game => game==="F1" || game==="F2";
 const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 function teamRoles(roles, game, tier) {
   if (game === "F2") {
-    return f2Teams.map(([name,logo])=>({name,logo,ids:roles.filter(role=>[normalize(name),normalize(name)+" f2"].includes(normalize(role.name))).map(role=>role.id)}));
+    return f2Teams.map(([name,logo])=>{
+      const aliases = name==="Hitech" ? ["hitech","hitech pulse eight"] : [normalize(name)];
+      return {name,logo,ids:roles.filter(role=>aliases.includes(normalize(role.name).replace(/ f2$/,""))).map(role=>role.id)};
+    });
   }
   if (game === "F1") {
     const prefix = tier.toLowerCase() + " full time ";
