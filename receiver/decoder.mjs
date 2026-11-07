@@ -31,7 +31,18 @@ export class Decoder{
     if(trackId!==null&&this.mapTrack!==trackId){this.mapPoints.clear();this.mapTrack=trackId;}
     const layout=layouts[this.format],status=fresh(7),damage=fresh(10),tel=fresh(6),extra=fresh(16),session=fresh(1,15000);
     const safetySession=fresh(1);
-    const marshalZones=safetySession?Array.from({length:Math.min(safetySession[48],21)},(_,i)=>({start:finite(safetySession.readFloatLE(49+i*5),0,1),flag:safetySession.readInt8(53+i*5)})).filter(z=>z.start!==null&&z.flag>=-1&&z.flag<=3):null;
+    // Both supported Session layouts place sector splits at the same offsets.
+    const sector2=safetySession?.readFloatLE(745),sector3=safetySession?.readFloatLE(749);
+    const hasSectorSplits=sector2>0&&sector2<sector3&&sector3<trackLength;
+    const marshalZones=safetySession?Array.from({length:Math.min(safetySession[48],21)},(_,i)=>{
+      const start=finite(safetySession.readFloatLE(49+i*5),0,1),flag=safetySession.readInt8(53+i*5);
+      const zone={start,flag};
+      if(start!==null&&hasSectorSplits){
+        const distance=start*trackLength;
+        zone.sector=distance>=sector3?3:distance>=sector2?2:1;
+      }
+      return zone;
+    }).filter(z=>z.start!==null&&z.flag>=-1&&z.flag<=3):null;
     const metadata=this.parts.get(1)?.b;
     const drivers=[];
     for(let i=0;i<Math.min(p[29],layout.cars);i++){
@@ -75,6 +86,7 @@ export class Decoder{
       // EA PacketSessionData: 21 packed five-byte marshal zones precede safetyCarStatus.
       safety_car_status:safetySession&&safetySession[154]<=3?safetySession[154]:null,
       marshal_zones:marshalZones,
+      game_signal_age_ms:safetySession?now-this.parts.get(1).at:null,
       total_laps:session?session[32]:null,track_id:session?session.readInt8(36):null}};
   }
 }

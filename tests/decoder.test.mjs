@@ -73,3 +73,14 @@ for(const format of [2025,2026])test('live safety periods decode and clear '+for
 for(const format of [2025,2026])test('marshal yellow zones decode, clear and expire '+format,()=>{const dec=feed(format),s=packet(1,format,500);s[48]=2;s.writeFloatLE(0,49);s[53]=1;s.writeFloatLE(.5,54);s[58]=3;dec.accept(s,1000);assert.deepEqual(dec.snapshot(1001).data.marshal_zones,[{start:0,flag:1},{start:.5,flag:3}]);s.writeUInt32LE(501,23);s[58]=1;dec.accept(s,1002);assert.equal(dec.snapshot(1003).data.marshal_zones[1].flag,1);dec.accept(packet(2,format,502),4000);assert.equal(dec.snapshot(4001).data.marshal_zones,null);assert.equal(dec.snapshot(4001).data.safety_car_status,null)});
 
 for(const format of [2025,2026])test('session type and formula are retained for recording '+format,()=>{const dec=feed(format);assert.equal(dec.snapshot(1001).data.session_type,null);const s=packet(1,format,101);s[35]=8;s[37]=2;dec.accept(s,1000);assert.equal(dec.snapshot(1001).data.session_type,8);assert.equal(dec.snapshot(1001).data.formula,2);s[35]=15;s.writeUInt32LE(102,23);dec.accept(s,1002);assert.equal(dec.snapshot(1003).data.session_type,15);dec.accept(packet(2,format,103),20000);dec.accept(packet(4,format,103),20000);assert.equal(dec.snapshot(20001).data.session_type,15)});
+
+for(const format of [2025,2026])test('sector yellow flags use game split distances '+format,()=>{
+ const dec=feed(format),session=packet(1,format,501);
+ session.writeUInt16LE(5000,33);session.writeFloatLE(1250,745);session.writeFloatLE(3750,749);
+ session[48]=3;
+ [0,.25,.75].forEach((start,i)=>{session.writeFloatLE(start,49+i*5);session[53+i*5]=3});
+ dec.accept(session,1000);
+ const {marshal_zones,game_signal_age_ms}=dec.snapshot(1100).data;
+ assert.deepEqual(marshal_zones.map(z=>z.sector),[1,2,3]);
+ assert.equal(game_signal_age_ms,100);
+});

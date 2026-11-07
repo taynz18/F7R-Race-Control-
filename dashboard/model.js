@@ -28,11 +28,18 @@ export function penaltyLabel(seconds){return Number.isSafeInteger(seconds)&&seco
 export function safetyPeriod(snapshot,race,now=Date.now(),demo=false){
  const state=feedState(snapshot,race,now,demo);
  if(state!=='LIVE'&&state!=='DEMO DATA')return null;
- const safety=({1:{code:'SC',label:'SAFETY CAR'},2:{code:'VSC',label:'VIRTUAL SAFETY CAR'}})[snapshot?.data?.safety_car_status];
+ const {safety_car_status,marshal_zones,game_signal_age_ms}=snapshot?.data||{};
+ const snapshotAge=now-Date.parse(snapshot?.received_at);
+ if(!demo&&(!isNumber(snapshotAge)||(isNumber(game_signal_age_ms)&&Math.max(0,snapshotAge)+game_signal_age_ms>3500)))return null;
+ const safety=({1:{code:'SC',label:'SAFETY CAR'},2:{code:'VSC',label:'VIRTUAL SAFETY CAR'}})[safety_car_status];
  if(safety)return {...safety,message:'DEPLOYED · LIVE GAME SIGNAL'};
- if(snapshot?.data?.safety_car_status!==0)return null;
- const yellow=snapshot?.data?.marshal_zones?.some(z=>z.flag===3&&isNumber(z.start)&&z.start>=0&&z.start<=1);
- return yellow?{code:'⚑',label:'YELLOW FLAG',local:true,message:'CAUTION ON TRACK · LIVE GAME SIGNAL'}:null;
+ if(safety_car_status!==0||!Array.isArray(marshal_zones))return null;
+ const yellow=marshal_zones.filter(z=>z?.flag===3&&isNumber(z.start)&&z.start>=0&&z.start<=1);
+ if(!yellow.length)return null;
+ const sectors=[...new Set(yellow.map(zone=>zone.sector))].sort();
+ const knownSectors=sectors.every(sector=>sector===1||sector===2||sector===3);
+ const location=knownSectors?' · '+(sectors.length===1?'SECTOR ':'SECTORS ')+sectors.join(', '):'';
+ return {code:'⚑',label:'YELLOW FLAG'+location,local:true,message:'CAUTION ON TRACK · LIVE GAME SIGNAL'};
 }
 
 export function inPitLane(driver){return driver?.pit_status===1||driver?.pit_status===2}
