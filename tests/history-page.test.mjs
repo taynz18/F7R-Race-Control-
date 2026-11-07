@@ -13,7 +13,10 @@ test('signed-in history opens recorded driver analysis and admin saves a recordi
  const client={from(name){let conditions=[];const q={select(){return q},eq(k,v){conditions.push([k,v]);return q},order(){return q},limit(){return q},range(){return q},maybeSingle(){return Promise.resolve({data:{user_id:'admin'}})},then(resolve){const all=name==='f7r_recordings'?[record]:samples;return Promise.resolve({data:all.filter(r=>conditions.every(([k,v])=>r[k]===v)),error:null}).then(resolve)}};return q},rpc:async(name,args)=>{if(name==='f7r_label_recording'){record.session_kind=args.session_category;return {error:null}}assert.equal(name,'f7r_finish_recording');record.state=args.discard?'discarded':'saved';record.title=args.session_title;return {error:null}},auth:{getUser:async()=>({data:{user:{id:'admin'}}}),onAuthStateChange(){}}};
  const code=(await readFile(new URL('../dashboard/history.js',import.meta.url),'utf8')).replace(/^import[^\n]+\n/gm,'').replace('}init();','}await init();');
  const ctx={circuitFor,sessionInfo,sessionStats,compoundName,lapTime,reading,driverName,teamFor,Node:Element,document:{getElementById:el,createElement:tag=>new Element(tag),createTextNode:t=>new Element('text')},window:{supabase:{createClient:()=>client}},fetch:async()=>({json:async()=>({})}),Date,console,setTimeout,setInterval(){},Blob,URL};
- vm.createContext(ctx);await vm.runInContext('(async()=>{'+code+'})()',ctx);
+ vm.createContext(ctx);
+ const sessionCode=await readFile(new URL('../dashboard/session.js',import.meta.url),'utf8');
+ vm.runInContext(sessionCode,ctx);
+ await vm.runInContext('(async()=>{'+code+'})()',ctx);
  assert.equal(el('history-admin').hidden,false);assert.equal(el('draft-list').children.length,1);
  const draft=el('draft-list').children[0];await draft.querySelectorAll('button').find(b=>b.textContent==='Preview recording').click();
  assert.match(el('session-detail').text,/F7R Test/);assert.match(el('session-detail').text,/1:30.000/);assert.match(el('session-detail').text,/15.0%/);const branded=el('session-detail').querySelectorAll('tr').find(r=>r.className==='history-team-row');assert.ok(branded.style['--team-color']);assert.ok(el('session-detail').querySelectorAll('img').some(i=>i.src==='./assets/teams/mercedes.png'));

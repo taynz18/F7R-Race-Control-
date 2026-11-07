@@ -5,7 +5,10 @@ async function boot(store){
  const client={auth:{getUser:async()=>({data:{user:store.user},error:null}),onAuthStateChange(){},signOut:async()=>{store.user=null;return {error:null}}},from(table){const q={select(){return q},eq(){return q},in(){return q},order(){return q},limit(){return q},maybeSingle:async()=>({data:table==='flag_admins'&&store.admin?{user_id:store.user.id}:null,error:null}),then(resolve){return Promise.resolve({data:[],error:null}).then(resolve)}};return q}};
  const code=(await readFile(new URL('../dashboard/app.js',import.meta.url),'utf8')).replace(/^import[^\n]+\n/gm,'').replace('}start();','}');
  const ctx={...model,teamFor,renderCar:()=>new Element(),renderTrackMap:()=>new Element(),startFlags:async(c,a,id)=>{flagAccess={admin:a,id}},stopFlags:async()=>{},document:{getElementById:el,createElement:()=>new Element()},window:{supabase:{createClient:(u,k,options)=>{authOptions=options;return client}}},fetch:async()=>({ok:true,json:async()=>({supabase_url:'https://uyiafrzsyzrtnuxxjkye.supabase.co',supabase_publishable_key:'sb_publishable_test'})}),setInterval(){},setTimeout:fn=>fn(),Date,console,URLSearchParams};
- vm.createContext(ctx);vm.runInContext(code,ctx);await vm.runInContext('start()',ctx);return {ctx,el,authOptions,flagAccess};
+ vm.createContext(ctx);
+ const sessionCode=await readFile(new URL('../dashboard/session.js',import.meta.url),'utf8');
+ vm.runInContext(sessionCode,ctx);
+ vm.runInContext(code,ctx);await vm.runInContext('start()',ctx);return {ctx,el,authOptions,flagAccess};
 }
 test('existing driver sign-in restores after navigation/reload without requesting credentials',async()=>{
  const store={user:{id:'driver',user_metadata:{display_name:'F7R Driver'}}};const first=await boot(store);

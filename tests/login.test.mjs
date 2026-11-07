@@ -10,7 +10,10 @@ async function setup({flagAdmin=false,membership=null,missingTables=false,signup
  const context={...model,teamFor,renderCar:()=>new Element(),renderTrackMap:()=>new Element(),document:{getElementById:el,createElement:()=>new Element()},window:{supabase:{createClient:()=>client}},
  startFlags:async(_c,isAdmin)=>flags.push(isAdmin),stopFlags:async()=>{},fetch:async()=>({ok:true,json:async()=>({supabase_url:'https://example.supabase.co',supabase_publishable_key:'sb_publishable_example'})}),
  setInterval(){},setTimeout:fn=>fn(),console,Date,Option:Element};
- vm.createContext(context);vm.runInContext(code,context);await new Promise(r=>setImmediate(r));el('email').value='test@example.invalid';el('password').value='mock-only';
+ vm.createContext(context);
+ const sessionCode=await readFile(new URL('../dashboard/session.js',import.meta.url),'utf8');
+ vm.runInContext(sessionCode,context);
+ vm.runInContext(code,context);await new Promise(r=>setImmediate(r));el('email').value='test@example.invalid';el('password').value='mock-only';
  await el('login-form').onsubmit({preventDefault(){}});return {el,flags,signups};
 }
 test('dashboard role admin does not grant flag control',async()=>{const {el,flags}=await setup({membership:{display_name:'Dashboard admin',role:'admin',approved:true}});assert.deepEqual(flags,[false]);assert.equal(el('dashboard').hidden,false);el('flags-tab').onclick();assert.equal(el('flags').hidden,false)});
