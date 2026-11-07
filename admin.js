@@ -156,8 +156,18 @@ function fillDiscordOptions(id, rows, prefix) {
   if (rows.some(row => row.id === previous)) select.value = previous;
 }
 async function requestDiscordAttendance(action, details) {
+  const {imageFile, ...fields} = details;
+  if (action === 'post' && imageFile) {
+    fields.artworkFile = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({type:imageFile.type, data:String(reader.result).split(',')[1]});
+      reader.onerror = () => reject(Error('Could not read the race image.'));
+      reader.readAsDataURL(imageFile);
+    });
+    fields.artwork = '';
+  }
   const { data, error } = await client.functions.invoke('f7r-discord-attendance', {
-    body: { action, ...details }
+    body: { action, ...fields }
   });
   if (error) {
     const body = await error.context?.json?.().catch(() => null);
@@ -188,8 +198,8 @@ async function discordAction(action, details = {}) {
       $('attendance-eligibility').textContent = isPreview ? 'Full-time seats require ' + data.fullTimeRole + ' and a team role.' : 'Saved defaults for ' + details.game;
       if (!isPreview) $('attendance-summary').textContent = '';
       const artworkPreview = $('attendance-artwork-preview');
-      artworkPreview.hidden = !isPreview || !details.artwork;
-      artworkPreview.textContent = artworkPreview.hidden ? '' : 'Race artwork: ' + details.artwork;
+      artworkPreview.hidden = !isPreview || !details.artwork && !details.imageFile;
+      artworkPreview.textContent = artworkPreview.hidden ? '' : 'Race artwork: ' + (details.imageFile?.name || details.artwork);
       const teams = $('attendance-teams');
       teams.replaceChildren();
       for (const team of data.teams) {
@@ -244,6 +254,9 @@ async function discordAction(action, details = {}) {
       status.textContent = isPreview ? 'Preview ready. Nothing has been posted.' : 'Choose emojis, then save your mappings.';
     } else if (action === 'emoji_save') {
       status.textContent = 'Team emojis saved for all Race Control admins.';
+    } else if (action === 'confirm_reserve') {
+      status.textContent = data.refreshed ? 'Reserve confirmed and Discord lineup updated.' : 'Reserve confirmed. Discord could not refresh the message.';
+      document.activeElement?.blur();
     } else if (action === 'post') {
       $('attendance-link').href = data.url;
       $('attendance-link').hidden = false;
@@ -258,12 +271,14 @@ async function discordAction(action, details = {}) {
       const roster = $('attendance-drivers');
       roster.replaceChildren();
       activeRoster = details;
-      const groups = [...data.teams, {name: 'Reserves'}, {name: 'Checked out'}];
+      const groups = [...data.teams, {name: 'Reserves'}, {name: 'Confirmed reserves'}, {name: 'Checked out'}];
       for (const group of groups) {
         const drivers = data.drivers.filter(row => {
           if (group.name === 'Checked out') return Boolean(row.checked_out_at);
           if (row.checked_out_at) return false;
-          return group.name === 'Reserves' ? row.placement === 'Reserve' : row.placement === 'Full-time' && row.team === group.name;
+          if (group.name === 'Reserves') return row.placement === 'Reserve' && !row.confirmed_at;
+          if (group.name === 'Confirmed reserves') return Boolean(row.confirmed_at);
+          return (row.placement === 'Full-time' || row.confirmed_at) && row.team === group.name;
         });
         const heading = document.createElement('h4');
         const brandLogo = group.logo || attendanceBrandLogos.get(group.name.toLowerCase());
@@ -276,7 +291,7 @@ async function discordAction(action, details = {}) {
         }
         heading.append(' ' + group.name + ' · ' + drivers.length);
         const list = document.createElement('ul');
-        const f1Team = data.f1 && !['Reserves','Checked out'].includes(group.name);
+        const f1Team = data.f1 && !['Reserves','Confirmed reserves','Checked out'].includes(group.name);
         const total = f1Team ? Math.max(2, drivers.length) : drivers.length;
         for (let index = 0; index < total; index++) {
           const item = document.createElement('li');
@@ -292,6 +307,21 @@ async function discordAction(action, details = {}) {
               timeZone:'Europe/London', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23'
             }).format(new Date(value)).replace(',', '');
             item.append(' ', stamp);
+          }
+          if (driver?.confirmed_at && group.name === 'Confirmed reserves') item.append(' → ' + driver.team);
+          if (driver && group.name === 'Reserves' && details.channelId && data.teams.length) {
+            const teamPicker = document.createElement('select');
+            teamPicker.setAttribute('aria-label', 'Team for ' + driver.driver_name);
+            teamPicker.add(new Option('Choose team', ''));
+            for (const team of data.teams) teamPicker.add(new Option(team.name, team.name));
+            const confirm = document.createElement('button');
+            confirm.type = 'button';
+            confirm.className = 'secondary';
+            confirm.textContent = 'Confirm seat';
+            confirm.disabled = true;
+            teamPicker.onchange = () => { confirm.disabled = !teamPicker.value; };
+            confirm.onclick = () => discordAction('confirm_reserve', {...details, driverId:driver.driver_id, team:teamPicker.value});
+            item.append(teamPicker, confirm);
           }
           list.append(item);
         }
@@ -331,13 +361,19 @@ $('attendance-form').onsubmit = event => {
   const series = $('attendance-series').value;
   const game = $('attendance-game').value;
   const notes = $('attendance-notes').value.trim();
-  const artwork = $('attendance-artwork').value.trim();
+  const imageFile = $('attendance-artwork-file').files?.[0];
+  if (imageFile && (imageFile.size > 2 * 1024 * 1024 || !['image/png','image/jpeg','image/webp','image/gif'].includes(imageFile.type))) {
+    $('discord-status').textContent = 'Choose a PNG, JPG, WebP or GIF up to 2 MB.';
+    return;
+  }
+  const artwork = imageFile ? '' : $('attendance-artwork').value.trim();
+  const round = $('attendance-round').value.trim();
   attendanceDraft ??= {
-    game, track, startsAt, notes, artwork, channelId: channel.value, tier, series,
+    game, track, startsAt, notes, artwork, imageFile, round, channelId: channel.value, tier, series,
     nonce: crypto.randomUUID().replaceAll('-', '').slice(0, 24)
   };
   $('attendance-summary').textContent = [
-    game, track, new Date(startsAt).toLocaleString(), channel.selectedOptions[0].text,
+    game, track, round, new Date(startsAt).toLocaleString(), channel.selectedOptions[0].text,
     game === 'F1' ? tier : game === 'Le Mans Ultimate' ? series : '', notes
   ].filter(Boolean).join(' · ');
   attendanceDraft.emojiIds = Object.create(null);
@@ -371,7 +407,7 @@ $('attendance-roster').onclick = () => {
 };
 
 $('attendance-message').oninput = () => { activeRoster = null; };
-setInterval(() => { if (activeRoster && verified) discordAction('roster', activeRoster); }, 5000);
+setInterval(() => { if (activeRoster && verified && !$('attendance-drivers').contains(document.activeElement)) discordAction('roster', activeRoster); }, 5000);
 
 const attendanceBatch = [];
 let postingBatch = false;

@@ -449,3 +449,49 @@ header, main, footer { position: relative; z-index: 1; }
 .restart-tool { grid-column: 1 / -1; }
 #start-green-countdown { border-color: #49dc8b66; color: #88efb7; }
 .flag[data-flag='PREPARE TO RACE']::before { background: var(--fabric-weave),linear-gradient(105deg,#0005,#fff4 25%,#0003 50%,#fff4 72%,#0003),linear-gradient(90deg,#ffda36 50%,#49dc8b 50%); }
+
+#discord-bot {
+  border-top: 2px solid var(--accent, #ef254c);
+}
+#discord-bot select,
+#discord-bot input[type="file"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 46px;
+  padding: .65rem .85rem;
+  border: 1px solid #415069;
+  border-radius: .75rem;
+  background: #101827;
+  color: #edf3ff;
+  color-scheme: dark;
+  font: inherit;
+}
+#discord-bot select:focus-visible,
+#discord-bot input[type="file"]:focus-visible {
+  outline: 2px solid #b8d2ff;
+  outline-offset: 2px;
+}
+#discord-bot input::file-selector-button {
+  margin-right: .75rem;
+  border: 0;
+  border-radius: .4rem;
+  padding: .45rem .7rem;
+  background: #283b59;
+  color: #fff;
+  cursor: pointer;
+}
+#attendance-preview, #attendance-batch, #attendance-drivers:not(:empty) {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #35445d;
+  border-radius: .9rem;
+  background: linear-gradient(145deg, #182438, #101827);
+}
+#attendance-drivers li {
+  margin-block: .45rem;
+}
+#attendance-drivers select {
+  width: auto;
+  max-width: 100%;
+  margin: .35rem;
+}

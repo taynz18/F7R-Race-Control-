@@ -1,3 +1,4 @@
+import { refreshDiscordRoster } from "../_shared/discord-roster.js";
 const f1Teams = [
   ["Mercedes","mercedes"], ["Ferrari","ferrari"], ["Red Bull Racing","red-bull"],
   ["McLaren","mclaren"], ["Alpine","alpine"], ["Aston Martin","aston-martin"],
@@ -66,16 +67,36 @@ Deno.serve(async (request) => {
       return reply({error: "Approved race admin access required."}, 403);
     }
     const input = await request.json().catch(() => null);
-    if (!["options", "preview", "post", "roster", "emoji_setup", "emoji_save"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
+    if (!["options", "preview", "post", "roster", "emoji_setup", "emoji_save", "confirm_reserve"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
     const token = Deno.env.get("F7R_DISCORD_BOT_TOKEN");
     const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
     if (!token || !snowflake(guild)) return reply({error: "Set the bot token and F7R server ID in Supabase."}, 503);
     const discordHeaders = {Authorization: "Bot " + token, "Content-Type": "application/json"};
     const api = "https://discord.com/api/v10";
+    if (input.action === "confirm_reserve") {
+      if (!snowflake(input.channelId) || !snowflake(input.messageId) || !snowflake(input.driverId)) return reply({error:"Open the roster with its Discord message link."},400);
+      const channel = await fetch(api+"/channels/"+input.channelId,{headers:discordHeaders});
+      if (!channel.ok || (await channel.json()).guild_id!==guild) return reply({error:"That channel is outside the configured server."},400);
+      const message = await fetch(api+"/channels/"+input.channelId+"/messages/"+input.messageId,{headers:discordHeaders});
+      if (!message.ok) return reply({error:"Could not open the check-in message."},502);
+      const post = await message.json();
+      const embed = post.embeds?.find(item=>item.title==="Team roles");
+      if (post.author?.id!=="1004676760815796334" || !embed?.fields?.some(field=>field.name===input.team)) return reply({error:"Choose a team from this check-in."},400);
+      const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      const assigned = await fetch(url+"/rest/v1/rpc/f7r_confirm_discord_reserve",{
+        method:"POST",headers:{apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"},
+        body:JSON.stringify({p_guild:guild,p_message:post.id,p_driver:input.driverId,p_team:input.team,p_f1:embed.footer?.text==="F1"})
+      });
+      if (!assigned.ok) return reply({error:"Could not confirm this reserve."},502);
+      const outcome = await assigned.json();
+      if (outcome!=="Confirmed") return reply({error:outcome},409);
+      const refreshed = await refreshDiscordRoster({message:post,channel_id:input.channelId},guild,service,embed.fields).catch(()=>false);
+      return reply({refreshed});
+    }
     if (input.action === "roster") {
       if (!snowflake(input.messageId)) return reply({error: "Enter a valid Discord message ID."}, 400);
       const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-      const query = new URLSearchParams({select:"driver_name,placement,team,seat,checked_in_at,checked_out_at",guild_id:"eq."+guild,message_id:"eq."+input.messageId,order:"driver_name"});
+      const query = new URLSearchParams({select:"driver_id,driver_name,placement,team,seat,checked_in_at,checked_out_at,confirmed_at",guild_id:"eq."+guild,message_id:"eq."+input.messageId,order:"driver_name"});
       const result = await fetch(url + "/rest/v1/f7r_discord_check_ins?" + query, {headers:{apikey:service,Authorization:"Bearer "+service}});
       if (!result.ok) return reply({error:"Could not load the check-in roster."},502);
       const drivers = await result.json();
@@ -101,7 +122,7 @@ Deno.serve(async (request) => {
     const channels = (await channelResponse.json()).filter(c=>c.type===0 || c.type===5).map(({id,name})=>({id,name}));
     const roles = (await roleResponse.json()).filter(r=>r.id!==guild).map(({id,name})=>({id,name}));
     if (input.action === "options") return reply({channels});
-    const {channelId, tier, series, game, track, startsAt, notes, nonce, artwork = ""} = input;
+    const {channelId, tier, series, game, track, startsAt, notes, nonce, artwork = "", artworkFile, round = ""} = input;
     if (!["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game)) return reply({error:"Choose a game first."},400);
     const emojiResponse = await fetch(guildPath + "/emojis", {headers:discordHeaders});
     const emojis = emojiResponse.ok
@@ -151,8 +172,19 @@ Deno.serve(async (request) => {
     const preferred = game === "Le Mans Ultimate" ? roles.filter(role=>compactRole(role.name)===compactRole(series+" Full Time")) : [];
     const fullTimeRoles = preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
     if (fullTimeRoles.length !== 1) return reply({error:"Expected one Discord role named " + fullTimeRole + "."},400);
+    if (typeof round!=="string" || round.length>40) return reply({error:"Keep the round label under 40 characters."},400);
     let image;
-    if (artwork) {
+    let upload;
+    if (artworkFile && input.action === "post") {
+      const extensions = {"image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif"};
+      const extension = Object.hasOwn(extensions,artworkFile.type) && extensions[artworkFile.type];
+      if (!extension || typeof artworkFile.data!=="string" || artworkFile.data.length>2796204) return reply({error:"Use a PNG, JPG, WebP or GIF up to 2 MB."},400);
+      const bytes = Uint8Array.from(atob(artworkFile.data), value=>value.charCodeAt(0));
+      if (!bytes.length || bytes.length>2097152) return reply({error:"Use an image up to 2 MB."},400);
+      upload={file:new Blob([bytes],{type:artworkFile.type}),name:"race-artwork."+extension};
+      image={url:"attachment://"+upload.name};
+    }
+    if (!upload && artwork) {
       const imageUrl = typeof artwork === "string" && artwork.length <= 1500 ? URL.parse(artwork) : null;
       if (!imageUrl || imageUrl.protocol !== "https:" || imageUrl.username || imageUrl.password) {
         return reply({error:"Race artwork needs a direct HTTPS image URL."},400);
@@ -174,18 +206,27 @@ Deno.serve(async (request) => {
     });
     const roster = {
       title:"Live check-in lineup", color:0xf21b32, image,
-      description:[...teamLines,"","**Reserves**","None yet","**Checked out**","None yet"].join("\n")
+      description:["**Full-time checked in:** 0  ·  **Reserves checked in:** 0","",...teamLines,"","**Reserves**","None yet","**Checked out**","None yet"].join("\n")
     };
     const time = Math.floor(startsAt/1000);
-    const message = await fetch(api + "/channels/" + channel.id + "/messages", {
-      method:"POST", headers:discordHeaders,
-      body:JSON.stringify({
-        content:"**F7R race check-in**\n" + game + " · " + track.trim() + "\nRace starts <t:" + time + ":F>" + (game === "F1" ? "\nTier: " + tier : "") + (game === "Le Mans Ultimate" ? "\nSeries: " + series : "") + "\nA matching team and full-time role are required for a seat. Other check-ins go to reserves." + (notes.trim()?"\n"+notes.trim():""),
-        allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
-        embeds:[roster,{title:"Team roles",footer:{text:game},fields:lineupFields},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
-        components:[{type:1,components:[{type:2,style:3,label:"Participating",custom_id:"f7r-team-rsvp:"+time},{type:2,style:4,label:"Check out",custom_id:"f7r-team-out:"+time}]}]
-      })
-    });
+    const payload = {
+      content:"**F7R race check-in**\n**Race & round:** " + game + " · " + track.trim() + (round.trim() ? " · "+round.trim() : "") +
+        "\n**Date and time:** <t:" + time + ":F>\n**Full-time role:** <@&"+fullTimeRoles[0].id+">" +
+        (notes.trim() ? "\n"+notes.trim() : ""),
+      allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
+      embeds:[roster,{title:"Team roles",footer:{text:game},fields:lineupFields},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
+      components:[{type:1,components:[{type:2,style:3,label:"Participating",custom_id:"f7r-team-rsvp:"+time},{type:2,style:4,label:"Check out",custom_id:"f7r-team-out:"+time}]}]
+    };
+    let body = JSON.stringify(payload);
+    let headers = discordHeaders;
+    if (upload) {
+      body = new FormData();
+      payload.attachments=[{id:0,filename:upload.name}];
+      body.append("payload_json",JSON.stringify(payload));
+      body.append("files[0]",upload.file,upload.name);
+      headers={Authorization:discordHeaders.Authorization};
+    }
+    const message = await fetch(api+"/channels/"+channel.id+"/messages",{method:"POST",headers,body});
     if (!message.ok) return reply({error:message.status===429?"Discord is rate limiting requests. Try again shortly.":"Could not post. Check the bot's View Channel and Send Messages permissions."},502);
     const posted=await message.json();
     return reply({url:"https://discord.com/channels/"+guild+"/"+channel.id+"/"+posted.id, messageId:posted.id});

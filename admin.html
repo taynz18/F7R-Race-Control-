@@ -3,8 +3,8 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0c111b">
 
-<title>F7R Race Control · Flags</title><link rel="stylesheet" href="admin.css?v=8">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=17"></script>
+<title>F7R Race Control · Flags</title><link rel="stylesheet" href="admin.css?v=9">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=18"></script>
 <link rel="icon" type="image/png" href="./assets/f7r-logo.png?v=f7r1"></head><body>
 <div id="race-atmosphere" aria-hidden="true"></div>
 <header><a class="brand" href="./admin.html"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL<span class="brand-caption">Your grid. In sync.</span></span></a><span class="tag"><span class="tag-dot" aria-hidden="true"></span> FLAG OPERATIONS</span></header>
@@ -29,6 +29,8 @@
 <select id="attendance-game" required><option value="">Choose a game</option><option>F1</option><option>Le Mans Ultimate</option><option>Assetto Corsa</option><option>Assetto Corsa Competizione</option></select>
 <label for="attendance-track">Track</label>
 <input id="attendance-track" maxlength="100" required placeholder="e.g. Silverstone">
+<label for="attendance-round">Round (optional)</label>
+<input id="attendance-round" maxlength="40" placeholder="e.g. Round 3">
 <label for="attendance-time">Race date and time (your local time)</label>
 <input id="attendance-time" type="datetime-local" required>
 <label for="attendance-channel">Discord channel</label>
@@ -44,7 +46,10 @@
 <p class="small muted">A team role assigns the car. The full-time role for this tier or series is also required for a seat.</p>
 <label for="attendance-notes">Notes (optional)</label>
 <input id="attendance-notes" maxlength="500" placeholder="e.g. Lobby opens 15 minutes early">
-<label for="attendance-artwork">Race artwork URL (optional)</label>
+<label for="attendance-artwork-file">Upload race artwork (optional)</label>
+<input id="attendance-artwork-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-describedby="attendance-artwork-help">
+<p id="attendance-artwork-help" class="small muted">PNG, JPG, WebP or GIF, up to 2 MB. An uploaded image takes priority over a link.</p>
+<label for="attendance-artwork">Or use a direct HTTPS image link</label>
 <input id="attendance-artwork" type="url" maxlength="1500" placeholder="https://…/race-day.png">
 <button class="secondary" id="attendance-preview-button" type="submit">Preview check-in</button>
 </form>
