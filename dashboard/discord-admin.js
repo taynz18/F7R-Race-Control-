@@ -202,7 +202,8 @@ async function discordAction(action, details = {}) {
     } else if (action === 'emoji_save') {
       status.textContent = 'Team emojis saved for all Race Control admins.';
     } else if (action === 'confirm_reserve') {
-      status.textContent = data.refreshed ? 'Reserve confirmed and Discord lineup updated.' : 'Reserve confirmed. Discord could not refresh the message.';
+      const change = details.moving ? 'Reserve moved' : 'Reserve confirmed';
+      status.textContent = data.refreshed ? change + ' and Discord lineup updated.' : change + '. Discord could not refresh the message.';
       document.activeElement?.blur();
     } else if (action === 'post') {
       $('attendance-link').href = data.url;
@@ -267,18 +268,26 @@ async function discordAction(action, details = {}) {
             item.append(' ', stamp);
           }
           if (driver?.confirmed_at && group.name === 'Confirmed reserves') item.append(' → ' + driver.team);
-          if (driver && group.name === 'Reserves' && details.channelId && data.teams.length) {
+          const moving = group.name === 'Confirmed reserves';
+          if (driver && (group.name === 'Reserves' || moving) && details.channelId && data.teams.length) {
             const teamPicker = document.createElement('select');
             teamPicker.setAttribute('aria-label', 'Team for ' + driver.driver_name);
-            teamPicker.add(new Option('Choose team', ''));
-            for (const team of data.teams) teamPicker.add(new Option(team.name, team.name));
+            teamPicker.add(new Option(moving ? 'Choose a new team' : 'Choose team', ''));
+            for (const team of data.teams) {
+              if (moving && team.name === driver.team) continue;
+              const occupied = data.f1 && data.drivers.filter(row => !row.checked_out_at && row.team === team.name &&
+                (row.placement === 'Full-time' || row.confirmed_at)).length >= 2;
+              const option = new Option(team.name + (occupied ? ' · full' : ''), team.name);
+              option.disabled = occupied;
+              teamPicker.add(option);
+            }
             const confirm = document.createElement('button');
             confirm.type = 'button';
             confirm.className = 'secondary';
-            confirm.textContent = 'Confirm seat';
+            confirm.textContent = moving ? 'Move seat' : 'Confirm seat';
             confirm.disabled = true;
             teamPicker.onchange = () => { confirm.disabled = !teamPicker.value; };
-            confirm.onclick = () => discordAction('confirm_reserve', {...details, driverId:driver.driver_id, team:teamPicker.value});
+            confirm.onclick = () => discordAction('confirm_reserve', {...details, driverId:driver.driver_id, team:teamPicker.value, moving});
             item.append(teamPicker, confirm);
           }
           list.append(item);
