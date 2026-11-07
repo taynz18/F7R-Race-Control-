@@ -16,13 +16,12 @@ function rosterEmbed(rows, mapped, isF1, limit) {
   const lines = [];
   for (const field of mapped) {
     const drivers = live.filter(row=>row.placement==="Full-time" && row.team===field.name);
-    if (!drivers.length && !isF1) continue;
     const emoji = /^<a?:\w+:\d{17,20}>/.exec(field.value)?.[0];
     lines.push("**"+(emoji ? emoji+" " : "")+clean(field.name)+"**");
     if (isF1) {
       for (const seat of [1,2]) {
         const driver = drivers.find(row=>row.seat===seat) ?? drivers.filter(row=>row.seat==null)[seat-1];
-        lines.push("↳ "+seat+" · "+(driver ? clean(driver.driver_name) : "Open"));
+        if (driver) lines.push("↳ "+seat+" · "+clean(driver.driver_name));
       }
     } else {
       for (const driver of drivers) lines.push("↳ "+clean(driver.driver_name));
@@ -36,8 +35,9 @@ function rosterEmbed(rows, mapped, isF1, limit) {
     lines.push("↳ "+(emoji ? emoji+" " : "")+clean(driver.driver_name)+(stamp(driver.checked_in_at) ? " · In "+stamp(driver.checked_in_at) : ""));
   }
   const departed = rows.filter(row=>row.checked_out_at);
+  lines.push("**Checked out**");
+  if (!departed.length) lines.push("None yet");
   if (departed.length) {
-    lines.push("**Checked out**");
     for (const driver of departed) {
       const entered = stamp(driver.checked_in_at);
       lines.push("↳ "+clean(driver.driver_name)+(entered ? " · In "+entered : "")+" · Out "+stamp(driver.checked_out_at));
@@ -46,10 +46,9 @@ function rosterEmbed(rows, mapped, isF1, limit) {
   let description = lines.join("\n");
   if (description.length > limit) {
     const note = "\nMore entries in Race Control.";
-    const compact = lines.filter(line=>!line.endsWith(" · Open")).join("\n");
-    description = compact.length<=limit ? compact : compact.slice(0,limit-note.length).split("\n").slice(0,-1).join("\n")+note;
+    description = description.slice(0,limit-note.length).split("\n").slice(0,-1).join("\n")+note;
   }
-  return {title:"Live check-in lineup", description};
+  return {title:"Live check-in lineup", color:0xf21b32, description};
 }
 
 async function refreshDiscordRoster(interaction, guild, service, mapped) {
@@ -69,9 +68,11 @@ async function refreshDiscordRoster(interaction, guild, service, mapped) {
   let rows = await load();
   for (let attempt=0; attempt<3; attempt++) {
     const roster = rosterEmbed(rows,mapped,base[0]?.footer?.text==="F1",limit);
+    const artwork = interaction.message.embeds.find(embed=>embed.title==="Live check-in lineup")?.image?.url;
+    if (artwork) roster.image = {url:artwork};
     const updated = await fetch(api+"/channels/"+(interaction.channel_id ?? interaction.channel?.id)+"/messages/"+interaction.message.id,{
       method:"PATCH",headers:{Authorization:"Bot "+token,"Content-Type":"application/json"},
-      body:JSON.stringify({embeds:[...base,roster],allowed_mentions:{parse:[]}})
+      body:JSON.stringify({embeds:[roster,...base],allowed_mentions:{parse:[]}})
     });
     if (!updated.ok) return false;
     const latest = await load();

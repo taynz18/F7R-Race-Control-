@@ -101,7 +101,7 @@ Deno.serve(async (request) => {
     const channels = (await channelResponse.json()).filter(c=>c.type===0 || c.type===5).map(({id,name})=>({id,name}));
     const roles = (await roleResponse.json()).filter(r=>r.id!==guild).map(({id,name})=>({id,name}));
     if (input.action === "options") return reply({channels});
-    const {channelId, tier, series, game, track, startsAt, notes, nonce} = input;
+    const {channelId, tier, series, game, track, startsAt, notes, nonce, artwork = ""} = input;
     if (!["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game)) return reply({error:"Choose a game first."},400);
     const emojiResponse = await fetch(guildPath + "/emojis", {headers:discordHeaders});
     const emojis = emojiResponse.ok
@@ -151,13 +151,30 @@ Deno.serve(async (request) => {
     const preferred = game === "Le Mans Ultimate" ? roles.filter(role=>compactRole(role.name)===compactRole(series+" Full Time")) : [];
     const fullTimeRoles = preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
     if (fullTimeRoles.length !== 1) return reply({error:"Expected one Discord role named " + fullTimeRole + "."},400);
+    let image;
+    if (artwork) {
+      const imageUrl = typeof artwork === "string" && artwork.length <= 1500 ? URL.parse(artwork) : null;
+      if (!imageUrl || imageUrl.protocol !== "https:" || imageUrl.username || imageUrl.password) {
+        return reply({error:"Race artwork needs a direct HTTPS image URL."},400);
+      }
+      image = {url:imageUrl.href};
+    }
     if (input.action === "preview") return reply({teams,fullTimeRole:fullTimeRoles[0].name,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
     const emojiIds = input.emojiIds ?? savedEmojis;
     if (!validEmojiIds(emojiIds)) return reply({error:"A selected emoji is no longer available. Preview the check-in again."},400);
     const teamField = (team) => {
       const emoji = emojis.find(emoji=>emoji.id===emojiIds[team.name]);
       const prefix = emoji ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+"> " : "";
-      return {name:team.name,value:prefix+team.ids.map(id=>"<@&"+id+">").join(" ")};
+      return {name:team.name,value:(prefix+team.ids.map(id=>"<@&"+id+">").join(" ")).trim() || "—"};
+    };
+    const lineupFields = (game === "F1" ? teams : mapped).map(teamField);
+    const teamLines = lineupFields.map(field => {
+      const emoji = /^<a?:\w+:\d{17,20}>/.exec(field.value)?.[0];
+      return "**" + (emoji ? emoji + " " : "") + field.name + "**";
+    });
+    const roster = {
+      title:"Live check-in lineup", color:0xf21b32, image,
+      description:[...teamLines,"","**Reserves**","None yet","**Checked out**","None yet"].join("\n")
     };
     const time = Math.floor(startsAt/1000);
     const message = await fetch(api + "/channels/" + channel.id + "/messages", {
@@ -165,8 +182,8 @@ Deno.serve(async (request) => {
       body:JSON.stringify({
         content:"**F7R race check-in**\n" + game + " · " + track.trim() + "\nRace starts <t:" + time + ":F>" + (game === "F1" ? "\nTier: " + tier : "") + (game === "Le Mans Ultimate" ? "\nSeries: " + series : "") + "\nA matching team and full-time role are required for a seat. Other check-ins go to reserves." + (notes.trim()?"\n"+notes.trim():""),
         allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
-        embeds:[{title:"Team roles",footer:{text:game},fields:mapped.map(teamField)},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
-        components:[{type:1,components:[{type:2,style:3,label:"Check in",custom_id:"f7r-team-rsvp:"+time},{type:2,style:2,label:"Check out",custom_id:"f7r-team-out:"+time}]}]
+        embeds:[roster,{title:"Team roles",footer:{text:game},fields:lineupFields},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
+        components:[{type:1,components:[{type:2,style:3,label:"Participating",custom_id:"f7r-team-rsvp:"+time},{type:2,style:4,label:"Check out",custom_id:"f7r-team-out:"+time}]}]
       })
     });
     if (!message.ok) return reply({error:message.status===429?"Discord is rate limiting requests. Try again shortly.":"Could not post. Check the bot's View Channel and Send Messages permissions."},502);

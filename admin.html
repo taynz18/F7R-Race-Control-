@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#0c111b">
 
 <title>F7R Race Control · Flags</title><link rel="stylesheet" href="admin.css?v=8">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=15"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=16"></script>
 <link rel="icon" type="image/png" href="./assets/f7r-logo.png?v=f7r1"></head><body>
 <div id="race-atmosphere" aria-hidden="true"></div>
 <header><a class="brand" href="./admin.html"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL<span class="brand-caption">Your grid. In sync.</span></span></a><span class="tag"><span class="tag-dot" aria-hidden="true"></span> FLAG OPERATIONS</span></header>
@@ -44,11 +44,13 @@
 <p class="small muted">A team role assigns the car. The full-time role for this tier or series is also required for a seat.</p>
 <label for="attendance-notes">Notes (optional)</label>
 <input id="attendance-notes" maxlength="500" placeholder="e.g. Lobby opens 15 minutes early">
+<label for="attendance-artwork">Race artwork URL (optional)</label>
+<input id="attendance-artwork" type="url" maxlength="1500" placeholder="https://…/race-day.png">
 <button class="secondary" id="attendance-preview-button" type="submit">Preview check-in</button>
 </form>
 <button class="secondary" id="attendance-emoji-setup" type="button">Set up team emojis for selected game</button>
 <div id="attendance-preview" hidden>
-<h3>Check-in preview</h3><p id="attendance-summary"></p><p id="attendance-eligibility"></p><p class="small muted" id="attendance-emoji-help">Choose a Discord emoji for each team. Save your mappings for all Race Control admins.</p><ul id="attendance-teams"></ul>
+<h3>Check-in preview</h3><p id="attendance-summary"></p><p id="attendance-artwork-preview" class="small muted" hidden></p><p id="attendance-eligibility"></p><p class="small muted" id="attendance-emoji-help">Choose a Discord emoji for each team. Save your mappings for all Race Control admins.</p><ul id="attendance-teams"></ul>
 <button class="secondary" id="attendance-emoji-save" type="button">Save team emojis</button>
 <button class="primary" id="attendance-send" type="button">Post to Discord ↗</button>
 </div>

@@ -182,6 +182,9 @@ async function discordAction(action, details = {}) {
       $('attendance-emoji-save').disabled = !data.emojiAvailable;
       $('attendance-eligibility').textContent = isPreview ? 'Full-time seats require ' + data.fullTimeRole + ' and a team role.' : 'Saved defaults for ' + details.game;
       if (!isPreview) $('attendance-summary').textContent = '';
+      const artworkPreview = $('attendance-artwork-preview');
+      artworkPreview.hidden = !isPreview || !details.artwork;
+      artworkPreview.textContent = artworkPreview.hidden ? '' : 'Race artwork: ' + details.artwork;
       const teams = $('attendance-teams');
       teams.replaceChildren();
       for (const team of data.teams) {
@@ -323,8 +326,9 @@ $('attendance-form').onsubmit = event => {
   const series = $('attendance-series').value;
   const game = $('attendance-game').value;
   const notes = $('attendance-notes').value.trim();
+  const artwork = $('attendance-artwork').value.trim();
   attendanceDraft ??= {
-    game, track, startsAt, notes, channelId: channel.value, tier, series,
+    game, track, startsAt, notes, artwork, channelId: channel.value, tier, series,
     nonce: crypto.randomUUID().replaceAll('-', '').slice(0, 24)
   };
   $('attendance-summary').textContent = [
