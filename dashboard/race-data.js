@@ -197,7 +197,7 @@ async function init() {
     if (!response.ok) throw Error('Configuration unavailable');
     const config = await response.json();
     client = window.supabase.createClient(config.supabase_url, config.supabase_publishable_key,
-      { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+      { auth: window.F7RAuth.options() });
     const { data, error } = await client.auth.getUser();
     if (error || !data.user || data.user.is_anonymous) {
       const link = element('a', 'Sign in to F7R');

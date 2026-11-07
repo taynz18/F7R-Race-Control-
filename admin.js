@@ -122,6 +122,7 @@ $('cancel-countdown').onclick=async()=>{
 };
 $('login-form').onsubmit=async e=>{
   e.preventDefault();if(!client)return;$('sign-in').disabled=true;message('Signing in…');
+  window.F7RAuth?.choosePreference();
   try{const {data,error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;$('password').value='';await checkAccess(data.session);}
   catch(error){message('Sign-in failed. '+error.message);}finally{$('sign-in').disabled=false;}
 };
@@ -132,9 +133,15 @@ async function start(){
     const r=await fetch('./config.json',{cache:'no-store'});if(!r.ok)throw Error('Missing config.json');const c=await r.json();
     if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(c.supabase_url) || !c.supabase_publishable_key?.startsWith('sb_publishable_') || c.supabase_publishable_key.includes('REPLACE'))throw Error('Add your Supabase project URL and publishable key to config.json.');
     if(!window.supabase)throw Error('Supabase library could not load. Check your internet connection.');
-    client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:{persistSession:false,autoRefreshToken:true,detectSessionInUrl:false}});
+    client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:window.F7RAuth?.options() ?? {persistSession:false,autoRefreshToken:true,detectSessionInUrl:false}});
     client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT')setTimeout(()=>checkAccess(null),0);});
-    $('sign-in').disabled=false;message();
+    message();
+    window.F7RAuth?.bindPreference();
+    if (window.F7RAuth) {
+      const {data} = await client.auth.getSession();
+      await checkAccess(data.session);
+    }
+    $('sign-in').disabled=false;
     setInterval(async()=>{if(!verified)return;try{await refreshState();}catch{$('connection').textContent='Connection interrupted';}},10000);
   }catch(error){message(error.message);}
 }

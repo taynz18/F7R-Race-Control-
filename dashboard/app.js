@@ -139,7 +139,9 @@ async function openAccount(user,g=++generation){
     if(nextPage==='history'||nextPage==='race-data'){window.location.assign('./'+nextPage+'.html');return}
     await refreshRaces();
 }
+window.F7RAuth.bindPreference();
 $('login-form').onsubmit=async e=>{
+ window.F7RAuth.choosePreference();
   e.preventDefault();if(!client)return;const g=++generation,createAccount=signingUp;$('sign-in').disabled=true;authMessage(createAccount?'Creating your account…':'Signing in…');
   try{
     authenticating=true;let response;
@@ -172,7 +174,7 @@ async function start(){try{
  const response=await fetch('./config.json',{cache:'no-store'});if(!response.ok)throw Error('Missing config.json');const c=await response.json();
  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(c.supabase_url)||!c.supabase_publishable_key?.startsWith('sb_publishable_'))throw Error('Set the Supabase project URL and publishable key in config.json.');
  if(!window.supabase)throw Error('Sign-in library did not load. Check your internet connection.');
- client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+ client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth: window.F7RAuth.options()});
  client.auth.onAuthStateChange((event,session)=>{
   if(event==='SIGNED_OUT'&&member&&!member.guest)setTimeout(signOut,0);
   if(event==='SIGNED_IN'&&session?.user&&!authenticating&&(!member||member.guest))setTimeout(()=>openAccount(session.user).catch(e=>authMessage(e.message)),0);

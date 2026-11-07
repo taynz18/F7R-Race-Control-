@@ -21,6 +21,7 @@ on:
       - 'assets/tyres/**'
       - 'assets/circuits/**'
       - 'assets/f7r-logo.png'
+      - 'assets/f7r-favicon.png'
       - 'assets/f7r-app.ico'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
@@ -53,7 +54,7 @@ jobs:
           cp -R assets/tyres public/assets/tyres
           cp -R assets/circuits public/assets/circuits
           cp index.html history.html race-data.html league.html grid.html tournament.html admin.html discord.html admin.css admin.js config.json public/
-          cp assets/f7r-logo.png assets/f7r-app.ico public/assets/
+          cp assets/f7r-logo.png assets/f7r-favicon.png assets/f7r-app.ico public/assets/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public

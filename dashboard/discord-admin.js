@@ -9,24 +9,27 @@ function closeDesk() {
   $('console').hidden = true;
   $('login-card').hidden = false;
 }
+async function openDesk(session) {
+  if (!session?.user || session.user.is_anonymous) return;
+  const generation = ++checkGeneration;
+  const access = await client.from('flag_admins').select('user_id').eq('user_id',session.user.id).maybeSingle();
+  if (generation !== checkGeneration) return;
+  if (access.error || !access.data) throw Error('Approved race admin access required.');
+  verified = true;
+  $('login-card').hidden = true;
+  $('console').hidden = false;
+  message();
+}
 $('login-form').onsubmit = async event => {
   event.preventDefault();
   if (!client) return;
   $('sign-in').disabled = true;
+  window.F7RAuth.choosePreference();
   try {
     const {data,error} = await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
     if (error) throw error;
     $('password').value = '';
-    const access = await client.from('flag_admins').select('user_id').eq('user_id',data.user.id).maybeSingle();
-    if (access.error || !access.data) {
-      await client.auth.signOut({scope:'local'});
-      throw Error('Approved race admin access required.');
-    }
-    checkGeneration++;
-    verified = true;
-    $('login-card').hidden = true;
-    $('console').hidden = false;
-    message();
+    await openDesk(data.session);
   } catch (error) { message(error.message); }
   finally { $('sign-in').disabled = false; }
 };
@@ -41,10 +44,13 @@ async function start() {
     if (!response.ok) throw Error('Race Control configuration is unavailable.');
     const config = await response.json();
     client = window.supabase.createClient(config.supabase_url, config.supabase_publishable_key, {
-      auth:{persistSession:false,autoRefreshToken:true,detectSessionInUrl:false}
+      auth:window.F7RAuth.options()
     });
     client.auth.onAuthStateChange(event => { if (event === 'SIGNED_OUT') closeDesk(); });
+    window.F7RAuth.bindPreference();
     $('sign-in').disabled = false;
+    const {data} = await client.auth.getSession();
+    await openDesk(data.session);
   } catch (error) { message(error.message); }
 }
 start();
