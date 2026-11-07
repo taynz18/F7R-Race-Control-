@@ -673,18 +673,27 @@ header, main, footer { position: relative; z-index: 1; }
   padding-top: .5rem;
 }
 .discord-desk .desk-game-logo {
-  width: 70px;
-  height: 28px;
-  filter: drop-shadow(0 2px 3px #0009);
+  box-sizing: border-box;
+  width: 76px;
+  height: 38px;
+  border: 1px solid #ffffff30;
+  border-radius: .45rem;
+  background: #0c1424;
+  object-fit: contain;
+}
+.discord-desk .desk-game-logo:is([src$="discord-f1.png"], [src$="f2-2026.png"]) {
+  padding-inline: 6px;
+  object-fit: cover;
+}
+.discord-desk .desk-game-logo:is([src$="discord-lmu.png"], [src$="discord-acc.png"]) {
+  padding-block: 2px;
+  background: white;
 }
 @supports (appearance: base-select) {
   .discord-desk select::picker(select) {
     border: 2px solid var(--desk-border);
   }
-  .discord-desk .desk-game-logo:is([src$="discord-f1.png"], [src$="discord-lmu.png"]) {
-    object-fit: cover;
-  }
-  .discord-desk .desk-game-logo:is([src$="discord-lmu.png"], [src$="discord-acc.png"]) {
-    height: 42px;
+  .discord-desk #attendance-game :is(option[data-game], selectedcontent) {
+    gap: .85rem;
   }
 }
