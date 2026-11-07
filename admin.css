@@ -612,13 +612,10 @@ header, main, footer { position: relative; z-index: 1; }
     width: 62px; height: 24px; flex: none; object-fit: contain;
     border-radius: .25rem; padding: 0; margin: 0;
   }
-  .discord-desk img[src$="game-lmu.png"] { object-fit: cover; object-position: top; }
 }
 
 @supports (appearance: base-select) {
-  .discord-desk img[src$="f1-2026.png"],
   .discord-desk img[src$="f2-2026.png"] { object-fit: cover; object-position: center; }
-  .discord-desk img[src$="f1-2026.png"] { filter: brightness(0) invert(1); }
 }
 
 .discord-desk {
@@ -684,7 +681,10 @@ header, main, footer { position: relative; z-index: 1; }
   .discord-desk select::picker(select) {
     border: 2px solid var(--desk-border);
   }
-  .discord-desk .desk-game-logo[src$="f1-2026.png"] {
-    filter: brightness(0) invert(1) drop-shadow(0 2px 3px #0009);
+  .discord-desk .desk-game-logo:is([src$="discord-f1.png"], [src$="discord-lmu.png"]) {
+    object-fit: cover;
+  }
+  .discord-desk .desk-game-logo:is([src$="discord-lmu.png"], [src$="discord-acc.png"]) {
+    height: 42px;
   }
 }
