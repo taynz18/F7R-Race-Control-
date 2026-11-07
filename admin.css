@@ -685,9 +685,26 @@ header, main, footer { position: relative; z-index: 1; }
   padding-inline: 6px;
   object-fit: cover;
 }
-.discord-desk .desk-game-logo:is([src$="discord-lmu.png"], [src$="discord-acc.png"]) {
-  padding-block: 2px;
-  background: white;
+.discord-desk .desk-game-logo-backplate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 76px;
+  box-sizing: border-box;
+  height: 38px;
+  border: 1px solid #ffffff30;
+  border-radius: .45rem;
+  background: #0c1424;
+  isolation: isolate;
+}
+.discord-desk .desk-game-logo-backplate .desk-game-logo {
+  width: 42px;
+  height: 36px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  filter: invert(1) hue-rotate(180deg) saturate(1.25);
+  mix-blend-mode: screen;
 }
 @supports (appearance: base-select) {
   .discord-desk select::picker(select) {
