@@ -133,7 +133,7 @@ Deno.serve(async (request) => {
     const channels = (await channelResponse.json()).filter(c=>c.type===0 || c.type===5).map(({id,name})=>({id,name}));
     const roles = (await roleResponse.json()).filter(r=>r.id!==guild).map(({id,name})=>({id,name}));
     if (input.action === "options") return reply({channels});
-    const {channelId, tier, series, game, track, startsAt, notes, nonce, artwork = "", artworkFile, round = "", lineupRoleId = ""} = input;
+    const {channelId, tier, series, game, track, startsAt, notes, nonce, artwork = "", artworkFile, round = "", lineupRoleId = "", openEntry = false} = input;
     if (!["F1","F2","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game)) return reply({error:"Choose a game first."},400);
     const emojiResponse = await fetch(guildPath + "/emojis", {headers:discordHeaders});
     const emojis = emojiResponse.ok
@@ -277,8 +277,9 @@ Deno.serve(async (request) => {
       }
       return reply({saved:true});
     }
+    if (openEntry !== false && (openEntry !== true || (!isAcc && !isLmu))) return reply({error:"Open entry is available for LMU and ACC."},400);
     const channel = channels.find(c=>c.id===channelId);
-    if (!channel || (!lineupRoleId && game === "Le Mans Ultimate" && !["WEC","ELMS"].includes(series)) || (!lineupRoleId && game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","F2","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
+    if (!channel || (!openEntry && !lineupRoleId && game === "Le Mans Ultimate" && !["WEC","ELMS"].includes(series)) || (!lineupRoleId && game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","F2","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
         typeof track!=="string" || !track.trim() || track.length>100 || typeof notes!=="string" || notes.length>500 ||
         !Number.isSafeInteger(startsAt) || startsAt<=Date.now() || startsAt>8640000000000000 ||
         typeof nonce!=="string" || !/^[a-f0-9]{24}$/.test(nonce)) return reply({error:"Choose a channel, game, track, future race time and an F1 tier where applicable."},400);
@@ -290,16 +291,17 @@ Deno.serve(async (request) => {
     const customLineup = config.lineups.find(row=>row.roleId===lineupRoleId);
     const fullTimeRoles = lineupRoleId ? roles.filter(role=>customLineup && role.id===customLineup.roleId) :
       preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
-    if (fullTimeRoles.length !== 1) return reply({error:lineupRoleId ? "The saved lineup role is unavailable. Reload attendance settings." : "Expected one Discord role named " + fullTimeRole + "."},400);
-    const teams = configuredTeams(!lineupRoleId && typeof tier==="string" ? tier : "", fullTimeRoles[0].id);
-    const classTeams = buildRaceTeams(teams, fullTimeRoles[0].id);
+    if (!openEntry && fullTimeRoles.length !== 1) return reply({error:lineupRoleId ? "The saved lineup role is unavailable. Reload attendance settings." : "Expected one Discord role named " + fullTimeRole + "."},400);
+    const teams = configuredTeams(!lineupRoleId && typeof tier==="string" ? tier : "", fullTimeRoles[0]?.id);
+    const classTeams = buildRaceTeams(teams, fullTimeRoles[0]?.id);
     const mapped = classTeams.filter(team=>team.ids.length);
-    if (!mapped.length && (!isAcc || input.action === "post")) {
+    if (!openEntry && !mapped.length && (!isAcc || input.action === "post")) {
       if (isAcc) return reply({error:"Map at least one ACC Discord role to a specific GT3 model in League setup."},400);
       const expected = game === "F1" ? "Mercedes or " + tier + " Full Time Mercedes" :
         game === "Le Mans Ultimate" ? "Mercedes LMU" : "Porsche ACC";
       return reply({error:"No Discord team roles matched " + game + ". Expected a role such as " + expected + "."},400);
     }
+    if (openEntry && classTeams.length>125) return reply({error:"Open entry supports up to 125 car choices."},400);
     if ((!isAcc && mapped.length > 25) || mapped.some(team=>team.ids.join(",").length>950)) {
       return reply({error:"Too many team roles to fit in one Discord check-in."},400);
     }
@@ -322,7 +324,7 @@ Deno.serve(async (request) => {
       }
       image = {url:imageUrl.href};
     }
-    if (input.action === "preview") return reply({teams:classTeams,fullTimeRole:fullTimeRoles[0].name,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
+    if (input.action === "preview") return reply({teams:classTeams,fullTimeRole:openEntry ? null : fullTimeRoles[0].name,openEntry,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
     const emojiIds = input.emojiIds ?? savedEmojis;
     if (!validEmojiIds(emojiIds)) return reply({error:"A selected emoji is no longer available. Preview the check-in again."},400);
     const teamField = (team) => {
@@ -334,8 +336,8 @@ Deno.serve(async (request) => {
     const time = Math.floor(startsAt/1000);
     const classEmoji = name => classEmojiFor(emojis,name);
     const classIcons = Object.fromEntries(["Hypercar","LMGT3","GT3","Reserve"].map(name=>[name,classEmojiText(classEmoji(name))]));
-    const roster = {...rosterEmbed([],lineupFields,isFormula(game),4096,classIcons),image};
-    if (!await savePostConfig(guild,nonce,{game,fields:lineupFields,fullTimeId:fullTimeRoles[0].id,classIcons},service)) {
+    const roster = {...rosterEmbed([],lineupFields,isFormula(game),4096,classIcons,openEntry),image};
+    if (!await savePostConfig(guild,nonce,{game,fields:lineupFields,fullTimeId:openEntry ? null : fullTimeRoles[0]?.id,classIcons,openEntry},service)) {
       return reply({error:"Could not save the check-in role mappings."},502);
     }
     const checkInButtons = isLmu ? [
@@ -345,7 +347,7 @@ Deno.serve(async (request) => {
     const payload = {
       content:"**F7R race check-in**\n**Race & round:** " + game + " · " + track.trim() + (round.trim() ? " · "+round.trim() : "") + (customLineup ? " · "+customLineup.name : "") +
         "\n**Date and time:** <t:" + time + ":F>" +
-        (notes.trim() ? "\n"+notes.trim() : ""),
+        (openEntry ? "\n**Open entry** · Choose your car and join the race." : "") + (notes.trim() ? "\n"+notes.trim() : ""),
       allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
       embeds:[roster],
       components:[{type:1,components:[...checkInButtons,{type:2,style:4,label:"Check out",custom_id:"f7r-team-out:"+time+":"+nonce}]}]

@@ -112,7 +112,7 @@ async function discordAction(action, details = {}) {
       $('attendance-send').hidden = !isPreview;
       $('attendance-queue-add').hidden = !isPreview;
       $('attendance-emoji-save').disabled = !data.emojiAvailable;
-      $('attendance-eligibility').textContent = isPreview ? 'Full-time seats require ' + data.fullTimeRole + ' and a team role.' : 'Saved defaults for ' + details.game;
+      $('attendance-eligibility').textContent = isPreview ? (data.openEntry ? 'Open entry. Drivers choose a car in Discord. No roles required.' : 'Full-time seats require ' + data.fullTimeRole + ' and a team role.') : 'Saved defaults for ' + details.game;
       if (!isPreview) $('attendance-summary').textContent = '';
       const artworkPreview = $('attendance-artwork-preview');
       artworkPreview.hidden = !isPreview || !details.artwork && !details.imageFile;
@@ -129,7 +129,7 @@ async function discordAction(action, details = {}) {
           logo.alt = '';
           item.append(logo);
         }
-        item.append(' ' + team.name + (isPreview ? (team.ids.length ? ' · Role matched' : ' · Role missing') : ''));
+        item.append(' ' + team.name + (isPreview && !data.openEntry ? (team.ids.length ? ' · Role matched' : ' · Role missing') : ''));
         const picker = document.createElement('select');
         picker.setAttribute('aria-label', 'Discord emoji for ' + team.name);
         picker.add(new Option('No Discord emoji', ''));
@@ -254,7 +254,14 @@ async function discordAction(action, details = {}) {
 }
 $('discord-check').onclick = () => discordAction('options');
 $('attendance-form').oninput = () => {
-  const useDefault = !$('attendance-lineup').value;
+  const game = $('attendance-game').value;
+  const canOpen = game === 'Le Mans Ultimate' || game === 'Assetto Corsa Competizione';
+  $('attendance-open-field').hidden = !canOpen;
+  $('attendance-open-entry').disabled = !canOpen;
+  if (!canOpen) $('attendance-open-entry').checked = false;
+  const openEntry = $('attendance-open-entry').checked;
+  $('attendance-lineup').disabled = openEntry;
+  const useDefault = !openEntry && !$('attendance-lineup').value;
   const f1 = useDefault && $('attendance-game').value === 'F1';
   $('attendance-tier-field').hidden = !f1;
   $('attendance-tier').required = f1;
@@ -275,7 +282,8 @@ $('attendance-form').onsubmit = event => {
     return;
   }
   const channel = $('attendance-channel');
-  const lineupRoleId = $('attendance-lineup').value;
+  const openEntry = $('attendance-open-entry').checked;
+  const lineupRoleId = openEntry ? '' : $('attendance-lineup').value;
   const tier = $('attendance-tier').value;
   const series = $('attendance-series').value;
   const game = $('attendance-game').value;
@@ -288,12 +296,12 @@ $('attendance-form').onsubmit = event => {
   const artwork = imageFile ? '' : $('attendance-artwork').value.trim();
   const round = $('attendance-round').value.trim();
   attendanceDraft ??= {
-    game, track, startsAt, notes, artwork, imageFile, round, channelId: channel.value, tier, series, lineupRoleId,
+    game, track, startsAt, notes, artwork, imageFile, round, channelId: channel.value, tier, series, lineupRoleId, openEntry,
     nonce: crypto.randomUUID().replaceAll('-', '').slice(0, 24)
   };
   $('attendance-summary').textContent = [
     game, track, round, new Date(startsAt).toLocaleString(), channel.selectedOptions[0].text,
-    lineupRoleId ? $('attendance-lineup').selectedOptions[0].text : game === 'F1' ? tier : game === 'Le Mans Ultimate' ? series : '', notes
+    openEntry ? 'Open entry' : lineupRoleId ? $('attendance-lineup').selectedOptions[0].text : game === 'F1' ? tier : game === 'Le Mans Ultimate' ? series : '', notes
   ].filter(Boolean).join(' · ');
   attendanceDraft.emojiIds = Object.create(null);
   discordAction('preview', attendanceDraft);

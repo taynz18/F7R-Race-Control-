@@ -16,14 +16,14 @@ function buttonClass(component) {
   if (component.custom_id?.startsWith("f7r-team-gt3:")) return "LMGT3";
   return null;
 }
-export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
+export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}, openEntry = false) {
   const clean = value => value.replace(/[\r\n]/g, " ").replace(/[\\*_~\x60|<>\[\]@]/g, "\\$&").slice(0, 90);
   const stamp = (value) => {
     const seconds = Math.floor(Date.parse(value) / 1000);
     return Number.isFinite(seconds) ? "<t:" + seconds + ":f>" : "";
   };
   const live = rows.filter(row=>!row.checked_out_at);
-  const totals = "**Full-time checked in:** "+live.filter(row=>row.placement==="Full-time").length+
+  const totals = openEntry ? "**Drivers checked in:** "+live.length : "**Full-time checked in:** "+live.filter(row=>row.placement==="Full-time").length+
     "  ·  **Reserves checked in:** "+live.filter(row=>row.placement==="Reserve").length;
   const reserveIcon = classIcons.Reserve || "🟨";
   const raceClass = team => /^(Hypercar|LMGT3|GT3)(?: · |$)/.exec(team ?? "")?.[1];
@@ -63,7 +63,7 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
       const label = className+(gt3.length && index===1 ? " · continued" : "");
       return {name:icon+" "+label+" ("+count+")",inline:true,value:fieldValue(manufacturers)};
     });
-    fields.push({name:reserveIcon+" Reserves ("+waiting.length+")",inline:true,value:fieldValue(waiting.map(driver=>{
+    if (!openEntry || waiting.length) fields.push({name:reserveIcon+" Reserves ("+waiting.length+")",inline:true,value:fieldValue(waiting.map(driver=>{
       const className = raceClass(driver.team);
       const time = stamp(driver.checked_in_at);
       return clean(driver.driver_name)+(className ? " · "+className : "")+(time ? " · "+time : "");
@@ -208,7 +208,7 @@ export async function refreshDiscordRoster(interaction, guild, service, config) 
   };
   let rows = await load();
   for (let attempt=0; attempt<3; attempt++) {
-    const roster = rosterEmbed(rows,config.fields,["F1","F2"].includes(config.game),limit,classIcons);
+    const roster = rosterEmbed(rows,config.fields,["F1","F2"].includes(config.game),limit,classIcons,config.openEntry);
     const artwork = interaction.message.embeds.find(embed=>embed.title==="Live check-in lineup")?.image?.url;
     const attachment = interaction.message.attachments?.find(item=>item.filename.startsWith("race-artwork."));
     if (attachment || artwork) roster.image = {url:attachment ? "attachment://"+attachment.filename : artwork};
