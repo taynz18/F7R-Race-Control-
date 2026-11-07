@@ -171,15 +171,17 @@ Deno.serve(async (request) => {
       if (!result.ok) return reply({error:"Could not save attendance settings."},502);
       return reply({saved:true});
     }
+    const isLmu = game==="Le Mans Ultimate";
     const configuredTeams = (tier, eligibilityRole = "") => {
       const scoped = eligibilityRole ? config.cars.filter(row=>row.lineupRoleId===eligibilityRole) : [];
       const gameWide = config.cars.filter(row=>!row.lineupRoleId);
       const tierPrefix = tier ? normalize(tier)+" full time " : "";
       const tierRoles = tierPrefix ? roles.filter(role=>normalize(role.name).startsWith(tierPrefix)) : [];
       const source = scoped.length ? [] : tierRoles.length ? tierRoles : roles;
-      const mappings = scoped.length ? scoped : tierRoles.length ? [] : gameWide;
+      const mappings = scoped.length ? (isLmu ? [...gameWide.filter(car=>!scoped.some(row=>row.roleId===car.roleId)),...scoped] : scoped) : tierRoles.length ? [] : gameWide;
       const assignedIds = new Set(mappings.map(row=>row.roleId));
-      const rows = teamRoles(source,game,tier).map(team=>({...team,ids:team.ids.filter(id=>!assignedIds.has(id))}));
+      const autoRoles = isLmu ? source.filter(role=>!config.cars.some(car=>car.roleId===role.id)) : source;
+      const rows = teamRoles(autoRoles,game,tier).map(team=>({...team,ids:team.ids.filter(id=>!assignedIds.has(id))}));
       for (const car of gameWide) {
         const team = rows.find(row=>normalize(row.name)===normalize(car.name));
         if (team && car.emojiId) savedEmojis[team.name]=car.emojiId;
@@ -193,12 +195,11 @@ Deno.serve(async (request) => {
       }
       return isFormula(game) ? rows : rows.filter(team=>team.ids.length);
     };
-    const isLmu = game==="Le Mans Ultimate";
     const canonical = name => {
-      const label = normalize(name).replace(/ (?:hypercar|lmgt3|gt3)$/,"");
+      const label = normalize(name).replace(/ (?:lmu|wec)$/,"").replace(/ (?:hypercar|lmgt3|gt3)$/,"");
       return label==="corvette" || label==="chevrolet corvette" ? "chevrolet" : label;
     };
-    const buildClassTeams = (teams, scope) => isLmu ? Object.entries(lmuClasses).flatMap(([className, manufacturers]) =>
+    const buildClassTeams = (teams) => isLmu ? Object.entries(lmuClasses).flatMap(([className, manufacturers]) =>
       manufacturers.map(name=>{
         const related = teams.filter(team=>{
           const qualifier = / (hypercar|lmgt3|gt3)$/.exec(normalize(team.name))?.[1];
@@ -206,14 +207,12 @@ Deno.serve(async (request) => {
             (!qualifier || (qualifier==="hypercar" ? className==="Hypercar" : className==="LMGT3"));
         });
         const ids = related.flatMap(team=>team.ids);
-        if (!config.cars.some(row=>scope && row.lineupRoleId===scope)) {
-          for (const role of roles) {
-            if (config.cars.some(row=>row.roleId===role.id && !row.lineupRoleId)) continue;
-            const label = normalize(role.name);
-            if (label==="genesis" && name==="Genesis" ||
-                / (?:lmu|wec)$/.test(label) && canonical(label.replace(/ (?:lmu|wec)$/,""))===canonical(name)) {
-              ids.push(role.id);
-            }
+        for (const role of roles) {
+          if (config.cars.some(row=>row.roleId===role.id)) continue;
+          const label = normalize(role.name);
+          if (label==="genesis" && name==="Genesis" ||
+              / (?:lmu|wec)$/.test(label) && canonical(label.replace(/ (?:lmu|wec)$/,""))===canonical(name)) {
+            ids.push(role.id);
           }
         }
         const key = className+" · "+name;
@@ -224,7 +223,7 @@ Deno.serve(async (request) => {
     const validEmojiIds = values => values && typeof values==="object" && !Array.isArray(values) &&
       Object.values(values).every(id=>id==="" || emojis.some(emoji=>emoji.id===id));
     if (input.action === "emoji_setup" || input.action === "emoji_save") {
-      const teams = buildClassTeams(configuredTeams(""), "");
+      const teams = buildClassTeams(configuredTeams(""));
       if (input.action === "emoji_setup") return reply({teams,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
       if (!emojiResponse.ok || !validEmojiIds(input.emojiIds) ||
           Object.keys(input.emojiIds).some(name=>!teams.some(team=>team.name===name))) return reply({error:"Invalid team emoji selection."},400);
@@ -250,7 +249,7 @@ Deno.serve(async (request) => {
       preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
     if (fullTimeRoles.length !== 1) return reply({error:lineupRoleId ? "The saved lineup role is unavailable. Reload attendance settings." : "Expected one Discord role named " + fullTimeRole + "."},400);
     const teams = configuredTeams(!lineupRoleId && typeof tier==="string" ? tier : "", fullTimeRoles[0].id);
-    const classTeams = buildClassTeams(teams, fullTimeRoles[0].id);
+    const classTeams = buildClassTeams(teams);
     const mapped = classTeams.filter(team=>team.ids.length);
     if (!mapped.length) {
       const expected = game === "F1" ? "Mercedes or " + tier + " Full Time Mercedes" :
