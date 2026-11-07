@@ -23,20 +23,40 @@ Deno.serve(async (req) => {
 
   const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
   if (!guild || interaction.guild_id !== guild) return privateReply("This check-in is only available in the F7R server.");
-  const rsvp = /^f7r-team-(rsvp|out):(\d{10,13})$/.exec(interaction.data?.custom_id ?? "");
-  if (interaction.type !== 3 || !rsvp || interaction.message?.author?.id !== appId || !interaction.member?.user?.id) {
-    return privateReply("Create your race check-in from the Race Control admin dashboard.");
+  const customId = interaction.data?.custom_id ?? "";
+  const button = interaction.type === 3 && /^f7r-team-(rsvp|out):(\d{10,13})$/.exec(customId);
+  const picker = interaction.type === 5 && /^f7r-f1-car:(\d{10,13})$/.exec(customId);
+  if ((!button && !picker) || interaction.message?.author?.id !== appId || !interaction.member?.user?.id) {
+    return privateReply("Open the F7R race check-in and try again.");
   }
-  if (Date.now() >= Number(rsvp[2]) * 1000) return privateReply("Check-in closed when the race started.");
-  const checkingOut = rsvp[1] === "out";
+  const deadline = button ? button[2] : picker[1];
+  if (Date.now() >= Number(deadline) * 1000) return privateReply("Check-in closed when the race started.");
+  const checkingOut = button && button[1] === "out";
   const member = interaction.member;
-  const mapped = interaction.message.embeds?.find(embed=>embed.title==="Team roles")?.fields ?? [];
-  const matches = mapped.filter(field => [...field.value.matchAll(/<@&(\d{17,20})>/g)].some(([,id])=>member.roles.includes(id)));
+  const teamEmbed = interaction.message.embeds?.find(embed=>embed.title==="Team roles");
+  const isF1 = teamEmbed?.footer?.text === "F1";
+  const mapped = teamEmbed?.fields ?? [];
+  const matches = mapped.map((field,index)=>({field,index})).filter(({field})=>
+    [...field.value.matchAll(/<@&(\d{17,20})>/g)].some(([,id])=>member.roles.includes(id)));
   const eligibility = interaction.message.embeds?.find(embed=>embed.title==="Full-time eligibility");
   const fullTimeId = /^<@&(\d{17,20})>$/.exec(eligibility?.description ?? "")?.[1];
   const eligible = !eligibility || member.roles.includes(fullTimeId);
-  if (!checkingOut && eligible && matches.length > 1) return privateReply("You have two car roles for this lineup. Ask an F7R admin to check them.");
-  const team = matches.length === 1 ? matches[0].name : null;
+  let team = matches.length === 1 ? matches[0].field.name : null;
+  if (picker) {
+    const selection = interaction.data.components?.find(row=>row.component?.custom_id==="car")?.component.values;
+    const chosen = selection?.length === 1 && matches.find(({index})=>String(index)===selection[0]);
+    if (!isF1 || !eligible || !chosen) return privateReply("That car is no longer available to you for this race. Try check-in again.");
+    team = chosen.field.name;
+  } else if (!checkingOut && eligible && matches.length > 1) {
+    if (!isF1) return privateReply("You have two car roles for this lineup. Ask an F7R admin to check them.");
+    return Response.json({type:9,data:{
+      custom_id:"f7r-f1-car:"+deadline, title:"Choose your car for this F1 race",
+      components:[{type:18,label:"Which car are you racing in?",component:{
+        type:3,custom_id:"car",placeholder:"Select your F1 team",
+        options:matches.map(({field,index})=>({label:field.name,value:String(index)}))
+      }}]
+    }});
+  }
   const placement = team && eligible ? "Full-time" : "Reserve";
   EdgeRuntime.waitUntil((async () => {
     let content = "Could not save your check-in. Please try again.";
@@ -49,7 +69,7 @@ Deno.serve(async (req) => {
           p_guild:guild,p_message:interaction.message.id,p_driver:member.user.id,
           p_name:member.nick || member.user.global_name || member.user.username,p_team:team,
           p_full_time:placement==="Full-time",p_f1:interaction.message.embeds?.some(embed=>embed.title==="Team roles" && ["F1","F2"].includes(embed.footer?.text)) ?? false,
-          p_out:checkingOut
+          p_out:Boolean(checkingOut)
         })
       });
       if (result.ok) {

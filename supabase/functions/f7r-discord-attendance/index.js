@@ -170,13 +170,13 @@ Deno.serve(async (request) => {
       if (!result.ok) return reply({error:"Could not save attendance settings."},502);
       return reply({saved:true});
     }
-    const configuredTeams = (tier, eligibilityRole = "", requireScope = false) => {
+    const configuredTeams = (tier, eligibilityRole = "") => {
       const scoped = eligibilityRole ? config.cars.filter(row=>row.lineupRoleId===eligibilityRole) : [];
       const gameWide = config.cars.filter(row=>!row.lineupRoleId);
       const tierPrefix = tier ? normalize(tier)+" full time " : "";
       const tierRoles = tierPrefix ? roles.filter(role=>normalize(role.name).startsWith(tierPrefix)) : [];
-      const source = scoped.length || requireScope ? [] : tierRoles.length ? tierRoles : roles;
-      const mappings = scoped.length ? scoped : requireScope || tierRoles.length ? [] : gameWide;
+      const source = scoped.length ? [] : tierRoles.length ? tierRoles : roles;
+      const mappings = scoped.length ? scoped : tierRoles.length ? [] : gameWide;
       const assignedIds = new Set(mappings.map(row=>row.roleId));
       const rows = teamRoles(source,game,tier).map(team=>({...team,ids:team.ids.filter(id=>!assignedIds.has(id))}));
       for (const car of gameWide) {
@@ -220,10 +220,9 @@ Deno.serve(async (request) => {
     const fullTimeRoles = lineupRoleId ? roles.filter(role=>customLineup && role.id===customLineup.roleId) :
       preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
     if (fullTimeRoles.length !== 1) return reply({error:lineupRoleId ? "The saved lineup role is unavailable. Reload attendance settings." : "Expected one Discord role named " + fullTimeRole + "."},400);
-    const teams = configuredTeams(!lineupRoleId && typeof tier==="string" ? tier : "", fullTimeRoles[0].id, game==="F1" && Boolean(lineupRoleId));
+    const teams = configuredTeams(!lineupRoleId && typeof tier==="string" ? tier : "", fullTimeRoles[0].id);
     const mapped = teams.filter(team=>team.ids.length);
     if (!mapped.length) {
-      if (game==="F1" && lineupRoleId) return reply({error:"Add car role mappings scoped to this lineup in League setup before posting."},400);
       const expected = game === "F1" ? "Mercedes or " + tier + " Full Time Mercedes" :
         game === "Le Mans Ultimate" ? "Mercedes LMU" : "Porsche ACC";
       return reply({error:"No Discord team roles matched " + game + ". Expected a role such as " + expected + "."},400);
