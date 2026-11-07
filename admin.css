@@ -620,3 +620,71 @@ header, main, footer { position: relative; z-index: 1; }
   .discord-desk img[src$="f2-2026.png"] { object-fit: cover; object-position: center; }
   .discord-desk img[src$="f1-2026.png"] { filter: brightness(0) invert(1); }
 }
+
+.discord-desk {
+  --desk-border: #f1f5ff70;
+  --desk-divider: #f1f5ff36;
+}
+.discord-desk :is(.intro, .card, .discord-desk-nav a),
+.discord-desk :is(#attendance-preview, #attendance-batch, #attendance-drivers:not(:empty)) {
+  border: 2px solid var(--desk-border);
+}
+.discord-desk :is(#discord-bot, #discord-settings) {
+  border-top: 3px solid var(--desk-gold);
+  padding: clamp(1rem, 3vw, 1.75rem);
+}
+.discord-desk :is(input:not([type="checkbox"]), select, textarea, .secondary, .primary) {
+  border-width: 2px;
+  border-color: var(--desk-border);
+}
+.discord-desk :is(input:not([type="checkbox"]), select, textarea, .secondary, .primary):not(:disabled):is(:hover, :focus-visible) {
+  border-color: #eef4ffbf;
+}
+.discord-desk :is(button, input, select, textarea, a):focus-visible {
+  outline: 2px solid #dceaff;
+  outline-offset: 3px;
+}
+.discord-desk #attendance-teams > li,
+.discord-desk .attendance-team-card {
+  --team-stripe: color-mix(in srgb, var(--team-colour, #889bbd) 13%, transparent);
+  border: 2px solid var(--desk-border);
+  border-inline-start: 4px solid var(--team-colour, #889bbd);
+  background:
+    repeating-linear-gradient(135deg, transparent 0 10px, var(--team-stripe) 10px 12px, transparent 12px 22px),
+    linear-gradient(115deg, color-mix(in srgb, var(--team-colour, #889bbd) 20%, #131b2c), #101725 85%);
+}
+.discord-desk .attendance-team-card h4 {
+  gap: .65rem;
+  padding-bottom: .55rem;
+  border-bottom: 2px solid var(--desk-divider);
+  color: color-mix(in srgb, var(--team-colour, #dfe8f9) 80%, white);
+}
+.discord-desk .attendance-team-card h4 img {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  padding: 4px;
+  box-sizing: border-box;
+  object-fit: contain;
+  background: #090e19b8;
+  border: 1px solid var(--desk-divider);
+  border-radius: .55rem;
+  filter: drop-shadow(0 2px 4px #0007);
+}
+.discord-desk .attendance-team-card li + li {
+  border-top: 2px solid var(--desk-divider);
+  padding-top: .5rem;
+}
+.discord-desk .desk-game-logo {
+  width: 70px;
+  height: 28px;
+  filter: drop-shadow(0 2px 3px #0009);
+}
+@supports (appearance: base-select) {
+  .discord-desk select::picker(select) {
+    border: 2px solid var(--desk-border);
+  }
+  .discord-desk .desk-game-logo[src$="f1-2026.png"] {
+    filter: brightness(0) invert(1) drop-shadow(0 2px 3px #0009);
+  }
+}
