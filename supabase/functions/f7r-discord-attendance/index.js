@@ -1,4 +1,4 @@
-import { refreshDiscordRoster, rosterEmbed, readPostConfig, savePostConfig } from "../_shared/discord-roster.js";
+import { refreshDiscordRoster, rosterEmbed, readPostConfig, savePostConfig, classEmojiFor, classEmojiText } from "../_shared/discord-roster.js";
 const lmuClasses = {"Hypercar":["Alpine","Aston Martin","BMW","Cadillac","Ferrari","Genesis","Lamborghini","Peugeot","Porsche","Toyota"],"LMGT3":["Aston Martin","BMW","Chevrolet","Ferrari","Ford","Lamborghini","Lexus","McLaren","Porsche"]};
 const f1Teams = [
   ["Mercedes","mercedes"], ["Ferrari","ferrari"], ["Red Bull Racing","red-bull"],
@@ -288,14 +288,8 @@ Deno.serve(async (request) => {
     };
     const lineupFields = (isFormula(game) || isLmu ? classTeams : mapped).map(teamField);
     const time = Math.floor(startsAt/1000);
-    const classEmoji = (name) => {
-      const match = emojis.find(emoji=>[name.toLowerCase(),"official"+name.toLowerCase(),name.toLowerCase()+"logo",...(name==="LMGT3"?["gt3","gt3logo"]:["lmh"])].includes(normalize(emoji.name).replaceAll(" ","")));
-      return match ? {id:match.id,name:match.name,animated:Boolean(match.animated)} : {name:name==="Hypercar"?"🟥":"🟧"};
-    };
-    const classIcons = Object.fromEntries(["Hypercar","LMGT3"].map(name=>{
-      const emoji = classEmoji(name);
-      return [name,emoji.id ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+">" : emoji.name];
-    }));
+    const classEmoji = name => classEmojiFor(emojis,name);
+    const classIcons = Object.fromEntries(["Hypercar","LMGT3"].map(name=>[name,classEmojiText(classEmoji(name))]));
     const roster = {...rosterEmbed([],lineupFields,isFormula(game),4096,classIcons),image};
     if (!await savePostConfig(guild,nonce,{game,fields:lineupFields,fullTimeId:fullTimeRoles[0].id,classIcons},service)) {
       return reply({error:"Could not save the check-in role mappings."},502);

@@ -1,4 +1,21 @@
 const api = "https://discord.com/api/v10";
+const classEmojiNames = {Hypercar:["hypercar","lmh","hypercarlogo","officialhypercar"],LMGT3:["gt3","lmgt3","gt3logo","lmgt3logo","officiallmgt3"]};
+export function classEmojiFor(emojis, className) {
+  for (const name of classEmojiNames[className]) {
+    const emoji = emojis.find(item=>item.available!==false && !item.roles?.length &&
+      item.id && item.name.toLowerCase().replaceAll("_","")===name);
+    if (emoji) return {id:emoji.id,name:emoji.name,animated:Boolean(emoji.animated)};
+  }
+  return {name:className==="Hypercar"?"🟥":"🟧"};
+}
+export function classEmojiText(emoji) {
+  return emoji.id ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+">" : emoji.name;
+}
+function buttonClass(component) {
+  if (component.custom_id?.startsWith("f7r-team-hyper:")) return "Hypercar";
+  if (component.custom_id?.startsWith("f7r-team-gt3:")) return "LMGT3";
+  return null;
+}
 export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
   const clean = value => value.replace(/[\r\n]/g, " ").replace(/[\\*_~\x60|<>\[\]@]/g, "\\$&").slice(0, 90);
   const stamp = (value) => {
@@ -130,6 +147,32 @@ export async function refreshDiscordRoster(interaction, guild, service, config) 
   if (!token) return false;
   if (config.legacy && !await savePostConfig(guild,postKey(interaction.message),{...config,legacy:false},service)) return false;
   const limit = 4096;
+  const originalComponents = interaction.message.components ?? [];
+  const classButtons = originalComponents.flatMap(row=>row.components ?? []).filter(buttonClass);
+  let components;
+  const classIcons = {...config.classIcons};
+  if (config.game==="Le Mans Ultimate" && classButtons.length) {
+    if (classButtons.some(button=>button.emoji?.name?.toLowerCase()!==classEmojiNames[buttonClass(button)][0])) {
+      try {
+        const result = await fetch(api+"/guilds/"+guild+"/emojis",{headers:{Authorization:"Bot "+token},signal:AbortSignal.timeout(2000)});
+        if (result.ok) {
+          const emojis = await result.json();
+          components = originalComponents.map(row=>({...row,components:row.components.map(button=>{
+            const className = buttonClass(button);
+            if (!className) return button;
+            const emoji = classEmojiFor(emojis,className);
+            return emoji.id ? {...button,emoji} : button;
+          })}));
+        }
+      } catch { /* Keep existing emojis if Discord's emoji endpoint is unavailable. */ }
+    }
+    for (const row of components ?? originalComponents) {
+      for (const button of row.components ?? []) {
+        const className = buttonClass(button);
+        if (className && button.emoji) classIcons[className] = classEmojiText(button.emoji);
+      }
+    }
+  }
   const query = new URLSearchParams({select:"driver_name,placement,team,seat,checked_in_at,checked_out_at,confirmed_at",guild_id:"eq."+guild,
     message_id:"eq."+interaction.message.id,order:"checked_in_at.asc.nullslast,driver_id.asc"});
   const load = async () => {
@@ -139,13 +182,13 @@ export async function refreshDiscordRoster(interaction, guild, service, config) 
   };
   let rows = await load();
   for (let attempt=0; attempt<3; attempt++) {
-    const roster = rosterEmbed(rows,config.fields,["F1","F2"].includes(config.game),limit,config.classIcons);
+    const roster = rosterEmbed(rows,config.fields,["F1","F2"].includes(config.game),limit,classIcons);
     const artwork = interaction.message.embeds.find(embed=>embed.title==="Live check-in lineup")?.image?.url;
     const attachment = interaction.message.attachments?.find(item=>item.filename.startsWith("race-artwork."));
     if (attachment || artwork) roster.image = {url:attachment ? "attachment://"+attachment.filename : artwork};
     const updated = await fetch(api+"/channels/"+(interaction.channel_id ?? interaction.channel?.id)+"/messages/"+interaction.message.id,{
       method:"PATCH",headers:{Authorization:"Bot "+token,"Content-Type":"application/json"},
-      body:JSON.stringify({embeds:[roster],allowed_mentions:{parse:[]},
+      body:JSON.stringify({embeds:[roster],components,allowed_mentions:{parse:[]},
         ...(config.legacy && typeof interaction.message.content==="string" ? {content:interaction.message.content.split("\n").filter(line=>!line.startsWith("**Full-time role:**")).join("\n")} : {})})
     });
     if (!updated.ok) return false;
