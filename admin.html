@@ -4,10 +4,10 @@
 <meta name="theme-color" content="#0c111b">
 
 <title>F7R Race Control · Flags</title><link rel="stylesheet" href="admin.css?v=9">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=18"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=19"></script>
 <link rel="icon" type="image/png" href="./assets/f7r-logo.png?v=f7r1"></head><body>
 <div id="race-atmosphere" aria-hidden="true"></div>
-<header><a class="brand" href="./admin.html"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL<span class="brand-caption">Your grid. In sync.</span></span></a><span class="tag"><span class="tag-dot" aria-hidden="true"></span> FLAG OPERATIONS</span></header>
+<header><a class="brand" href="./admin.html"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL<span class="brand-caption">Your grid. In sync.</span></span></a><a class="secondary" href="./discord.html">Discord attendance ↗</a><span class="tag"><span class="tag-dot" aria-hidden="true"></span> FLAG OPERATIONS</span></header>
 <main>
 <div class="intro"><p class="eyebrow"><span class="eyebrow-line" aria-hidden="true"></span> THE SIGNAL. THE WHOLE GRID.</p><h1>Every flag.<br><span>One command.</span></h1><p class="lede">Stay in control, from lights out to the chequered flag. One clear signal for every connected driver.</p><div class="signal-strip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>Clarity at every corner.</span></div></div>
 <section id="login-card" class="card"><div class="login-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/></svg></div><p class="eyebrow">ADMIN ACCESS</p><h2>Welcome to race control.</h2><p class="muted">Sign in to take your place at the flag desk.</p>
@@ -20,60 +20,6 @@
 <section class="card countdown-tool"><p class="eyebrow">CONTROL THE RESTART</p><h2>FCY countdown</h2><label for="countdown-seconds">Countdown in seconds</label><input id="countdown-seconds" type="number" min="1" max="2147483647" step="1" inputmode="numeric" placeholder="e.g. 30"><p class="small muted">Starts FCY with the message above. Becomes FCY ACTIVE at zero and stays yellow, even if this page closes. Another flag cancels the countdown.</p><div class="countdown-actions"><button id="start-countdown" class="secondary" disabled>Start FCY countdown ↗</button><button id="cancel-countdown" class="secondary" disabled>Cancel timer</button></div></section>
 <section class="card countdown-tool restart-tool"><p class="eyebrow">PREPARE THE GRID</p><h2>Prepare to race</h2><label for="green-countdown-seconds">Countdown to green · seconds</label><input id="green-countdown-seconds" type="number" min="1" max="2147483647" step="1" inputmode="numeric" placeholder="e.g. 10"><p class="small muted">Shows half yellow, half green with PREPARE TO RACE and the countdown. Becomes fully green at zero.</p><button id="start-green-countdown" class="secondary" disabled>Start Prepare to race ↗</button></section></div>
 <div class="section-heading"><div><p class="eyebrow">MAKE THE CALL</p><h2>Choose a signal</h2></div><p class="muted">Your next selection replaces the active flag.</p></div><div id="flag-grid" class="flag-grid" role="group" aria-label="Race flag controls"></div>
-<section class="card" id="discord-bot">
-<p class="eyebrow">DISCORD BOT DASHBOARD</p><h2>Driver attendance</h2>
-<p class="small muted">Prepare a check-in, preview it here and post only when you're ready. Check-in closes when the race starts.</p>
-<button class="secondary" id="discord-check" type="button">Load Discord channels and roles</button>
-<form id="attendance-form">
-<label for="attendance-game">Game</label>
-<select id="attendance-game" required><option value="">Choose a game</option><option>F1</option><option>Le Mans Ultimate</option><option>Assetto Corsa</option><option>Assetto Corsa Competizione</option></select>
-<label for="attendance-track">Track</label>
-<input id="attendance-track" maxlength="100" required placeholder="e.g. Silverstone">
-<label for="attendance-round">Round (optional)</label>
-<input id="attendance-round" maxlength="40" placeholder="e.g. Round 3">
-<label for="attendance-time">Race date and time (your local time)</label>
-<input id="attendance-time" type="datetime-local" required>
-<label for="attendance-channel">Discord channel</label>
-<select id="attendance-channel" required><option value="">Load Discord channels first</option></select>
-<div id="attendance-tier-field" hidden>
-<label for="attendance-tier">F1 tier</label>
-<select id="attendance-tier"><option value="">Choose a tier</option><option>T1</option><option>T2</option><option>T3</option><option>T4</option></select>
-</div>
-<div id="attendance-series-field" hidden>
-<label for="attendance-series">Le Mans Ultimate series</label>
-<select id="attendance-series"><option value="">Choose a series</option><option>WEC</option><option>ELMS</option></select>
-</div>
-<p class="small muted">A team role assigns the car. The full-time role for this tier or series is also required for a seat.</p>
-<label for="attendance-notes">Notes (optional)</label>
-<input id="attendance-notes" maxlength="500" placeholder="e.g. Lobby opens 15 minutes early">
-<label for="attendance-artwork-file">Upload race artwork (optional)</label>
-<input id="attendance-artwork-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-describedby="attendance-artwork-help">
-<p id="attendance-artwork-help" class="small muted">PNG, JPG, WebP or GIF, up to 2 MB. An uploaded image takes priority over a link.</p>
-<label for="attendance-artwork">Or use a direct HTTPS image link</label>
-<input id="attendance-artwork" type="url" maxlength="1500" placeholder="https://…/race-day.png">
-<button class="secondary" id="attendance-preview-button" type="submit">Preview check-in</button>
-</form>
-<button class="secondary" id="attendance-emoji-setup" type="button">Set up team emojis for selected game</button>
-<div id="attendance-preview" hidden>
-<h3>Check-in preview</h3><p id="attendance-summary"></p><p id="attendance-artwork-preview" class="small muted" hidden></p><p id="attendance-eligibility"></p><p class="small muted" id="attendance-emoji-help">Choose a Discord emoji for each team. Save your mappings for all Race Control admins.</p><ul id="attendance-teams"></ul>
-<button class="secondary" id="attendance-emoji-save" type="button">Save team emojis</button>
-<button class="secondary" id="attendance-queue-add" type="button">Add to posting queue</button>
-<button class="primary" id="attendance-send" type="button">Post to Discord ↗</button>
-</div>
-<section id="attendance-batch" hidden aria-labelledby="attendance-batch-title">
-<h3 id="attendance-batch-title">Posting queue</h3>
-<p class="small muted">Set up each race and its channel, then publish the queued check-ins together. Keep this tab open while posting.</p>
-<ol id="attendance-batch-list"></ol>
-<button id="attendance-batch-send" class="primary" type="button">Post queued check-ins ↗</button>
-<p id="attendance-batch-status" role="status"></p>
-</section>
-<p id="discord-status" role="status"></p><a id="attendance-link" hidden target="_blank" rel="noopener noreferrer">Open check-in in Discord ↗</a>
-<h3>Check-in roster</h3>
-<label for="attendance-message">Discord message link or ID</label>
-<input id="attendance-message" placeholder="Paste the Discord message link">
-<button class="secondary" id="attendance-roster" type="button">Load roster</button>
-<div id="attendance-drivers" aria-live="polite"></div>
-</section>
 <div class="history-heading"><div><p class="eyebrow">THE LATEST CALLS</p><h2>Recent signals</h2></div><button id="refresh-history" class="secondary"><span aria-hidden="true">↻</span> Refresh history</button></div><ol id="history" class="card history" aria-label="Recent flag changes"></ol>
 </section><p id="message" role="status" aria-live="polite"></p>
 </main><footer><span>F7R RACE CONTROL</span><a class="download-link" href="https://github.com/taynz18/F7R-Race-Control-/releases/latest/download/RaceFlags-Windows.zip">Download Windows driver app ↗</a></footer></body></html>

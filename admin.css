@@ -495,3 +495,16 @@ header, main, footer { position: relative; z-index: 1; }
   max-width: 100%;
   margin: .35rem;
 }
+
+.discord-desk main { max-width: 1100px; }
+.discord-desk .intro { padding-block: clamp(2rem, 6vw, 4rem); }
+.discord-desk .intro h1 { max-width: 100%; }
+#discord-settings { margin-top: 1.2rem; }
+#discord-settings summary { cursor: pointer; color: #f2f5ff; font-weight: 700; padding-block: .4rem; }
+#discord-settings textarea, #discord-settings select {
+  display: block; width: 100%; box-sizing: border-box;
+  background: #101827; color: #edf3ff; color-scheme: dark; border: 1px solid #415069;
+  border-radius: .75rem; padding: .75rem; font: inherit;
+}
+#discord-settings :is(button, ul, h3) { margin-top: .75rem; }
+#discord-settings li { margin-bottom: .55rem; }

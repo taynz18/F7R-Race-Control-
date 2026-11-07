@@ -67,7 +67,7 @@ Deno.serve(async (request) => {
       return reply({error: "Approved race admin access required."}, 403);
     }
     const input = await request.json().catch(() => null);
-    if (!["options", "preview", "post", "roster", "emoji_setup", "emoji_save", "confirm_reserve"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
+    if (!["options", "preview", "post", "roster", "emoji_setup", "emoji_save", "confirm_reserve", "game_settings", "save_game_settings"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
     const token = Deno.env.get("F7R_DISCORD_BOT_TOKEN");
     const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
     if (!token || !snowflake(guild)) return reply({error: "Set the bot token and F7R server ID in Supabase."}, 503);
@@ -122,7 +122,7 @@ Deno.serve(async (request) => {
     const channels = (await channelResponse.json()).filter(c=>c.type===0 || c.type===5).map(({id,name})=>({id,name}));
     const roles = (await roleResponse.json()).filter(r=>r.id!==guild).map(({id,name})=>({id,name}));
     if (input.action === "options") return reply({channels});
-    const {channelId, tier, series, game, track, startsAt, notes, nonce, artwork = "", artworkFile, round = ""} = input;
+    const {channelId, tier, series, game, track, startsAt, notes, nonce, artwork = "", artworkFile, round = "", lineupRoleId = ""} = input;
     if (!["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game)) return reply({error:"Choose a game first."},400);
     const emojiResponse = await fetch(guildPath + "/emojis", {headers:discordHeaders});
     const emojis = emojiResponse.ok
@@ -135,11 +135,51 @@ Deno.serve(async (request) => {
     const query = new URLSearchParams({select:"team,emoji_id",guild_id:"eq."+guild,game:"eq."+game});
     const saved = await fetch(settingsUrl+"?"+query,{headers:settingsHeaders});
     if (!saved.ok) return reply({error:"Could not load saved team emojis."},502);
-    const savedEmojis = Object.fromEntries((await saved.json()).map(row=>[row.team,row.emoji_id]));
+    let savedEmojis = Object.fromEntries((await saved.json()).map(row=>[row.team,row.emoji_id]));
+    const gameSettingsUrl = url + "/rest/v1/f7r_discord_game_settings";
+    const gameQuery = new URLSearchParams({select:"settings",guild_id:"eq."+guild,game:"eq."+game});
+    const configResponse = await fetch(gameSettingsUrl+"?"+gameQuery,{headers:settingsHeaders});
+    if (!configResponse.ok) return reply({error:"Could not load attendance settings."},502);
+    const defaults = {circuits:[],lineups:[],cars:[]};
+    const config = (await configResponse.json())[0]?.settings ?? defaults;
+    if (input.action === "game_settings") return reply({config,roles,emojis});
+    if (input.action === "save_game_settings") {
+      const settings = input.settings;
+      const label = (value, max) => typeof value==="string" && value.trim().length>0 && value.length<=max;
+      const hasRole = id => roles.some(role=>role.id===id);
+      if (!settings || !Array.isArray(settings.circuits) || settings.circuits.length>200 ||
+          !settings.circuits.every(name=>label(name,100)) ||
+          !Array.isArray(settings.lineups) || settings.lineups.length>50 ||
+          !settings.lineups.every(row=>row && label(row.name,80) && hasRole(row.roleId)) ||
+          !Array.isArray(settings.cars) || settings.cars.length>100 ||
+          !settings.cars.every(row=>row && label(row.name,100) && hasRole(row.roleId) &&
+             (game!=="F1" || f1Teams.some(([name])=>normalize(name)===normalize(row.name))) &&
+             (row.emojiId==="" || emojis.some(emoji=>emoji.id===row.emojiId))) ||
+          new Set(settings.lineups.map(row=>row.roleId)).size!==settings.lineups.length ||
+          new Set(settings.cars.map(row=>row.roleId)).size!==settings.cars.length) {
+        return reply({error:"Check circuit names, role selections and emojis. Use each role once in its list."},400);
+      }
+      const result = await fetch(gameSettingsUrl,{method:"POST",headers:{...settingsHeaders,Prefer:"resolution=merge-duplicates"},
+        body:JSON.stringify({guild_id:guild,game,settings})});
+      if (!result.ok) return reply({error:"Could not save attendance settings."},502);
+      return reply({saved:true});
+    }
+    const configuredTeams = (tier) => {
+      const assignedIds = new Set(config.cars.map(row=>row.roleId));
+      const rows = teamRoles(roles,game,tier).map(team=>({...team,ids:team.ids.filter(id=>!assignedIds.has(id))}));
+      for (const car of config.cars) {
+        if (!roles.some(role=>role.id===car.roleId)) continue;
+        const existing = rows.find(team=>normalize(team.name)===normalize(car.name));
+        if (existing) existing.ids.push(car.roleId);
+        else rows.push({name:car.name,ids:[car.roleId]});
+        if (car.emojiId) savedEmojis[existing?.name ?? car.name]=car.emojiId;
+      }
+      return game==="F1" ? rows : rows.filter(team=>team.ids.length);
+    };
     const validEmojiIds = values => values && typeof values==="object" && !Array.isArray(values) &&
       Object.values(values).every(id=>id==="" || emojis.some(emoji=>emoji.id===id));
     if (input.action === "emoji_setup" || input.action === "emoji_save") {
-      const teams = teamRoles(roles,game,"");
+      const teams = configuredTeams("");
       if (input.action === "emoji_setup") return reply({teams,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
       if (!emojiResponse.ok || !validEmojiIds(input.emojiIds) ||
           Object.keys(input.emojiIds).some(name=>!teams.some(team=>team.name===name))) return reply({error:"Invalid team emoji selection."},400);
@@ -151,11 +191,11 @@ Deno.serve(async (request) => {
       return reply({saved:true});
     }
     const channel = channels.find(c=>c.id===channelId);
-    if (!channel || (game === "Le Mans Ultimate" && !["WEC","ELMS"].includes(series)) || (game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
+    if (!channel || (!lineupRoleId && game === "Le Mans Ultimate" && !["WEC","ELMS"].includes(series)) || (!lineupRoleId && game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
         typeof track!=="string" || !track.trim() || track.length>100 || typeof notes!=="string" || notes.length>500 ||
         !Number.isSafeInteger(startsAt) || startsAt<=Date.now() || startsAt>8640000000000000 ||
         typeof nonce!=="string" || !/^[a-f0-9]{24}$/.test(nonce)) return reply({error:"Choose a channel, game, track, future race time and an F1 tier where applicable."},400);
-    const teams = teamRoles(roles, game, tier);
+    const teams = configuredTeams(typeof tier==="string" ? tier : "");
     const mapped = teams.filter(team=>team.ids.length);
     if (!mapped.length) {
       const expected = game === "F1" ? "Mercedes or " + tier + " Full Time Mercedes" :
@@ -170,8 +210,10 @@ Deno.serve(async (request) => {
     const compactRole = name => normalize(name).replaceAll(" ", "");
     const eligibilityName = compactRole(fullTimeRole);
     const preferred = game === "Le Mans Ultimate" ? roles.filter(role=>compactRole(role.name)===compactRole(series+" Full Time")) : [];
-    const fullTimeRoles = preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
-    if (fullTimeRoles.length !== 1) return reply({error:"Expected one Discord role named " + fullTimeRole + "."},400);
+    const customLineup = config.lineups.find(row=>row.roleId===lineupRoleId);
+    const fullTimeRoles = lineupRoleId ? roles.filter(role=>customLineup && role.id===customLineup.roleId) :
+      preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
+    if (fullTimeRoles.length !== 1) return reply({error:lineupRoleId ? "The saved lineup role is unavailable. Reload attendance settings." : "Expected one Discord role named " + fullTimeRole + "."},400);
     if (typeof round!=="string" || round.length>40) return reply({error:"Keep the round label under 40 characters."},400);
     let image;
     let upload;
@@ -210,7 +252,7 @@ Deno.serve(async (request) => {
     };
     const time = Math.floor(startsAt/1000);
     const payload = {
-      content:"**F7R race check-in**\n**Race & round:** " + game + " · " + track.trim() + (round.trim() ? " · "+round.trim() : "") +
+      content:"**F7R race check-in**\n**Race & round:** " + game + " · " + track.trim() + (round.trim() ? " · "+round.trim() : "") + (customLineup ? " · "+customLineup.name : "") +
         "\n**Date and time:** <t:" + time + ":F>\n**Full-time role:** <@&"+fullTimeRoles[0].id+">" +
         (notes.trim() ? "\n"+notes.trim() : ""),
       allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
