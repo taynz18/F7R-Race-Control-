@@ -173,6 +173,10 @@ export async function refreshDiscordRoster(interaction, guild, service, config) 
       }
     }
   }
+  const checkIn = button => /^f7r-team-(?:rsvp|hyper|gt3):/.test(button.custom_id ?? "");
+  if ((components ?? originalComponents).some(row=>row.components?.some(button=>checkIn(button) && button.style!==2))) {
+    components = (components ?? originalComponents).map(row=>({...row,components:row.components.map(button=>checkIn(button) ? {...button,style:2} : button)}));
+  }
   const query = new URLSearchParams({select:"driver_name,placement,team,seat,checked_in_at,checked_out_at,confirmed_at",guild_id:"eq."+guild,
     message_id:"eq."+interaction.message.id,order:"checked_in_at.asc.nullslast,driver_id.asc"});
   const load = async () => {

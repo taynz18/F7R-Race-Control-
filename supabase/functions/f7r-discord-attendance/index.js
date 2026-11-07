@@ -295,9 +295,9 @@ Deno.serve(async (request) => {
       return reply({error:"Could not save the check-in role mappings."},502);
     }
     const checkInButtons = isLmu ? [
-      {type:2,style:3,label:"Check in · Hypercar",emoji:classEmoji("Hypercar"),custom_id:"f7r-team-hyper:"+time+":"+nonce},
-      {type:2,style:3,label:"Check in · LMGT3",emoji:classEmoji("LMGT3"),custom_id:"f7r-team-gt3:"+time+":"+nonce}
-    ] : [{type:2,style:3,label:"Participating",custom_id:"f7r-team-rsvp:"+time+":"+nonce}];
+      {type:2,style:2,label:"Check in · Hypercar",emoji:classEmoji("Hypercar"),custom_id:"f7r-team-hyper:"+time+":"+nonce},
+      {type:2,style:2,label:"Check in · LMGT3",emoji:classEmoji("LMGT3"),custom_id:"f7r-team-gt3:"+time+":"+nonce}
+    ] : [{type:2,style:2,label:"Participating",custom_id:"f7r-team-rsvp:"+time+":"+nonce}];
     const payload = {
       content:"**F7R race check-in**\n**Race & round:** " + game + " · " + track.trim() + (round.trim() ? " · "+round.trim() : "") + (customLineup ? " · "+customLineup.name : "") +
         "\n**Date and time:** <t:" + time + ":F>" +
