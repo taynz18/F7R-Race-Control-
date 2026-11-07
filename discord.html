@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer"><meta name="theme-color" content="#0c111b">
 <title>F7R Race Control · Discord</title><link rel="stylesheet" href="admin.css?v=10"><link rel="icon" href="./assets/f7r-logo.png">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script type="module" src="./dashboard/discord-admin.js"></script></head>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script type="module" src="./dashboard/discord-admin.js?v=2"></script></head>
 <body class="discord-desk"><header><a class="brand" href="./"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL</span></a>
 <a class="secondary" href="./">Back to Race Control ↗</a></header><main>
 <div class="intro"><p class="eyebrow">DISCORD OPERATIONS</p><h1>Race-day attendance.</h1><p class="lede">Plan check-ins, build your lineups and confirm reserve seats.</p></div>
@@ -17,7 +17,7 @@
 <p class="small muted">Choose a game to load its circuits and lineups. Use League setup below to make changes.</p>
 <form id="attendance-form">
 <label for="attendance-game">Game</label>
-<select id="attendance-game" required><option value="">Choose a game</option><option>F1</option><option>Le Mans Ultimate</option><option>Assetto Corsa Competizione</option></select>
+<select id="attendance-game" required><option value="">Choose a game</option><option>F1</option><option>F2</option><option>Le Mans Ultimate</option><option>Assetto Corsa Competizione</option></select>
 <label for="attendance-track">Track</label>
 <select id="attendance-track" required><option value="">Choose a game first</option></select>
 <label for="attendance-lineup">Lineup</label>
@@ -78,6 +78,8 @@
 <button type="button" class="secondary" id="settings-lineup-add">Add or update lineup</button><ul id="settings-lineups"></ul>
 <h3>Car roles and emojis</h3><label for="settings-car-name">Team or car name</label><input id="settings-car-name" maxlength="100" placeholder="e.g. BMW">
 <label for="settings-car-role">Discord car role</label><select id="settings-car-role"></select>
+<label for="settings-car-lineup">Use this car role for</label><select id="settings-car-lineup"></select>
+<p class="small muted">Choose the lineup’s full-time role to keep this car assignment separate from other races. Map every car used in a scoped lineup.</p>
 <label for="settings-car-emoji">Discord emoji</label><select id="settings-car-emoji"></select>
 <button type="button" class="secondary" id="settings-car-add">Add or update car mapping</button><ul id="settings-cars"></ul>
 <button type="button" class="primary" id="settings-save">Save game settings</button>

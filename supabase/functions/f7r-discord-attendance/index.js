@@ -5,8 +5,13 @@ const f1Teams = [
   ["Racing Bulls","racing-bulls"], ["Cadillac","cadillac"], ["Haas","haas"],
   ["Williams","williams"], ["Audi","audi"]
 ];
+const f2Teams = [["ART Grand Prix","f2-art"],["Campos Racing","f2-campos"],["Rodin Motorsport","f2-rodin"],["AIX Racing","f2-aix"],["DAMS Lucas Oil","f2-dams"],["Hitech","f2-hitech"],["MP Motorsport","f2-mp"],["PREMA Racing","f2-prema"],["Trident","f2-trident"],["Van Amersfoort Racing","f2-var"],["Invicta Racing","f2-invicta"]];
+const isFormula = game => game==="F1" || game==="F2";
 const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 function teamRoles(roles, game, tier) {
+  if (game === "F2") {
+    return f2Teams.map(([name,logo])=>({name,logo,ids:roles.filter(role=>[normalize(name),normalize(name)+" f2"].includes(normalize(role.name))).map(role=>role.id)}));
+  }
   if (game === "F1") {
     const prefix = tier.toLowerCase() + " full time ";
     return f1Teams.map(([name, logo]) => ({
@@ -85,7 +90,7 @@ Deno.serve(async (request) => {
       const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       const assigned = await fetch(url+"/rest/v1/rpc/f7r_confirm_discord_reserve",{
         method:"POST",headers:{apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"},
-        body:JSON.stringify({p_guild:guild,p_message:post.id,p_driver:input.driverId,p_team:input.team,p_f1:embed.footer?.text==="F1"})
+        body:JSON.stringify({p_guild:guild,p_message:post.id,p_driver:input.driverId,p_team:input.team,p_f1:isFormula(embed.footer?.text)})
       });
       if (!assigned.ok) return reply({error:"Could not confirm this reserve."},502);
       const outcome = await assigned.json();
@@ -123,7 +128,7 @@ Deno.serve(async (request) => {
     const roles = (await roleResponse.json()).filter(r=>r.id!==guild).map(({id,name})=>({id,name}));
     if (input.action === "options") return reply({channels});
     const {channelId, tier, series, game, track, startsAt, notes, nonce, artwork = "", artworkFile, round = "", lineupRoleId = ""} = input;
-    if (!["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game)) return reply({error:"Choose a game first."},400);
+    if (!["F1","F2","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game)) return reply({error:"Choose a game first."},400);
     const emojiResponse = await fetch(guildPath + "/emojis", {headers:discordHeaders});
     const emojis = emojiResponse.ok
       ? (await emojiResponse.json()).filter(emoji=>emoji.available!==false && !emoji.roles?.length && snowflake(emoji.id) && /^[a-zA-Z0-9_]+$/.test(emoji.name))
@@ -153,10 +158,11 @@ Deno.serve(async (request) => {
           !settings.lineups.every(row=>row && label(row.name,80) && hasRole(row.roleId)) ||
           !Array.isArray(settings.cars) || settings.cars.length>100 ||
           !settings.cars.every(row=>row && label(row.name,100) && hasRole(row.roleId) &&
-             (game!=="F1" || f1Teams.some(([name])=>normalize(name)===normalize(row.name))) &&
+             (!isFormula(game) || (game==="F1"?f1Teams:f2Teams).some(([name])=>normalize(name)===normalize(row.name))) &&
+             (!row.lineupRoleId || hasRole(row.lineupRoleId)) &&
              (row.emojiId==="" || emojis.some(emoji=>emoji.id===row.emojiId))) ||
           new Set(settings.lineups.map(row=>row.roleId)).size!==settings.lineups.length ||
-          new Set(settings.cars.map(row=>row.roleId)).size!==settings.cars.length) {
+          new Set(settings.cars.map(row=>(row.lineupRoleId??"")+":"+row.roleId)).size!==settings.cars.length) {
         return reply({error:"Check circuit names, role selections and emojis. Use each role once in its list."},400);
       }
       const result = await fetch(gameSettingsUrl,{method:"POST",headers:{...settingsHeaders,Prefer:"resolution=merge-duplicates"},
@@ -164,17 +170,27 @@ Deno.serve(async (request) => {
       if (!result.ok) return reply({error:"Could not save attendance settings."},502);
       return reply({saved:true});
     }
-    const configuredTeams = (tier) => {
-      const assignedIds = new Set(config.cars.map(row=>row.roleId));
-      const rows = teamRoles(roles,game,tier).map(team=>({...team,ids:team.ids.filter(id=>!assignedIds.has(id))}));
-      for (const car of config.cars) {
+    const configuredTeams = (tier, eligibilityRole = "", requireScope = false) => {
+      const scoped = eligibilityRole ? config.cars.filter(row=>row.lineupRoleId===eligibilityRole) : [];
+      const gameWide = config.cars.filter(row=>!row.lineupRoleId);
+      const tierPrefix = tier ? normalize(tier)+" full time " : "";
+      const tierRoles = tierPrefix ? roles.filter(role=>normalize(role.name).startsWith(tierPrefix)) : [];
+      const source = scoped.length || requireScope ? [] : tierRoles.length ? tierRoles : roles;
+      const mappings = scoped.length ? scoped : requireScope || tierRoles.length ? [] : gameWide;
+      const assignedIds = new Set(mappings.map(row=>row.roleId));
+      const rows = teamRoles(source,game,tier).map(team=>({...team,ids:team.ids.filter(id=>!assignedIds.has(id))}));
+      for (const car of gameWide) {
+        const team = rows.find(row=>normalize(row.name)===normalize(car.name));
+        if (team && car.emojiId) savedEmojis[team.name]=car.emojiId;
+      }
+      for (const car of mappings) {
         if (!roles.some(role=>role.id===car.roleId)) continue;
         const existing = rows.find(team=>normalize(team.name)===normalize(car.name));
         if (existing) existing.ids.push(car.roleId);
         else rows.push({name:car.name,ids:[car.roleId]});
         if (car.emojiId) savedEmojis[existing?.name ?? car.name]=car.emojiId;
       }
-      return game==="F1" ? rows : rows.filter(team=>team.ids.length);
+      return isFormula(game) ? rows : rows.filter(team=>team.ids.length);
     };
     const validEmojiIds = values => values && typeof values==="object" && !Array.isArray(values) &&
       Object.values(values).every(id=>id==="" || emojis.some(emoji=>emoji.id===id));
@@ -191,22 +207,12 @@ Deno.serve(async (request) => {
       return reply({saved:true});
     }
     const channel = channels.find(c=>c.id===channelId);
-    if (!channel || (!lineupRoleId && game === "Le Mans Ultimate" && !["WEC","ELMS"].includes(series)) || (!lineupRoleId && game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
+    if (!channel || (!lineupRoleId && game === "Le Mans Ultimate" && !["WEC","ELMS"].includes(series)) || (!lineupRoleId && game === "F1" && !["T1","T2","T3","T4"].includes(tier)) || !["F1","F2","Le Mans Ultimate","Assetto Corsa","Assetto Corsa Competizione"].includes(game) ||
         typeof track!=="string" || !track.trim() || track.length>100 || typeof notes!=="string" || notes.length>500 ||
         !Number.isSafeInteger(startsAt) || startsAt<=Date.now() || startsAt>8640000000000000 ||
         typeof nonce!=="string" || !/^[a-f0-9]{24}$/.test(nonce)) return reply({error:"Choose a channel, game, track, future race time and an F1 tier where applicable."},400);
-    const teams = configuredTeams(typeof tier==="string" ? tier : "");
-    const mapped = teams.filter(team=>team.ids.length);
-    if (!mapped.length) {
-      const expected = game === "F1" ? "Mercedes or " + tier + " Full Time Mercedes" :
-        game === "Le Mans Ultimate" ? "Mercedes LMU" : "Porsche ACC";
-      return reply({error:"No Discord team roles matched " + game + ". Expected a role such as " + expected + "."},400);
-    }
-    if (mapped.length > 25 || mapped.some(team=>team.ids.join(",").length>950)) {
-      return reply({error:"Too many team roles to fit in one Discord check-in."},400);
-    }
     const fullTimeRole = game === "F1" ? tier + " Full Time" :
-      game === "Le Mans Ultimate" ? series + " Full Time Driver" : "ACC Full Time Driver";
+      game === "Le Mans Ultimate" ? series + " Full Time Driver" : game === "F2" ? "Realistic F2 Full Time" : "ACC Full Time Driver";
     const compactRole = name => normalize(name).replaceAll(" ", "");
     const eligibilityName = compactRole(fullTimeRole);
     const preferred = game === "Le Mans Ultimate" ? roles.filter(role=>compactRole(role.name)===compactRole(series+" Full Time")) : [];
@@ -214,6 +220,17 @@ Deno.serve(async (request) => {
     const fullTimeRoles = lineupRoleId ? roles.filter(role=>customLineup && role.id===customLineup.roleId) :
       preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
     if (fullTimeRoles.length !== 1) return reply({error:lineupRoleId ? "The saved lineup role is unavailable. Reload attendance settings." : "Expected one Discord role named " + fullTimeRole + "."},400);
+    const teams = configuredTeams(!lineupRoleId && typeof tier==="string" ? tier : "", fullTimeRoles[0].id, game==="F1" && Boolean(lineupRoleId));
+    const mapped = teams.filter(team=>team.ids.length);
+    if (!mapped.length) {
+      if (game==="F1" && lineupRoleId) return reply({error:"Add car role mappings scoped to this lineup in League setup before posting."},400);
+      const expected = game === "F1" ? "Mercedes or " + tier + " Full Time Mercedes" :
+        game === "Le Mans Ultimate" ? "Mercedes LMU" : "Porsche ACC";
+      return reply({error:"No Discord team roles matched " + game + ". Expected a role such as " + expected + "."},400);
+    }
+    if (mapped.length > 25 || mapped.some(team=>team.ids.join(",").length>950)) {
+      return reply({error:"Too many team roles to fit in one Discord check-in."},400);
+    }
     if (typeof round!=="string" || round.length>40) return reply({error:"Keep the round label under 40 characters."},400);
     let image;
     let upload;
@@ -241,7 +258,7 @@ Deno.serve(async (request) => {
       const prefix = emoji ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+"> " : "";
       return {name:team.name,value:(prefix+team.ids.map(id=>"<@&"+id+">").join(" ")).trim() || "—"};
     };
-    const lineupFields = (game === "F1" ? teams : mapped).map(teamField);
+    const lineupFields = (isFormula(game) ? teams : mapped).map(teamField);
     const teamLines = lineupFields.map(field => {
       const emoji = /^<a?:\w+:\d{17,20}>/.exec(field.value)?.[0];
       return "**" + (emoji ? emoji + " " : "") + field.name + "**";

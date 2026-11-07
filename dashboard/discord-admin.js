@@ -418,7 +418,10 @@ function renderSettingsLists() {
       const item = document.createElement('li');
       const role = settingsOptions.roles.find(role => role.id === row.roleId);
       const emoji = settingsOptions.emojis.find(emoji => emoji.id === row.emojiId);
-      item.textContent = row.name + ' · ' + (role?.name || 'Role unavailable') + (emoji ? ' · :' + emoji.name + ':' : '');
+      const scope = settingsOptions.roles.find(role => role.id === row.lineupRoleId);
+      item.textContent = row.name + ' · ' + (role?.name || 'Role unavailable') +
+        (key === 'cars' ? ' · ' + (scope?.name || (row.lineupRoleId ? 'Lineup unavailable' : 'Game-wide')) : '') +
+        (emoji ? ' · :' + emoji.name + ':' : '');
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'secondary';
@@ -427,7 +430,10 @@ function renderSettingsLists() {
         const type = key === 'cars' ? 'car' : 'lineup';
         $('settings-' + type + '-name').value = row.name;
         $('settings-' + type + '-role').value = row.roleId;
-        if (type === 'car') $('settings-car-emoji').value = row.emojiId;
+        if (type === 'car') {
+          $('settings-car-emoji').value = row.emojiId;
+          $('settings-car-lineup').value = row.lineupRoleId || '';
+        }
       };
       const remove = document.createElement('button');
       remove.type = 'button';
@@ -456,13 +462,14 @@ async function loadGameSettings() {
     settingsGame = game;
     settingsOptions = data;
     settingsDraft = data.config;
-    const circuits = settingsDraft.circuits.length ? settingsDraft.circuits : game === 'F1' ? defaultF1Circuits : [];
+    const circuits = settingsDraft.circuits.length ? settingsDraft.circuits : ['F1','F2'].includes(game) ? defaultF1Circuits : [];
     $('settings-circuits').value = circuits.join('\n');
     setChoices('attendance-track', circuits.map(name => ({id:name,name})), circuits.length ? 'Choose a circuit' : 'Add a circuit in League setup');
     setChoices('attendance-lineup', settingsDraft.lineups.map(row => ({id:row.roleId,name:row.name})), 'Use the standard tier or series role');
     const roles = [...data.roles].sort((a,b) => a.name.localeCompare(b.name));
     setChoices('settings-lineup-role', roles, 'Choose a full-time role');
     setChoices('settings-car-role', roles, 'Choose a car role');
+    setChoices('settings-car-lineup', roles, 'Game-wide default');
     setChoices('settings-car-emoji', data.emojis.map(emoji => ({id:emoji.id,name:':' + emoji.name + ':'})), 'No emoji override');
     for (const id of ['settings-lineup-name','settings-car-name']) $(id).value = '';
     renderSettingsLists();
@@ -493,8 +500,8 @@ for (const [type,key] of [['lineup','lineups'],['car','cars']]) {
       $('settings-status').textContent = 'Enter a name and select a Discord role.';
       return;
     }
-    const row = type === 'car' ? {name,roleId,emojiId:$('settings-car-emoji').value} : {name,roleId};
-    const index = settingsDraft[key].findIndex(entry => entry.roleId === roleId);
+    const row = type === 'car' ? {name,roleId,emojiId:$('settings-car-emoji').value,lineupRoleId:$('settings-car-lineup').value} : {name,roleId};
+    const index = settingsDraft[key].findIndex(entry => entry.roleId === roleId && (key !== "cars" || (entry.lineupRoleId || "") === row.lineupRoleId));
     if (index === -1) settingsDraft[key].push(row);
     else settingsDraft[key][index] = row;
     renderSettingsLists();

@@ -64,7 +64,7 @@ export async function refreshDiscordRoster(interaction, guild, service, mapped) 
   };
   let rows = await load();
   for (let attempt=0; attempt<3; attempt++) {
-    const roster = rosterEmbed(rows,mapped,base[0]?.footer?.text==="F1",limit);
+    const roster = rosterEmbed(rows,mapped,["F1","F2"].includes(base[0]?.footer?.text),limit);
     const artwork = interaction.message.embeds.find(embed=>embed.title==="Live check-in lineup")?.image?.url;
     const attachment = interaction.message.attachments?.find(item=>item.filename.startsWith("race-artwork."));
     if (attachment || artwork) roster.image = {url:attachment ? "attachment://"+attachment.filename : artwork};
