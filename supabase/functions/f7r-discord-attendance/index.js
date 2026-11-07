@@ -1,4 +1,4 @@
-import { refreshDiscordRoster, rosterEmbed } from "../_shared/discord-roster.js";
+import { refreshDiscordRoster, rosterEmbed, readPostConfig, savePostConfig } from "../_shared/discord-roster.js";
 const lmuClasses = {"Hypercar":["Alpine","Aston Martin","BMW","Cadillac","Ferrari","Genesis","Lamborghini","Peugeot","Porsche","Toyota"],"LMGT3":["Aston Martin","BMW","Chevrolet","Ferrari","Ford","Lamborghini","Lexus","McLaren","Porsche"]};
 const f1Teams = [
   ["Mercedes","mercedes"], ["Ferrari","ferrari"], ["Red Bull Racing","red-bull"],
@@ -86,17 +86,17 @@ Deno.serve(async (request) => {
       const message = await fetch(api+"/channels/"+input.channelId+"/messages/"+input.messageId,{headers:discordHeaders});
       if (!message.ok) return reply({error:"Could not open the check-in message."},502);
       const post = await message.json();
-      const embed = post.embeds?.find(item=>item.title==="Team roles");
-      if (post.author?.id!=="1004676760815796334" || !embed?.fields?.some(field=>field.name===input.team)) return reply({error:"Choose a team from this check-in."},400);
       const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      const postConfig = post.author?.id==="1004676760815796334" ? await readPostConfig(post,guild,service) : null;
+      if (!postConfig?.fields.some(field=>field.name===input.team)) return reply({error:"Choose a team from this check-in."},400);
       const assigned = await fetch(url+"/rest/v1/rpc/f7r_confirm_discord_reserve",{
         method:"POST",headers:{apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"},
-        body:JSON.stringify({p_guild:guild,p_message:post.id,p_driver:input.driverId,p_team:input.team,p_f1:isFormula(embed.footer?.text)})
+        body:JSON.stringify({p_guild:guild,p_message:post.id,p_driver:input.driverId,p_team:input.team,p_f1:isFormula(postConfig.game)})
       });
       if (!assigned.ok) return reply({error:"Could not confirm this reserve."},502);
       const outcome = await assigned.json();
       if (outcome!=="Confirmed") return reply({error:outcome},409);
-      const refreshed = await refreshDiscordRoster({message:post,channel_id:input.channelId},guild,service,embed.fields).catch(()=>false);
+      const refreshed = await refreshDiscordRoster({message:post,channel_id:input.channelId},guild,service,postConfig).catch(()=>false);
       return reply({refreshed});
     }
     if (input.action === "roster") {
@@ -112,10 +112,10 @@ Deno.serve(async (request) => {
         const message = await fetch(api + "/channels/" + input.channelId + "/messages/" + input.messageId, {headers:discordHeaders});
         if (!message.ok) return reply({error:"Could not open that check-in message. Check its link and the bot's Read Message History permission."},502);
         const post = await message.json();
-        const embed = post.embeds?.find(item=>item.title==="Team roles");
-        if (post.author?.id !== "1004676760815796334" || !embed) return reply({error:"This link is not an F7R team check-in."},400);
-        f1 = embed.footer?.text === "F1";
-        teams = f1 ? f1Teams.map(([name,logo])=>({name,logo})) : embed.fields.map(({name})=>({name}));
+        const postConfig = post.author?.id==="1004676760815796334" ? await readPostConfig(post,guild,service) : null;
+        if (!postConfig) return reply({error:"This link is not an F7R team check-in."},400);
+        f1 = isFormula(postConfig.game);
+        teams = f1 ? (postConfig.game==="F2"?f2Teams:f1Teams).map(([name,logo])=>({name,logo})) : postConfig.fields.map(({name})=>({name}));
       }
       return reply({drivers,teams,f1});
     }
@@ -288,23 +288,30 @@ Deno.serve(async (request) => {
       return {name:team.name,value:(prefix+team.ids.map(id=>"<@&"+id+">").join(" ")).trim() || "—"};
     };
     const lineupFields = (isFormula(game) || isLmu ? classTeams : mapped).map(teamField);
-    const roster = {...rosterEmbed([],lineupFields,isFormula(game),4096),image};
     const time = Math.floor(startsAt/1000);
     const classEmoji = (name) => {
-      const match = emojis.find(emoji=>normalize(emoji.name).replaceAll(" ","")===name.toLowerCase());
+      const match = emojis.find(emoji=>[name.toLowerCase(),"official"+name.toLowerCase(),name.toLowerCase()+"logo",...(name==="LMGT3"?["gt3","gt3logo"]:["lmh"])].includes(normalize(emoji.name).replaceAll(" ","")));
       return match ? {id:match.id,name:match.name,animated:Boolean(match.animated)} : {name:name==="Hypercar"?"🟥":"🟧"};
     };
+    const classIcons = Object.fromEntries(["Hypercar","LMGT3"].map(name=>{
+      const emoji = classEmoji(name);
+      return [name,emoji.id ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+">" : emoji.name];
+    }));
+    const roster = {...rosterEmbed([],lineupFields,isFormula(game),4096,classIcons),image};
+    if (!await savePostConfig(guild,nonce,{game,fields:lineupFields,fullTimeId:fullTimeRoles[0].id,classIcons},service)) {
+      return reply({error:"Could not save the check-in role mappings."},502);
+    }
     const checkInButtons = isLmu ? [
-      {type:2,style:3,label:"Check in · Hypercar",emoji:classEmoji("Hypercar"),custom_id:"f7r-team-hyper:"+time},
-      {type:2,style:3,label:"Check in · LMGT3",emoji:classEmoji("LMGT3"),custom_id:"f7r-team-gt3:"+time}
-    ] : [{type:2,style:3,label:"Participating",custom_id:"f7r-team-rsvp:"+time}];
+      {type:2,style:3,label:"Check in · Hypercar",emoji:classEmoji("Hypercar"),custom_id:"f7r-team-hyper:"+time+":"+nonce},
+      {type:2,style:3,label:"Check in · LMGT3",emoji:classEmoji("LMGT3"),custom_id:"f7r-team-gt3:"+time+":"+nonce}
+    ] : [{type:2,style:3,label:"Participating",custom_id:"f7r-team-rsvp:"+time+":"+nonce}];
     const payload = {
       content:"**F7R race check-in**\n**Race & round:** " + game + " · " + track.trim() + (round.trim() ? " · "+round.trim() : "") + (customLineup ? " · "+customLineup.name : "") +
-        "\n**Date and time:** <t:" + time + ":F>\n**Full-time role:** <@&"+fullTimeRoles[0].id+">" +
+        "\n**Date and time:** <t:" + time + ":F>" +
         (notes.trim() ? "\n"+notes.trim() : ""),
       allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
-      embeds:[roster,{title:"Team roles",footer:{text:game},fields:lineupFields},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
-      components:[{type:1,components:[...checkInButtons,{type:2,style:4,label:"Check out",custom_id:"f7r-team-out:"+time}]}]
+      embeds:[roster],
+      components:[{type:1,components:[...checkInButtons,{type:2,style:4,label:"Check out",custom_id:"f7r-team-out:"+time+":"+nonce}]}]
     };
     let body = JSON.stringify(payload);
     let headers = discordHeaders;

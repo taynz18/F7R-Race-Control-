@@ -1,5 +1,5 @@
 const api = "https://discord.com/api/v10";
-export function rosterEmbed(rows, mapped, isF1, limit) {
+export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
   const clean = value => value.replace(/[\r\n]/g, " ").replace(/[\\*_~\x60|<>\[\]@]/g, "\\$&").slice(0, 90);
   const stamp = (value) => {
     const seconds = Math.floor(Date.parse(value) / 1000);
@@ -22,15 +22,16 @@ export function rosterEmbed(rows, mapped, isF1, limit) {
       const note = "More in Race Control.";
       return value.slice(0,Math.max(0,valueLimit-note.length-1)).split("\n").slice(0,-1).concat(note).join("\n");
     };
-    const fields = [["LMGT3","🟧"],["Hypercar","🟥"]].map(([className, icon])=>{
+    const fields = [["LMGT3",classIcons.LMGT3 || "🟧"],["Hypercar",classIcons.Hypercar || "🟥"]].map(([className, icon])=>{
       const drivers = active.filter(row=>raceClass(row.team)===className);
-      return {name:icon+" "+className+" ("+drivers.length+")",inline:true,value:fieldValue(drivers.map(driver=>{
-        const team = mapped.find(field=>field.name===driver.team);
-        const emoji = /^<a?:\w+:\d{17,20}>/.exec(team?.value ?? "")?.[0];
-        const car = clean(driver.team.slice(className.length+3));
-        return clean(driver.driver_name)+(emoji ? " · "+emoji : car ? " · "+car : "")+
-          (driver.confirmed_at ? " · Reserve" : "");
-      }))};
+      const manufacturers = mapped.filter(field=>raceClass(field.name)===className).flatMap(field=>{
+        const emoji = /^<a?:\w+:\d{17,20}>/.exec(field.value)?.[0];
+        const car = clean(field.name.slice(className.length+3));
+        const teamDrivers = drivers.filter(driver=>driver.team===field.name);
+        return ["**"+(emoji ? emoji+" " : "")+car+"**", ...teamDrivers.map(driver=>
+          "↳ "+clean(driver.driver_name)+(driver.confirmed_at ? " · Reserve" : ""))];
+      });
+      return {name:icon+" "+className+" ("+drivers.length+")",inline:true,value:fieldValue(manufacturers)};
     });
     fields.push({name:"🟨 Reserves ("+waiting.length+")",inline:true,value:fieldValue(waiting.map(driver=>{
       const className = raceClass(driver.team);
@@ -86,13 +87,49 @@ export function rosterEmbed(rows, mapped, isF1, limit) {
   return {title:"Live check-in lineup", color:0xf21b32, description};
 }
 
-export async function refreshDiscordRoster(interaction, guild, service, mapped) {
+function configHeaders(service) {
+  return {apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"};
+}
+function postKey(message) {
+  for (const row of message.components ?? []) {
+    for (const component of row.components ?? []) {
+      const nonce = /^f7r-team-(?:rsvp|out|hyper|gt3):\d{10,13}:([a-f0-9]{24})$/.exec(component.custom_id ?? "")?.[1];
+      if (nonce) return nonce;
+    }
+  }
+  return message.id;
+}
+export async function savePostConfig(guild, key, config, service) {
+  const result = await fetch(Deno.env.get("SUPABASE_URL")+"/rest/v1/f7r_discord_post_config",{
+    method:"POST",headers:{...configHeaders(service),Prefer:"resolution=ignore-duplicates"},
+    body:JSON.stringify({guild_id:guild,post_key:key,config})
+  });
+  return result.ok;
+}
+export async function readPostConfig(message, guild, service) {
+  const teamEmbed = message.embeds?.find(embed=>embed.title==="Team roles");
+  if (teamEmbed) {
+    const eligibility = message.embeds.find(embed=>embed.title==="Full-time eligibility");
+    const classIcons = Object.fromEntries((message.components ?? []).flatMap(row=>row.components ?? []).flatMap(component=>{
+      const className = component.custom_id?.startsWith("f7r-team-hyper:") ? "Hypercar" : component.custom_id?.startsWith("f7r-team-gt3:") ? "LMGT3" : "";
+      const emoji = component.emoji;
+      return className && emoji?.id ? [[className,"<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+">"]] : [];
+    }));
+    return {game:teamEmbed.footer?.text,fields:teamEmbed.fields ?? [],classIcons,
+      fullTimeId:/^<@&(\d{17,20})>$/.exec(eligibility?.description ?? "")?.[1] ?? null, legacy:true};
+  }
+  const query = new URLSearchParams({select:"config",guild_id:"eq."+guild,post_key:"eq."+postKey(message)});
+  const result = await fetch(Deno.env.get("SUPABASE_URL")+"/rest/v1/f7r_discord_post_config?"+query,
+    {headers:configHeaders(service),signal:AbortSignal.timeout(1800)});
+  if (!result.ok) throw Error("Attendance configuration is unavailable.");
+  return (await result.json())[0]?.config ?? null;
+}
+
+export async function refreshDiscordRoster(interaction, guild, service, config) {
   const token = Deno.env.get("F7R_DISCORD_BOT_TOKEN");
   if (!token) return false;
-  const base = interaction.message.embeds.filter(embed=>["Team roles","Full-time eligibility"].includes(embed.title))
-    .map(({title, description, footer, fields})=>({title, description, footer:footer && {text:footer.text}, fields}));
-  const limit = Math.min(4096, 5900 - base.reduce((sum, embed)=>sum+JSON.stringify(embed).length,0));
-  if (limit < 80) return false;
+  if (config.legacy && !await savePostConfig(guild,postKey(interaction.message),{...config,legacy:false},service)) return false;
+  const limit = 4096;
   const query = new URLSearchParams({select:"driver_name,placement,team,seat,checked_in_at,checked_out_at,confirmed_at",guild_id:"eq."+guild,
     message_id:"eq."+interaction.message.id,order:"checked_in_at.asc.nullslast,driver_id.asc"});
   const load = async () => {
@@ -102,13 +139,14 @@ export async function refreshDiscordRoster(interaction, guild, service, mapped) 
   };
   let rows = await load();
   for (let attempt=0; attempt<3; attempt++) {
-    const roster = rosterEmbed(rows,mapped,["F1","F2"].includes(base[0]?.footer?.text),limit);
+    const roster = rosterEmbed(rows,config.fields,["F1","F2"].includes(config.game),limit,config.classIcons);
     const artwork = interaction.message.embeds.find(embed=>embed.title==="Live check-in lineup")?.image?.url;
     const attachment = interaction.message.attachments?.find(item=>item.filename.startsWith("race-artwork."));
     if (attachment || artwork) roster.image = {url:attachment ? "attachment://"+attachment.filename : artwork};
     const updated = await fetch(api+"/channels/"+(interaction.channel_id ?? interaction.channel?.id)+"/messages/"+interaction.message.id,{
       method:"PATCH",headers:{Authorization:"Bot "+token,"Content-Type":"application/json"},
-      body:JSON.stringify({embeds:[roster,...base],allowed_mentions:{parse:[]}})
+      body:JSON.stringify({embeds:[roster],allowed_mentions:{parse:[]},
+        ...(config.legacy && typeof interaction.message.content==="string" ? {content:interaction.message.content.split("\n").filter(line=>!line.startsWith("**Full-time role:**")).join("\n")} : {})})
     });
     if (!updated.ok) return false;
     const latest = await load();

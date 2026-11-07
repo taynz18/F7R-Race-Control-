@@ -1,4 +1,4 @@
-import { refreshDiscordRoster } from "../_shared/discord-roster.js";
+import { refreshDiscordRoster, readPostConfig } from "../_shared/discord-roster.js";
 const appId = "1004676760815796334";
 const publicKey = "009733d0f6a808d8c612002338884e15eaf68fd8adaffce335a503681a6e189f";
 const bytes = (hex) => Uint8Array.from(hex.match(/../g), (pair) => parseInt(pair, 16));
@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
   const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
   if (!guild || interaction.guild_id !== guild) return privateReply("This check-in is only available in the F7R server.");
   const customId = interaction.data?.custom_id ?? "";
-  const button = interaction.type === 3 && /^f7r-team-(rsvp|out|hyper|gt3):(\d{10,13})$/.exec(customId);
+  const button = interaction.type === 3 && /^f7r-team-(rsvp|out|hyper|gt3):(\d{10,13})(?::[a-f0-9]{24})?$/.exec(customId);
   const picker = interaction.type === 5 && /^f7r-(f1|hyper|gt3)-car:(\d{10,13})$/.exec(customId);
   if ((!button && !picker) || interaction.message?.author?.id !== appId || !interaction.member?.user?.id) {
     return privateReply("Open the F7R race check-in and try again.");
@@ -33,19 +33,19 @@ Deno.serve(async (req) => {
   if (Date.now() >= Number(deadline) * 1000) return privateReply("Check-in closed when the race started.");
   const checkingOut = button && button[1] === "out";
   const member = interaction.member;
-  const teamEmbed = interaction.message.embeds?.find(embed=>embed.title==="Team roles");
-  const isF1 = teamEmbed?.footer?.text === "F1";
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const config = await readPostConfig(interaction.message,guild,service).catch(()=>null);
+  if (!config) return privateReply("The check-in settings could not load. Please try again.");
+  const isF1 = config.game === "F1";
   const choice = button ? button[1] : picker[1];
   const raceClass = choice==="hyper" ? "Hypercar" : choice==="gt3" ? "LMGT3" : "";
-  const mapped = teamEmbed?.fields ?? [];
-  if (raceClass && (teamEmbed?.footer?.text!=="Le Mans Ultimate" || !mapped.some(field=>field.name.startsWith(raceClass+" · ")))) {
+  const mapped = config.fields;
+  if (raceClass && (config.game!=="Le Mans Ultimate" || !mapped.some(field=>field.name.startsWith(raceClass+" · ")))) {
     return privateReply("That class is unavailable for this race.");
   }
   const matches = mapped.map((field,index)=>({field,index})).filter(({field})=>
     (!raceClass || field.name.startsWith(raceClass+" · ")) && [...field.value.matchAll(/<@&(\d{17,20})>/g)].some(([,id])=>member.roles.includes(id)));
-  const eligibility = interaction.message.embeds?.find(embed=>embed.title==="Full-time eligibility");
-  const fullTimeId = /^<@&(\d{17,20})>$/.exec(eligibility?.description ?? "")?.[1];
-  const eligible = !eligibility || member.roles.includes(fullTimeId);
+  const eligible = !config.fullTimeId || member.roles.includes(config.fullTimeId);
   let team = matches.length === 1 ? matches[0].field.name : null;
   if (picker) {
     const selection = interaction.data.components?.find(row=>row.component?.custom_id==="car")?.component.values;
@@ -66,14 +66,13 @@ Deno.serve(async (req) => {
   EdgeRuntime.waitUntil((async () => {
     let content = "Could not save your check-in. Please try again.";
     try {
-      const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
       const result = await fetch(Deno.env.get("SUPABASE_URL") + "/rest/v1/rpc/f7r_record_discord_check_in", {
         method:"POST",
         headers:{apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"},
         body:JSON.stringify({
           p_guild:guild,p_message:interaction.message.id,p_driver:member.user.id,
           p_name:member.nick || member.user.global_name || member.user.username,p_team:team || raceClass || null,
-          p_full_time:placement==="Full-time",p_f1:interaction.message.embeds?.some(embed=>embed.title==="Team roles" && ["F1","F2"].includes(embed.footer?.text)) ?? false,
+          p_full_time:placement==="Full-time",p_f1:["F1","F2"].includes(config.game),
           p_out:Boolean(checkingOut)
         })
       });
@@ -89,7 +88,7 @@ Deno.serve(async (req) => {
           const recordedClass = /^(Hypercar|LMGT3)(?: · |$)/.exec(recordedTeam ?? "")?.[1];
           if (recordedClass && recordedClass!==raceClass) content = "You're already checked in for "+recordedClass+". Check out first to change class.";
         }
-        if (!await refreshDiscordRoster(interaction,guild,service,mapped).catch(()=>false)) {
+        if (!await refreshDiscordRoster(interaction,guild,service,config).catch(()=>false)) {
           content += " The Discord lineup could not refresh. Your response is saved in Race Control.";
         }
       }
