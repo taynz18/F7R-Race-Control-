@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer"><meta name="theme-color" content="#0c111b">
-<title>F7R Race Control · Discord</title><link rel="stylesheet" href="admin.css?v=11"><link rel="icon" type="image/png" sizes="64x64" href="./assets/f7r-favicon.png">
+<title>F7R Race Control · Discord</title><link rel="stylesheet" href="admin.css?v=12"><link rel="icon" type="image/png" sizes="64x64" href="./assets/f7r-favicon.png">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="./dashboard/session.js?v=1"></script><script type="module" src="./dashboard/discord-admin.js?v=reserve-move1"></script></head>
 <body class="discord-desk"><header><a class="brand" href="./"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL</span></a>
 <a class="secondary" href="./">Back to Race Control ↗</a></header><main>
@@ -18,7 +18,14 @@
 <p class="small muted">Choose a game to load its circuits and lineups. Use League setup below to make changes.</p>
 <form id="attendance-form">
 <label for="attendance-game">Game</label>
-<select id="attendance-game" required><option value="">Choose a game</option><option>F1</option><option>F2</option><option>Le Mans Ultimate</option><option>Assetto Corsa Competizione</option></select>
+<select id="attendance-game" required>
+  <button><selectedcontent></selectedcontent></button>
+  <option value="">Choose a game</option>
+  <option value="F1" data-game="f1"><img class="desk-game-logo" src="./assets/teams/f1-2026.png" alt=""><span>F1</span></option>
+  <option value="F2" data-game="f2"><img class="desk-game-logo" src="./assets/teams/f2-2026.png" alt=""><span>F2</span></option>
+  <option value="Le Mans Ultimate" data-game="lmu"><img class="desk-game-logo" src="./assets/teams/game-lmu.png" alt=""><span>Le Mans Ultimate</span></option>
+  <option value="Assetto Corsa Competizione" data-game="acc"><img class="desk-game-logo" src="./assets/teams/game-acc.png" alt=""><span>Assetto Corsa Competizione</span></option>
+</select>
 <label for="attendance-track">Track</label>
 <select id="attendance-track" required><option value="">Choose a game first</option></select>
 <div id="attendance-open-field" hidden>

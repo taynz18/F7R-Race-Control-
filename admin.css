@@ -568,3 +568,55 @@ header, main, footer { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) {
   .discord-desk-nav a { transition: none; }
 }
+
+.discord-desk {
+  --select-accent: #a4b9e0;
+  --select-surface: #131d30;
+}
+.discord-desk #discord-bot select,
+.discord-desk #discord-settings select {
+  background: repeating-linear-gradient(128deg,transparent 0 12px,#ffffff06 13px 14px,transparent 15px 24px),
+    linear-gradient(110deg,color-mix(in srgb,var(--select-accent) 13%,var(--select-surface)),#101725 76%);
+  border-color: color-mix(in srgb,var(--select-accent) 35%,#344056);
+}
+.discord-desk #attendance-form:has(option[data-game="f1"]:checked) { --select-accent: #ff647d; }
+.discord-desk #attendance-form:has(option[data-game="f2"]:checked) { --select-accent: #6dbfff; }
+.discord-desk #attendance-form:has(option[data-game="lmu"]:checked) { --select-accent: #d09bf7; }
+.discord-desk #attendance-form:has(option[data-game="acc"]:checked) { --select-accent: #77d9ab; }
+.discord-desk select option { color: #edf3ff; background: #141e31; }
+@supports (appearance: base-select) {
+  .discord-desk select,
+  .discord-desk select::picker(select) { appearance: base-select; }
+  .discord-desk select::picker(select) {
+    margin-block: .3rem; padding: .35rem; border: 1px solid #42506a; border-radius: .85rem;
+    color: #edf3ff; background: #101827; box-shadow: 0 12px 30px #05080ea0;
+  }
+  .discord-desk select option {
+    padding: .6rem .75rem; border-radius: .5rem; gap: .65rem;
+    color: #edf3ff; background: transparent; white-space: normal;
+  }
+  .discord-desk select option:is(:hover,:focus-visible,:checked) {
+    background: linear-gradient(100deg,color-mix(in srgb,var(--select-accent) 22%,#162237),#202b41);
+  }
+  .discord-desk select option::checkmark { color: var(--select-accent); }
+  .discord-desk #attendance-game option[data-game="f1"] { --select-accent: #ff647d; }
+  .discord-desk #attendance-game option[data-game="f2"] { --select-accent: #6dbfff; }
+  .discord-desk #attendance-game option[data-game="lmu"] { --select-accent: #d09bf7; }
+  .discord-desk #attendance-game option[data-game="acc"] { --select-accent: #77d9ab; }
+  .discord-desk #attendance-game option[data-game],
+  .discord-desk #attendance-game selectedcontent {
+    align-items: center; gap: .65rem;
+  }
+  .discord-desk #attendance-game selectedcontent { display: flex; }
+  .discord-desk .desk-game-logo {
+    width: 62px; height: 24px; flex: none; object-fit: contain;
+    border-radius: .25rem; padding: 0; margin: 0;
+  }
+  .discord-desk img[src$="game-lmu.png"] { object-fit: cover; object-position: top; }
+}
+
+@supports (appearance: base-select) {
+  .discord-desk img[src$="f1-2026.png"],
+  .discord-desk img[src$="f2-2026.png"] { object-fit: cover; object-position: center; }
+  .discord-desk img[src$="f1-2026.png"] { filter: brightness(0) invert(1); }
+}
