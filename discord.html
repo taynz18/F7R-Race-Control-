@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer"><meta name="theme-color" content="#0c111b">
 <title>F7R Race Control · Discord</title><link rel="stylesheet" href="admin.css?v=10"><link rel="icon" href="./assets/f7r-logo.png">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script type="module" src="./dashboard/discord-admin.js?v=2"></script></head>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script type="module" src="./dashboard/discord-admin.js?v=3"></script></head>
 <body class="discord-desk"><header><a class="brand" href="./"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL</span></a>
 <a class="secondary" href="./">Back to Race Control ↗</a></header><main>
 <div class="intro"><p class="eyebrow">DISCORD OPERATIONS</p><h1>Race-day attendance.</h1><p class="lede">Plan check-ins, build your lineups and confirm reserve seats.</p></div>
@@ -26,6 +26,9 @@
 <input id="attendance-round" maxlength="40" placeholder="e.g. Round 3">
 <label for="attendance-time">Race date and time (your local time)</label>
 <input id="attendance-time" type="datetime-local" required>
+<label for="attendance-channel-search">Search Discord channels</label>
+<input id="attendance-channel-search" type="search" placeholder="Type part of a name, e.g. atte" autocomplete="off" aria-describedby="attendance-channel-count">
+<p id="attendance-channel-count" class="small muted" role="status">Load Discord channels to search.</p>
 <label for="attendance-channel">Discord channel</label>
 <select id="attendance-channel" required><option value="">Load Discord channels first</option></select>
 <div id="attendance-tier-field" hidden>

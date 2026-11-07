@@ -53,15 +53,23 @@ let attendanceDraft;
 let emojiDraft;
 let activeRoster;
 let discordBusy = false;
-function fillDiscordOptions(id, rows, prefix) {
-  const select = $(id);
-  const previous = select.value;
-  select.replaceChildren(new Option('Choose an option', ''));
-  for (const row of rows.sort((a, b) => a.name.localeCompare(b.name))) {
-    select.add(new Option(prefix + row.name, row.id));
-  }
-  if (rows.some(row => row.id === previous)) select.value = previous;
+let attendanceChannels = [];
+
+function channelSearchText(value) {
+  const smallCaps = 'ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘꞯʀꜱᴛᴜᴠᴡʏᴢ';
+  const plain = 'abcdefghijklmnopqrstuvwyz';
+  return value.normalize('NFKC').toLowerCase().replace(/[ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘꞯʀꜱᴛᴜᴠᴡʏᴢ]/g, letter => plain[smallCaps.indexOf(letter)]);
 }
+function filterAttendanceChannels() {
+  const search = channelSearchText($('attendance-channel-search').value.trim());
+  const matches = attendanceChannels.filter(channel => channelSearchText(channel.name).includes(search));
+  setChoices('attendance-channel', matches.map(channel => ({id:channel.id,name:'#' + channel.name})),
+    matches.length ? 'Choose a channel' : attendanceChannels.length ? 'No matching channels' : 'Load Discord channels first');
+  $('attendance-channel-count').textContent = attendanceChannels.length
+    ? matches.length + ' of ' + attendanceChannels.length + ' channels'
+    : 'No channels loaded.';
+}
+$('attendance-channel-search').oninput = filterAttendanceChannels;
 async function requestDiscordAttendance(action, details) {
   const {imageFile, ...fields} = details;
   if (action === 'post' && imageFile) {
@@ -92,7 +100,9 @@ async function discordAction(action, details = {}) {
     const data = await requestDiscordAttendance(action, details);
     if (generation !== checkGeneration) return;
     if (action === 'options') {
-      fillDiscordOptions('attendance-channel', data.channels, '#');
+      attendanceChannels = [...data.channels].sort((a,b) => a.name.localeCompare(b.name));
+      filterAttendanceChannels();
+      $('attendance-form').oninput();
       status.textContent = 'Discord channels loaded.';
     } else if (action === 'preview' || action === 'emoji_setup') {
       const isPreview = action === 'preview';
