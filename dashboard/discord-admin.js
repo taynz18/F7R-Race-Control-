@@ -138,7 +138,7 @@ async function discordAction(action, details = {}) {
         let saved = null;
         try { saved = localStorage.getItem(key); } catch {}
         const normalizeEmoji = name => name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const aliases = [normalizeEmoji(team.name), normalizeEmoji(team.logo || team.name)];
+        const aliases = [normalizeEmoji(team.manufacturer || team.name.replace(/^(Hypercar|LMGT3) · /, '')), normalizeEmoji(team.logo || team.name)];
         const suggested = data.emojis.filter(emoji => aliases.includes(normalizeEmoji(emoji.name)));
         const configured = Object.hasOwn(data.savedEmojis, team.name) ? data.savedEmojis[team.name] : saved;
         const selected = configured === null && suggested.length === 1 ? suggested[0].id : configured;

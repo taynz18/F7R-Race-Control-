@@ -24,20 +24,25 @@ Deno.serve(async (req) => {
   const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
   if (!guild || interaction.guild_id !== guild) return privateReply("This check-in is only available in the F7R server.");
   const customId = interaction.data?.custom_id ?? "";
-  const button = interaction.type === 3 && /^f7r-team-(rsvp|out):(\d{10,13})$/.exec(customId);
-  const picker = interaction.type === 5 && /^f7r-f1-car:(\d{10,13})$/.exec(customId);
+  const button = interaction.type === 3 && /^f7r-team-(rsvp|out|hyper|gt3):(\d{10,13})$/.exec(customId);
+  const picker = interaction.type === 5 && /^f7r-(f1|hyper|gt3)-car:(\d{10,13})$/.exec(customId);
   if ((!button && !picker) || interaction.message?.author?.id !== appId || !interaction.member?.user?.id) {
     return privateReply("Open the F7R race check-in and try again.");
   }
-  const deadline = button ? button[2] : picker[1];
+  const deadline = button ? button[2] : picker[2];
   if (Date.now() >= Number(deadline) * 1000) return privateReply("Check-in closed when the race started.");
   const checkingOut = button && button[1] === "out";
   const member = interaction.member;
   const teamEmbed = interaction.message.embeds?.find(embed=>embed.title==="Team roles");
   const isF1 = teamEmbed?.footer?.text === "F1";
+  const choice = button ? button[1] : picker[1];
+  const raceClass = choice==="hyper" ? "Hypercar" : choice==="gt3" ? "LMGT3" : "";
   const mapped = teamEmbed?.fields ?? [];
+  if (raceClass && (teamEmbed?.footer?.text!=="Le Mans Ultimate" || !mapped.some(field=>field.name.startsWith(raceClass+" · ")))) {
+    return privateReply("That class is unavailable for this race.");
+  }
   const matches = mapped.map((field,index)=>({field,index})).filter(({field})=>
-    [...field.value.matchAll(/<@&(\d{17,20})>/g)].some(([,id])=>member.roles.includes(id)));
+    (!raceClass || field.name.startsWith(raceClass+" · ")) && [...field.value.matchAll(/<@&(\d{17,20})>/g)].some(([,id])=>member.roles.includes(id)));
   const eligibility = interaction.message.embeds?.find(embed=>embed.title==="Full-time eligibility");
   const fullTimeId = /^<@&(\d{17,20})>$/.exec(eligibility?.description ?? "")?.[1];
   const eligible = !eligibility || member.roles.includes(fullTimeId);
@@ -45,15 +50,15 @@ Deno.serve(async (req) => {
   if (picker) {
     const selection = interaction.data.components?.find(row=>row.component?.custom_id==="car")?.component.values;
     const chosen = selection?.length === 1 && matches.find(({index})=>String(index)===selection[0]);
-    if (!isF1 || !eligible || !chosen) return privateReply("That car is no longer available to you for this race. Try check-in again.");
+    if ((!isF1 && !raceClass) || !eligible || !chosen) return privateReply("That car is no longer available to you for this race. Try check-in again.");
     team = chosen.field.name;
   } else if (!checkingOut && eligible && matches.length > 1) {
-    if (!isF1) return privateReply("You have two car roles for this lineup. Ask an F7R admin to check them.");
+    if (!isF1 && !raceClass) return privateReply("You have two car roles for this lineup. Ask an F7R admin to check them.");
     return Response.json({type:9,data:{
-      custom_id:"f7r-f1-car:"+deadline, title:"Choose your car for this F1 race",
+      custom_id:"f7r-"+(raceClass ? choice : "f1")+"-car:"+deadline, title:raceClass ? "Choose your "+raceClass+" manufacturer" : "Choose your car for this F1 race",
       components:[{type:18,label:"Which car are you racing in?",component:{
-        type:3,custom_id:"car",placeholder:"Select your F1 team",
-        options:matches.map(({field,index})=>({label:field.name,value:String(index)}))
+        type:3,custom_id:"car",placeholder:raceClass ? "Select your manufacturer" : "Select your F1 team",
+        options:matches.map(({field,index})=>({label:raceClass ? field.name.slice(raceClass.length+3) : field.name,value:String(index)}))
       }}]
     }});
   }
@@ -67,14 +72,23 @@ Deno.serve(async (req) => {
         headers:{apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"},
         body:JSON.stringify({
           p_guild:guild,p_message:interaction.message.id,p_driver:member.user.id,
-          p_name:member.nick || member.user.global_name || member.user.username,p_team:team,
+          p_name:member.nick || member.user.global_name || member.user.username,p_team:team || raceClass || null,
           p_full_time:placement==="Full-time",p_f1:interaction.message.embeds?.some(embed=>embed.title==="Team roles" && ["F1","F2"].includes(embed.footer?.text)) ?? false,
           p_out:Boolean(checkingOut)
         })
       });
       if (result.ok) {
         const outcome = await result.json();
-        content = checkingOut ? outcome + "." : "You're checked in as **" + outcome + "**" + (team ? " · " + team : "") + ".";
+        content = checkingOut ? outcome + "." : "You're checked in as **" + outcome + "**" + (placement === "Full-time" && team ? " · " + team : raceClass ? " · " + raceClass : "") + ".";
+        if (raceClass && !checkingOut) {
+          const query = new URLSearchParams({select:"team",guild_id:"eq."+guild,
+            message_id:"eq."+interaction.message.id,driver_id:"eq."+member.user.id});
+          const recorded = await fetch(Deno.env.get("SUPABASE_URL")+"/rest/v1/f7r_discord_check_ins?"+query,
+            {headers:{apikey:service,Authorization:"Bearer "+service}});
+          const recordedTeam = recorded.ok ? (await recorded.json())[0]?.team : null;
+          const recordedClass = /^(Hypercar|LMGT3)(?: · |$)/.exec(recordedTeam ?? "")?.[1];
+          if (recordedClass && recordedClass!==raceClass) content = "You're already checked in for "+recordedClass+". Check out first to change class.";
+        }
         if (!await refreshDiscordRoster(interaction,guild,service,mapped).catch(()=>false)) {
           content += " The Discord lineup could not refresh. Your response is saved in Race Control.";
         }

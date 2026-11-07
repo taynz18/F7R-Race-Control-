@@ -1,5 +1,5 @@
 const api = "https://discord.com/api/v10";
-function rosterEmbed(rows, mapped, isF1, limit) {
+export function rosterEmbed(rows, mapped, isF1, limit) {
   const clean = value => value.replace(/[\r\n]/g, " ").replace(/[\\*_~\x60|<>\[\]@]/g, "\\$&").slice(0, 90);
   const stamp = (value) => {
     const seconds = Math.floor(Date.parse(value) / 1000);
@@ -7,10 +7,16 @@ function rosterEmbed(rows, mapped, isF1, limit) {
   };
   const live = rows.filter(row=>!row.checked_out_at);
   const lines = [];
+  let previousClass = "";
   for (const field of mapped) {
+    const group = /^(Hypercar|LMGT3) · (.+)$/.exec(field.name);
+    if (group && group[1] !== previousClass) {
+      previousClass = group[1];
+      lines.push("", previousClass === "Hypercar" ? "🟥 **Hypercar**" : "🟧 **LMGT3**");
+    }
     const drivers = live.filter(row=>(row.placement==="Full-time" || row.confirmed_at) && row.team===field.name);
     const emoji = /^<a?:\w+:\d{17,20}>/.exec(field.value)?.[0];
-    lines.push("**"+(emoji ? emoji+" " : "")+clean(field.name)+"**");
+    lines.push("**"+(emoji ? emoji+" " : "")+clean(group?.[2] ?? field.name)+"**");
     if (isF1) {
       for (const seat of [1,2]) {
         const driver = drivers.find(row=>row.seat===seat) ?? drivers.filter(row=>row.seat==null)[seat-1];
@@ -24,7 +30,8 @@ function rosterEmbed(rows, mapped, isF1, limit) {
   const reserves = live.filter(row=>row.placement==="Reserve" && !row.confirmed_at);
   if (!reserves.length) lines.push("None yet");
   for (const driver of reserves) {
-    lines.push("↳ "+clean(driver.driver_name)+(stamp(driver.checked_in_at) ? " · In "+stamp(driver.checked_in_at) : ""));
+    const raceClass = /^(Hypercar|LMGT3)(?: · |$)/.exec(driver.team ?? "")?.[1];
+    lines.push("↳ "+clean(driver.driver_name)+(raceClass ? " · "+raceClass : "")+(stamp(driver.checked_in_at) ? " · In "+stamp(driver.checked_in_at) : ""));
   }
   const confirmed = live.filter(row=>row.confirmed_at);
   if (confirmed.length) {

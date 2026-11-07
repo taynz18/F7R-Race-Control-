@@ -1,4 +1,5 @@
-import { refreshDiscordRoster } from "../_shared/discord-roster.js";
+import { refreshDiscordRoster, rosterEmbed } from "../_shared/discord-roster.js";
+const lmuClasses = {"Hypercar":["Alpine","Aston Martin","BMW","Cadillac","Ferrari","Genesis","Lamborghini","Peugeot","Porsche","Toyota"],"LMGT3":["Aston Martin","BMW","Chevrolet","Ferrari","Ford","Lamborghini","Lexus","McLaren","Porsche"]};
 const f1Teams = [
   ["Mercedes","mercedes"], ["Ferrari","ferrari"], ["Red Bull Racing","red-bull"],
   ["McLaren","mclaren"], ["Alpine","alpine"], ["Aston Martin","aston-martin"],
@@ -192,10 +193,38 @@ Deno.serve(async (request) => {
       }
       return isFormula(game) ? rows : rows.filter(team=>team.ids.length);
     };
+    const isLmu = game==="Le Mans Ultimate";
+    const canonical = name => {
+      const label = normalize(name).replace(/ (?:hypercar|lmgt3|gt3)$/,"");
+      return label==="corvette" || label==="chevrolet corvette" ? "chevrolet" : label;
+    };
+    const buildClassTeams = (teams, scope) => isLmu ? Object.entries(lmuClasses).flatMap(([className, manufacturers]) =>
+      manufacturers.map(name=>{
+        const related = teams.filter(team=>{
+          const qualifier = / (hypercar|lmgt3|gt3)$/.exec(normalize(team.name))?.[1];
+          return canonical(team.name)===canonical(name) &&
+            (!qualifier || (qualifier==="hypercar" ? className==="Hypercar" : className==="LMGT3"));
+        });
+        const ids = related.flatMap(team=>team.ids);
+        if (!config.cars.some(row=>scope && row.lineupRoleId===scope)) {
+          for (const role of roles) {
+            if (config.cars.some(row=>row.roleId===role.id && !row.lineupRoleId)) continue;
+            const label = normalize(role.name);
+            if (label==="genesis" && name==="Genesis" ||
+                / (?:lmu|wec)$/.test(label) && canonical(label.replace(/ (?:lmu|wec)$/,""))===canonical(name)) {
+              ids.push(role.id);
+            }
+          }
+        }
+        const key = className+" · "+name;
+        const sourceEmoji = Object.keys(savedEmojis).find(key=>canonical(key)===canonical(name) && savedEmojis[key]);
+        if (sourceEmoji && !Object.hasOwn(savedEmojis,key)) savedEmojis[key]=savedEmojis[sourceEmoji];
+        return {name:key, manufacturer:name, ids:[...new Set(ids)], logo:related[0]?.logo};
+      })) : teams;
     const validEmojiIds = values => values && typeof values==="object" && !Array.isArray(values) &&
       Object.values(values).every(id=>id==="" || emojis.some(emoji=>emoji.id===id));
     if (input.action === "emoji_setup" || input.action === "emoji_save") {
-      const teams = configuredTeams("");
+      const teams = buildClassTeams(configuredTeams(""), "");
       if (input.action === "emoji_setup") return reply({teams,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
       if (!emojiResponse.ok || !validEmojiIds(input.emojiIds) ||
           Object.keys(input.emojiIds).some(name=>!teams.some(team=>team.name===name))) return reply({error:"Invalid team emoji selection."},400);
@@ -221,7 +250,8 @@ Deno.serve(async (request) => {
       preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
     if (fullTimeRoles.length !== 1) return reply({error:lineupRoleId ? "The saved lineup role is unavailable. Reload attendance settings." : "Expected one Discord role named " + fullTimeRole + "."},400);
     const teams = configuredTeams(!lineupRoleId && typeof tier==="string" ? tier : "", fullTimeRoles[0].id);
-    const mapped = teams.filter(team=>team.ids.length);
+    const classTeams = buildClassTeams(teams, fullTimeRoles[0].id);
+    const mapped = classTeams.filter(team=>team.ids.length);
     if (!mapped.length) {
       const expected = game === "F1" ? "Mercedes or " + tier + " Full Time Mercedes" :
         game === "Le Mans Ultimate" ? "Mercedes LMU" : "Porsche ACC";
@@ -249,7 +279,7 @@ Deno.serve(async (request) => {
       }
       image = {url:imageUrl.href};
     }
-    if (input.action === "preview") return reply({teams,fullTimeRole:fullTimeRoles[0].name,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
+    if (input.action === "preview") return reply({teams:classTeams,fullTimeRole:fullTimeRoles[0].name,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
     const emojiIds = input.emojiIds ?? savedEmojis;
     if (!validEmojiIds(emojiIds)) return reply({error:"A selected emoji is no longer available. Preview the check-in again."},400);
     const teamField = (team) => {
@@ -257,23 +287,24 @@ Deno.serve(async (request) => {
       const prefix = emoji ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+"> " : "";
       return {name:team.name,value:(prefix+team.ids.map(id=>"<@&"+id+">").join(" ")).trim() || "—"};
     };
-    const lineupFields = (isFormula(game) ? teams : mapped).map(teamField);
-    const teamLines = lineupFields.map(field => {
-      const emoji = /^<a?:\w+:\d{17,20}>/.exec(field.value)?.[0];
-      return "**" + (emoji ? emoji + " " : "") + field.name + "**";
-    });
-    const roster = {
-      title:"Live check-in lineup", color:0xf21b32, image,
-      description:["**Full-time checked in:** 0  ·  **Reserves checked in:** 0","",...teamLines,"","**Reserves**","None yet","**Checked out**","None yet"].join("\n")
-    };
+    const lineupFields = (isFormula(game) || isLmu ? classTeams : mapped).map(teamField);
+    const roster = {...rosterEmbed([],lineupFields,isFormula(game),4096),image};
     const time = Math.floor(startsAt/1000);
+    const classEmoji = (name) => {
+      const match = emojis.find(emoji=>normalize(emoji.name).replaceAll(" ","")===name.toLowerCase());
+      return match ? {id:match.id,name:match.name,animated:Boolean(match.animated)} : {name:name==="Hypercar"?"🟥":"🟧"};
+    };
+    const checkInButtons = isLmu ? [
+      {type:2,style:3,label:"Check in · Hypercar",emoji:classEmoji("Hypercar"),custom_id:"f7r-team-hyper:"+time},
+      {type:2,style:3,label:"Check in · LMGT3",emoji:classEmoji("LMGT3"),custom_id:"f7r-team-gt3:"+time}
+    ] : [{type:2,style:3,label:"Participating",custom_id:"f7r-team-rsvp:"+time}];
     const payload = {
       content:"**F7R race check-in**\n**Race & round:** " + game + " · " + track.trim() + (round.trim() ? " · "+round.trim() : "") + (customLineup ? " · "+customLineup.name : "") +
         "\n**Date and time:** <t:" + time + ":F>\n**Full-time role:** <@&"+fullTimeRoles[0].id+">" +
         (notes.trim() ? "\n"+notes.trim() : ""),
       allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
       embeds:[roster,{title:"Team roles",footer:{text:game},fields:lineupFields},{title:"Full-time eligibility",description:"<@&"+fullTimeRoles[0].id+">"}],
-      components:[{type:1,components:[{type:2,style:3,label:"Participating",custom_id:"f7r-team-rsvp:"+time},{type:2,style:4,label:"Check out",custom_id:"f7r-team-out:"+time}]}]
+      components:[{type:1,components:[...checkInButtons,{type:2,style:4,label:"Check out",custom_id:"f7r-team-out:"+time}]}]
     };
     let body = JSON.stringify(payload);
     let headers = discordHeaders;
