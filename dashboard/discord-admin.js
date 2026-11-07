@@ -1,4 +1,5 @@
 import { CIRCUITS } from './circuits.js';
+import { TEAMS } from './teams.js';
 const $ = id => document.getElementById(id);
 let client, verified = false, checkGeneration = 0;
 const message = value => { $('message').textContent = value || ''; };
@@ -48,6 +49,17 @@ async function start() {
 }
 start();
 
+const attendanceColours = [
+  ...Object.values(TEAMS).filter(team => team.key !== 'unknown').map(team => [team.name, team.color]),
+  ['BMW','#87b7ff'], ['Porsche','#f4c96f'], ['Lexus','#9bde81'], ['Ford','#6ebdff'],
+  ['Nissan','#f37b9a'], ['Lamborghini','#f8cc57'], ['Chevrolet','#ffb55e'],
+  ['Genesis','#ca9bf6'], ['Peugeot','#a5baff'], ['Toyota','#ff7384']
+].sort((a,b) => b[0].length-a[0].length);
+function attendanceColour(name) {
+  const label = (name || '').replace(/^(Hypercar|LMGT3|GT3) · /, '').toLowerCase();
+  return attendanceColours.find(([team]) => label === team.toLowerCase() ||
+    label.startsWith(team.toLowerCase() + ' ') || label.startsWith(team.toLowerCase() + '-'))?.[1];
+}
 const attendanceBrandLogos = new Map([['bmw', 'bmw'], ['porsche', 'porsche'], ['mercedes', 'mercedes']]);
 let attendanceDraft;
 let emojiDraft;
@@ -121,6 +133,8 @@ async function discordAction(action, details = {}) {
       teams.replaceChildren();
       for (const team of data.teams) {
         const item = document.createElement('li');
+        const colour = attendanceColour(team.name);
+        if (colour) item.style.setProperty('--team-colour', colour);
         const brandLogo = team.logo || attendanceBrandLogos.get(team.name.toLowerCase());
         if (brandLogo) {
           const logo = document.createElement('img');
@@ -129,7 +143,17 @@ async function discordAction(action, details = {}) {
           logo.alt = '';
           item.append(logo);
         }
-        item.append(' ' + team.name + (isPreview && !data.openEntry ? (team.ids.length ? ' · Role matched' : ' · Role missing') : ''));
+        const teamLabel = document.createElement('strong');
+        teamLabel.className = 'attendance-team-label';
+        teamLabel.textContent = team.name;
+        item.append(teamLabel);
+        if (isPreview && !data.openEntry) {
+          const badge = document.createElement('small');
+          badge.className = 'attendance-role-badge';
+          badge.dataset.matched = String(Boolean(team.ids.length));
+          badge.textContent = team.ids.length ? 'Role matched' : 'Role missing';
+          item.append(badge);
+        }
         const picker = document.createElement('select');
         picker.setAttribute('aria-label', 'Discord emoji for ' + team.name);
         picker.add(new Option('No Discord emoji', ''));
@@ -197,6 +221,10 @@ async function discordAction(action, details = {}) {
           if (group.name === 'Confirmed reserves') return Boolean(row.confirmed_at);
           return (row.placement === 'Full-time' || row.confirmed_at) && row.team === group.name;
         });
+        const card = document.createElement('section');
+        card.className = 'attendance-team-card';
+        const teamColour = attendanceColour(group.name);
+        if (teamColour) card.style.setProperty('--team-colour', teamColour);
         const heading = document.createElement('h4');
         const brandLogo = group.logo || attendanceBrandLogos.get(group.name.toLowerCase());
         if (brandLogo) {
@@ -214,7 +242,14 @@ async function discordAction(action, details = {}) {
           const item = document.createElement('li');
           const label = f1Team ? (index < 2 ? 'Seat ' + (index + 1) + ' · ' : 'Additional check-in · ') : '';
           const driver = f1Team ? drivers.find(row => row.seat === index + 1) ?? drivers.filter(row => row.seat == null)[index] : drivers[index];
-          item.textContent = label + (driver?.driver_name || 'Awaiting check-in');
+          item.append(label);
+          const driverName = document.createElement('span');
+          driverName.className = 'attendance-driver-name';
+          driverName.textContent = driver?.driver_name || 'Awaiting check-in';
+          const driverColour = driver && !driver.checked_out_at && (driver.placement==='Full-time' || driver.confirmed_at)
+            ? attendanceColour(driver.team) : null;
+          if (driverColour) driverName.style.setProperty('--driver-colour',driverColour);
+          item.append(driverName);
           for (const [caption, value] of [['In', driver?.checked_in_at], ['Out', driver?.checked_out_at]]) {
             if (!value) continue;
             const stamp = document.createElement('time');
@@ -242,7 +277,8 @@ async function discordAction(action, details = {}) {
           }
           list.append(item);
         }
-        roster.append(heading, list);
+        card.append(heading, list);
+        roster.append(card);
       }
       status.textContent = 'Roster loaded.';
     }

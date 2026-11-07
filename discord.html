@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer"><meta name="theme-color" content="#0c111b">
-<title>F7R Race Control · Discord</title><link rel="stylesheet" href="admin.css?v=10"><link rel="icon" href="./assets/f7r-logo.png">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script type="module" src="./dashboard/discord-admin.js?v=6"></script></head>
+<title>F7R Race Control · Discord</title><link rel="stylesheet" href="admin.css?v=11"><link rel="icon" href="./assets/f7r-logo.png">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script type="module" src="./dashboard/discord-admin.js?v=7"></script></head>
 <body class="discord-desk"><header><a class="brand" href="./"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL</span></a>
 <a class="secondary" href="./">Back to Race Control ↗</a></header><main>
 <div class="intro"><p class="eyebrow">DISCORD OPERATIONS</p><h1>Race-day attendance.</h1><p class="lede">Plan check-ins, build your lineups and confirm reserve seats.</p></div>
@@ -10,6 +10,7 @@
 <form id="login-form"><label for="email">Email address</label><input id="email" type="email" autocomplete="username" required placeholder="you@yourleague.com"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required placeholder="Enter your password"><button id="sign-in" class="primary" disabled>Enter race control <span aria-hidden="true">↗</span></button></form><p class="small login-note"><span aria-hidden="true">◈</span> Reserved for approved race admins.</p></section>
 
 <div id="console" hidden><div class="console-heading"><div><p class="eyebrow">ADMIN WORKSPACE</p><h2>Discord control desk</h2></div><button id="sign-out" class="secondary">Sign out</button></div>
+<nav class="discord-desk-nav" aria-label="Discord workspace"><a href="#discord-bot">New check-in</a><a href="#attendance-roster">Live roster</a><a href="#discord-settings">League setup</a></nav>
 <section class="card" id="discord-bot">
 <p class="eyebrow">DISCORD BOT DASHBOARD</p><h2>Driver attendance</h2>
 <p class="small muted">Prepare a check-in, preview it here and post only when you're ready. Check-in closes when the race starts.</p>

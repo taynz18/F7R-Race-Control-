@@ -508,3 +508,63 @@ header, main, footer { position: relative; z-index: 1; }
 }
 #discord-settings :is(button, ul, h3) { margin-top: .75rem; }
 #discord-settings li { margin-bottom: .55rem; }
+
+.discord-desk {
+  --desk-gold: #efc76a;
+  background: radial-gradient(ellipse at 85% 6%, #302039 0, transparent 32rem),
+    radial-gradient(ellipse at 3% 25%, #14253d 0, transparent 34rem), #0b101b;
+}
+.discord-desk .intro {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+  padding-inline: clamp(1.2rem, 5vw, 3.5rem);
+  border: 1px solid #47404d;
+  border-radius: 1.2rem;
+  background: linear-gradient(110deg, #141e30 24%, #241c2e 70%, #362136);
+}
+.discord-desk .intro::after {
+  position: absolute; content: ""; z-index: -1; inset: 0 0 0 45%;
+  background: repeating-linear-gradient(125deg, transparent 0 18px, #efc76a13 19px 20px, transparent 21px 35px);
+  mask-image: linear-gradient(to right,transparent,#000);
+  pointer-events: none;
+}
+.discord-desk .intro .eyebrow { color: var(--desk-gold); }
+.discord-desk-nav { display: flex; flex-wrap: wrap; gap: .65rem; margin: 0 0 1.25rem; }
+.discord-desk-nav a {
+  color: #e3ebfa; text-decoration: none; background: #151f30;
+  border: 1px solid #35445e; padding: .65rem 1rem; border-radius: 999px;
+  transition: border-color .16s, background-color .16s;
+}
+.discord-desk-nav a:is(:hover,:focus-visible) { border-color: var(--desk-gold); background: #222940; }
+.discord-desk #discord-bot, .discord-desk #discord-settings {
+  border-top: 2px solid var(--desk-gold);
+  background: linear-gradient(145deg,#161f31,#101725);
+}
+.discord-desk #attendance-open-entry { width: auto; min-height: 0; accent-color: var(--desk-gold); }
+.discord-desk #attendance-teams {
+  list-style: none; padding: 0; display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(min(100%,245px),1fr)); gap: .65rem;
+}
+.discord-desk #attendance-teams li, .attendance-team-card {
+  border: 1px solid #35445e; border-inline-start: 3px solid var(--team-colour,#536683);
+  background: linear-gradient(115deg,color-mix(in srgb,var(--team-colour,#536683) 11%,#121a29),#111827);
+  border-radius: .75rem; padding: .75rem; overflow-wrap: anywhere;
+}
+.discord-desk #attendance-teams select { margin-block: .55rem .15rem; }
+.attendance-team-label, .attendance-team-card h4 { color: var(--team-colour,#eaf0fa); }
+.attendance-role-badge {
+  display: inline-block; border-radius: 999px; margin: .35rem .2rem; padding: .15rem .45rem;
+  background: #33263b; color: #f5b8da;
+}
+.attendance-role-badge[data-matched="true"] { background: #123530; color: #91eed0; }
+.discord-desk #attendance-drivers:not(:empty) {
+  display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,260px),1fr)); gap: .75rem;
+}
+.attendance-team-card h4 { display: flex; align-items: center; gap: .35rem; margin: 0 0 .55rem; }
+.attendance-team-card ul { margin: 0; padding-inline-start: 1.1rem; }
+.attendance-driver-name { color: var(--driver-colour,#e5ebf6); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  .discord-desk-nav a { transition: none; }
+}
