@@ -1,12 +1,12 @@
 const api = "https://discord.com/api/v10";
-const classEmojiNames = {Hypercar:["hypercar","lmh","hypercarlogo","officialhypercar"],LMGT3:["gt3","lmgt3","gt3logo","lmgt3logo","officiallmgt3"]};
+const classEmojiNames = {Reserve:["reserve"],Hypercar:["hypercar","lmh","hypercarlogo","officialhypercar"],LMGT3:["gt3","lmgt3","gt3logo","lmgt3logo","officiallmgt3"]};
 export function classEmojiFor(emojis, className) {
   for (const name of classEmojiNames[className]) {
     const emoji = emojis.find(item=>item.available!==false && !item.roles?.length &&
       item.id && item.name.toLowerCase().replaceAll("_","")===name);
     if (emoji) return {id:emoji.id,name:emoji.name,animated:Boolean(emoji.animated)};
   }
-  return {name:className==="Hypercar"?"🟥":"🟧"};
+  return {name:className==="Reserve"?"🟨":className==="Hypercar"?"🟥":"🟧"};
 }
 export function classEmojiText(emoji) {
   return emoji.id ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+">" : emoji.name;
@@ -25,6 +25,7 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
   const live = rows.filter(row=>!row.checked_out_at);
   const totals = "**Full-time checked in:** "+live.filter(row=>row.placement==="Full-time").length+
     "  ·  **Reserves checked in:** "+live.filter(row=>row.placement==="Reserve").length;
+  const reserveIcon = classIcons.Reserve || "🟨";
   const raceClass = team => /^(Hypercar|LMGT3)(?: · |$)/.exec(team ?? "")?.[1];
   if (mapped.some(field=>raceClass(field.name))) {
     const active = live.filter(row=>row.placement==="Full-time" || row.confirmed_at);
@@ -50,7 +51,7 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
       });
       return {name:icon+" "+className+" ("+drivers.length+")",inline:true,value:fieldValue(manufacturers)};
     });
-    fields.push({name:"🟨 Reserves ("+waiting.length+")",inline:true,value:fieldValue(waiting.map(driver=>{
+    fields.push({name:reserveIcon+" Reserves ("+waiting.length+")",inline:true,value:fieldValue(waiting.map(driver=>{
       const className = raceClass(driver.team);
       const time = stamp(driver.checked_in_at);
       return clean(driver.driver_name)+(className ? " · "+className : "")+(time ? " · "+time : "");
@@ -59,7 +60,7 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
       ...active.filter(row=>row.confirmed_at).map(row=>clean(row.driver_name)+" → "+clean(row.team)),
       ...checkedOut.map(row=>clean(row.driver_name)+(stamp(row.checked_in_at) ? " · In "+stamp(row.checked_in_at) : "")+" · Out "+stamp(row.checked_out_at))
     ];
-    if (changes.length) fields.push({name:"Confirmed reserves and check-outs",value:fieldValue(changes)});
+    if (changes.length) fields.push({name:reserveIcon+" Confirmed reserves and check-outs",value:fieldValue(changes)});
     return {title:"Live check-in lineup",color:0xf21b32,description:totals,fields};
   }
   const lines = [];
@@ -76,7 +77,7 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
       for (const driver of drivers) lines.push("↳ "+clean(driver.driver_name));
     }
   }
-  lines.push("**Reserves**");
+  lines.push(reserveIcon+" **Reserves**");
   const reserves = live.filter(row=>row.placement==="Reserve" && !row.confirmed_at);
   if (!reserves.length) lines.push("None yet");
   for (const driver of reserves) {
@@ -84,7 +85,7 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
   }
   const confirmed = live.filter(row=>row.confirmed_at);
   if (confirmed.length) {
-    lines.push("**Confirmed reserves**");
+    lines.push(reserveIcon+" **Confirmed reserves**");
     for (const driver of confirmed) lines.push("↳ "+clean(driver.driver_name)+" → "+clean(driver.team));
   }
   const departed = rows.filter(row=>row.checked_out_at);
@@ -151,12 +152,21 @@ export async function refreshDiscordRoster(interaction, guild, service, config) 
   const classButtons = originalComponents.flatMap(row=>row.components ?? []).filter(buttonClass);
   let components;
   const classIcons = {...config.classIcons};
+  let emojiRequest;
+  const loadEmojis = () => emojiRequest ??= fetch(api+"/guilds/"+guild+"/emojis",{
+    headers:{Authorization:"Bot "+token},signal:AbortSignal.timeout(2000)
+  }).then(response=>response.ok ? response.json() : []).catch(()=>[]);
+  if (!classIcons.Reserve?.startsWith("<")) {
+    const currentRoster = interaction.message.embeds?.find(embed=>embed.title==="Live check-in lineup");
+    const existing = [currentRoster?.description ?? "", ...(currentRoster?.fields ?? []).map(field=>field.name)]
+      .join("\n").match(/<a?:reserve:\d{17,20}>/i)?.[0];
+    classIcons.Reserve = existing ?? classEmojiText(classEmojiFor(await loadEmojis(),"Reserve"));
+  }
   if (config.game==="Le Mans Ultimate" && classButtons.length) {
     if (classButtons.some(button=>button.emoji?.name?.toLowerCase()!==classEmojiNames[buttonClass(button)][0])) {
       try {
-        const result = await fetch(api+"/guilds/"+guild+"/emojis",{headers:{Authorization:"Bot "+token},signal:AbortSignal.timeout(2000)});
-        if (result.ok) {
-          const emojis = await result.json();
+        const emojis = await loadEmojis();
+        if (emojis.length) {
           components = originalComponents.map(row=>({...row,components:row.components.map(button=>{
             const className = buttonClass(button);
             if (!className) return button;

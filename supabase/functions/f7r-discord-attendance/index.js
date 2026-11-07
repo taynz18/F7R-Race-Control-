@@ -289,7 +289,7 @@ Deno.serve(async (request) => {
     const lineupFields = (isFormula(game) || isLmu ? classTeams : mapped).map(teamField);
     const time = Math.floor(startsAt/1000);
     const classEmoji = name => classEmojiFor(emojis,name);
-    const classIcons = Object.fromEntries(["Hypercar","LMGT3"].map(name=>[name,classEmojiText(classEmoji(name))]));
+    const classIcons = Object.fromEntries(["Hypercar","LMGT3","Reserve"].map(name=>[name,classEmojiText(classEmoji(name))]));
     const roster = {...rosterEmbed([],lineupFields,isFormula(game),4096,classIcons),image};
     if (!await savePostConfig(guild,nonce,{game,fields:lineupFields,fullTimeId:fullTimeRoles[0].id,classIcons},service)) {
       return reply({error:"Could not save the check-in role mappings."},502);
