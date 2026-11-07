@@ -1,5 +1,5 @@
 const api = "https://discord.com/api/v10";
-const classEmojiNames = {Reserve:["reserve"],Hypercar:["hypercar","lmh","hypercarlogo","officialhypercar"],LMGT3:["gt3","lmgt3","gt3logo","lmgt3logo","officiallmgt3"]};
+const classEmojiNames = {GT3:["gt3","gt3logo"],Reserve:["reserve"],Hypercar:["hypercar","lmh","hypercarlogo","officialhypercar"],LMGT3:["gt3","lmgt3","gt3logo","lmgt3logo","officiallmgt3"]};
 export function classEmojiFor(emojis, className) {
   for (const name of classEmojiNames[className]) {
     const emoji = emojis.find(item=>item.available!==false && !item.roles?.length &&
@@ -26,7 +26,7 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
   const totals = "**Full-time checked in:** "+live.filter(row=>row.placement==="Full-time").length+
     "  ·  **Reserves checked in:** "+live.filter(row=>row.placement==="Reserve").length;
   const reserveIcon = classIcons.Reserve || "🟨";
-  const raceClass = team => /^(Hypercar|LMGT3)(?: · |$)/.exec(team ?? "")?.[1];
+  const raceClass = team => /^(Hypercar|LMGT3|GT3)(?: · |$)/.exec(team ?? "")?.[1];
   if (mapped.some(field=>raceClass(field.name))) {
     const active = live.filter(row=>row.placement==="Full-time" || row.confirmed_at);
     const waiting = live.filter(row=>row.placement==="Reserve" && !row.confirmed_at);
@@ -40,16 +40,28 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}) {
       const note = "More in Race Control.";
       return value.slice(0,Math.max(0,valueLimit-note.length-1)).split("\n").slice(0,-1).concat(note).join("\n");
     };
-    const fields = [["LMGT3",classIcons.LMGT3 || "🟧"],["Hypercar",classIcons.Hypercar || "🟥"]].map(([className, icon])=>{
-      const drivers = active.filter(row=>raceClass(row.team)===className);
-      const manufacturers = mapped.filter(field=>raceClass(field.name)===className).flatMap(field=>{
+    const gt3 = mapped.filter(field=>raceClass(field.name)==="GT3");
+    const midpoint = Math.ceil(gt3.length/2);
+    const groups = gt3.length ? [
+      ["GT3",classIcons.GT3 || "🟧",gt3.slice(0,midpoint)],
+      ["GT3",classIcons.GT3 || "🟧",gt3.slice(midpoint)]
+    ] : [
+      ["LMGT3",classIcons.LMGT3 || "🟧",mapped.filter(field=>raceClass(field.name)==="LMGT3")],
+      ["Hypercar",classIcons.Hypercar || "🟥",mapped.filter(field=>raceClass(field.name)==="Hypercar")]
+    ];
+    const fields = groups.map(([className,icon,cars],index)=>{
+      const manufacturers = [];
+      let count = 0;
+      for (const field of cars) {
         const emoji = /^<a?:\w+:\d{17,20}>/.exec(field.value)?.[0];
         const car = clean(field.name.slice(className.length+3));
-        const teamDrivers = drivers.filter(driver=>driver.team===field.name);
-        return ["**"+(emoji ? emoji+" " : "")+car+"**", ...teamDrivers.map(driver=>
-          "↳ "+clean(driver.driver_name)+(driver.confirmed_at ? " · Reserve" : ""))];
-      });
-      return {name:icon+" "+className+" ("+drivers.length+")",inline:true,value:fieldValue(manufacturers)};
+        const drivers = active.filter(driver=>driver.team===field.name);
+        count += drivers.length;
+        manufacturers.push("**"+(emoji ? emoji+" " : "")+car+"**",
+          ...drivers.map(driver=>"↳ "+clean(driver.driver_name)+(driver.confirmed_at ? " · Reserve" : "")));
+      }
+      const label = className+(gt3.length && index===1 ? " · continued" : "");
+      return {name:icon+" "+label+" ("+count+")",inline:true,value:fieldValue(manufacturers)};
     });
     fields.push({name:reserveIcon+" Reserves ("+waiting.length+")",inline:true,value:fieldValue(waiting.map(driver=>{
       const className = raceClass(driver.team);

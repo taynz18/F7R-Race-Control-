@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
   if (!guild || interaction.guild_id !== guild) return privateReply("This check-in is only available in the F7R server.");
   const customId = interaction.data?.custom_id ?? "";
   const button = interaction.type === 3 && /^f7r-team-(rsvp|out|hyper|gt3):(\d{10,13})(?::[a-f0-9]{24})?$/.exec(customId);
-  const picker = interaction.type === 5 && /^f7r-(f1|hyper|gt3)-car:(\d{10,13})$/.exec(customId);
+  const picker = interaction.type === 5 && /^f7r-(f1|hyper|gt3|acc)-car:(\d{10,13})$/.exec(customId);
   if ((!button && !picker) || interaction.message?.author?.id !== appId || !interaction.member?.user?.id) {
     return privateReply("Open the F7R race check-in and try again.");
   }
@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
   const config = await readPostConfig(interaction.message,guild,service).catch(()=>null);
   if (!config) return privateReply("The check-in settings could not load. Please try again.");
   const isF1 = config.game === "F1";
+  const isAcc = config.game?.startsWith("Assetto Corsa") && config.fields.some(field=>field.name.startsWith("GT3 · "));
   const choice = button ? button[1] : picker[1];
   const raceClass = choice==="hyper" ? "Hypercar" : choice==="gt3" ? "LMGT3" : "";
   const mapped = config.fields;
@@ -50,15 +51,16 @@ Deno.serve(async (req) => {
   if (picker) {
     const selection = interaction.data.components?.find(row=>row.component?.custom_id==="car")?.component.values;
     const chosen = selection?.length === 1 && matches.find(({index})=>String(index)===selection[0]);
-    if ((!isF1 && !raceClass) || !eligible || !chosen) return privateReply("That car is no longer available to you for this race. Try check-in again.");
+    if ((picker[1]==="acc" ? !isAcc : !isF1 && !raceClass) || !eligible || !chosen) return privateReply("That car is no longer available to you for this race. Try check-in again.");
     team = chosen.field.name;
   } else if (!checkingOut && eligible && matches.length > 1) {
-    if (!isF1 && !raceClass) return privateReply("You have two car roles for this lineup. Ask an F7R admin to check them.");
+    if (!isF1 && !raceClass && !isAcc) return privateReply("You have two car roles for this lineup. Ask an F7R admin to check them.");
+    if (matches.length > 25) return privateReply("You have too many matching car roles. Ask an F7R admin to check them.");
     return Response.json({type:9,data:{
-      custom_id:"f7r-"+(raceClass ? choice : "f1")+"-car:"+deadline, title:raceClass ? "Choose your "+raceClass+" manufacturer" : "Choose your car for this F1 race",
+      custom_id:"f7r-"+(raceClass ? choice : isAcc ? "acc" : "f1")+"-car:"+deadline, title:raceClass ? "Choose your "+raceClass+" manufacturer" : isAcc ? "Choose your ACC GT3 model" : "Choose your car for this F1 race",
       components:[{type:18,label:"Which car are you racing in?",component:{
-        type:3,custom_id:"car",placeholder:raceClass ? "Select your manufacturer" : "Select your F1 team",
-        options:matches.map(({field,index})=>({label:raceClass ? field.name.slice(raceClass.length+3) : field.name,value:String(index)}))
+        type:3,custom_id:"car",placeholder:raceClass ? "Select your manufacturer" : isAcc ? "Select your GT3 model" : "Select your F1 team",
+        options:matches.map(({field,index})=>({label:raceClass ? field.name.slice(raceClass.length+3) : isAcc ? field.name.slice(6) : field.name,value:String(index)}))
       }}]
     }});
   }

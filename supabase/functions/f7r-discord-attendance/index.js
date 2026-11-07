@@ -1,4 +1,5 @@
 import { refreshDiscordRoster, rosterEmbed, readPostConfig, savePostConfig, classEmojiFor, classEmojiText } from "../_shared/discord-roster.js";
+const accModels = [["Aston Martin V8 Vantage GT3","Aston Martin"],["Aston Martin V12 Vantage GT3","Aston Martin"],["Audi R8 LMS GT3","Audi"],["Audi R8 LMS GT3 Evo","Audi"],["Audi R8 LMS GT3 Evo II","Audi"],["Bentley Continental GT3 (2015)","Bentley"],["Bentley Continental GT3 (2018)","Bentley"],["BMW M4 GT3","BMW"],["BMW M6 GT3","BMW"],["Ferrari 296 GT3","Ferrari"],["Ferrari 488 GT3","Ferrari"],["Ferrari 488 GT3 Evo","Ferrari"],["Ford Mustang GT3","Ford"],["Honda NSX GT3","Honda"],["Honda NSX GT3 Evo","Honda"],["Jaguar Emil Frey G3","Jaguar"],["Lamborghini Huracán GT3","Lamborghini"],["Lamborghini Huracán GT3 Evo","Lamborghini"],["Lamborghini Huracán GT3 Evo2","Lamborghini"],["Lexus RC F GT3","Lexus"],["McLaren 650S GT3","McLaren"],["McLaren 720S GT3","McLaren"],["McLaren 720S GT3 Evo","McLaren"],["Mercedes-AMG GT3 (2015)","Mercedes"],["Mercedes-AMG GT3 Evo","Mercedes"],["Nissan GT-R Nismo GT3 (2015)","Nissan"],["Nissan GT-R Nismo GT3 (2018)","Nissan"],["Porsche 911 GT3 R (991)","Porsche"],["Porsche 911 GT3 R (991 II)","Porsche"],["Porsche 911 GT3 R (992)","Porsche"],["Reiter R-EX GT3","Reiter"]];
 const lmuClasses = {"Hypercar":["Alpine","Aston Martin","BMW","Cadillac","Ferrari","Genesis","Lamborghini","Peugeot","Porsche","Toyota"],"LMGT3":["Aston Martin","BMW","Chevrolet","Ferrari","Ford","Lamborghini","Lexus","McLaren","Porsche"]};
 const f1Teams = [
   ["Mercedes","mercedes"], ["Ferrari","ferrari"], ["Red Bull Racing","red-bull"],
@@ -148,7 +149,7 @@ Deno.serve(async (request) => {
     if (!configResponse.ok) return reply({error:"Could not load attendance settings."},502);
     const defaults = {circuits:[],lineups:[],cars:[]};
     const config = (await configResponse.json())[0]?.settings ?? defaults;
-    if (input.action === "game_settings") return reply({config,roles,emojis});
+    if (input.action === "game_settings") return reply({config,roles,emojis,models:game.startsWith("Assetto Corsa") ? accModels.map(([name])=>name) : []});
     if (input.action === "save_game_settings") {
       const settings = input.settings;
       const label = (value, max) => typeof value==="string" && value.trim().length>0 && value.length<=max;
@@ -220,10 +221,37 @@ Deno.serve(async (request) => {
         if (sourceEmoji && !Object.hasOwn(savedEmojis,key)) savedEmojis[key]=savedEmojis[sourceEmoji];
         return {name:key, manufacturer:name, ids:[...new Set(ids)], logo:related[0]?.logo};
       })) : teams;
+    const isAcc = game.startsWith("Assetto Corsa");
+    const accKey = value => normalize(value.normalize("NFKD").replace(/\p{M}/gu,""))
+      .replace(/ acc$/,"").replace(/\bgt3\b/g,"").replaceAll(" ","");
+    const buildAccTeams = (teams) => {
+      const manufacturers = [...new Set(accModels.map(([,brand])=>brand))];
+      const metadata = new Map(accModels.map(([name,brand])=>[accKey(name),{name,brand,ids:[]}]));
+      for (const team of teams) {
+        const key = accKey(team.name);
+        if (manufacturers.some(brand=>accKey(brand)===key)) continue;
+        const explicit = config.cars.some(row=>accKey(row.name)===key && team.ids.includes(row.roleId));
+        const model = metadata.get(key);
+        if (!model && !explicit) continue;
+        if (!model) metadata.set(key,{name:team.name,brand:manufacturers.find(brand=>normalize(team.name).startsWith(normalize(brand))) ?? team.name,ids:[]});
+        metadata.get(key).ids.push(...team.ids);
+        if (savedEmojis[team.name]) savedEmojis["GT3 · "+metadata.get(key).name] ??= savedEmojis[team.name];
+      }
+      return [...metadata.values()].map(({name,brand,ids})=>{
+        const key = "GT3 · "+name;
+        const manufacturerEmoji = Object.keys(savedEmojis).find(label=>accKey(label)===accKey(brand) && savedEmojis[label]);
+        const suggested = emojis.find(emoji=>accKey(emoji.name)===accKey(brand));
+        if (!Object.hasOwn(savedEmojis,key) && (manufacturerEmoji || suggested)) {
+          savedEmojis[key] = manufacturerEmoji ? savedEmojis[manufacturerEmoji] : suggested.id;
+        }
+        return {name:key,manufacturer:brand,ids:[...new Set(ids)]};
+      });
+    };
+    const buildRaceTeams = teams => isAcc ? buildAccTeams(teams) : buildClassTeams(teams);
     const validEmojiIds = values => values && typeof values==="object" && !Array.isArray(values) &&
       Object.values(values).every(id=>id==="" || emojis.some(emoji=>emoji.id===id));
     if (input.action === "emoji_setup" || input.action === "emoji_save") {
-      const teams = buildClassTeams(configuredTeams(""));
+      const teams = buildRaceTeams(configuredTeams(""));
       if (input.action === "emoji_setup") return reply({teams,emojis,emojiAvailable:emojiResponse.ok,savedEmojis});
       if (!emojiResponse.ok || !validEmojiIds(input.emojiIds) ||
           Object.keys(input.emojiIds).some(name=>!teams.some(team=>team.name===name))) return reply({error:"Invalid team emoji selection."},400);
@@ -249,14 +277,15 @@ Deno.serve(async (request) => {
       preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
     if (fullTimeRoles.length !== 1) return reply({error:lineupRoleId ? "The saved lineup role is unavailable. Reload attendance settings." : "Expected one Discord role named " + fullTimeRole + "."},400);
     const teams = configuredTeams(!lineupRoleId && typeof tier==="string" ? tier : "", fullTimeRoles[0].id);
-    const classTeams = buildClassTeams(teams);
+    const classTeams = buildRaceTeams(teams);
     const mapped = classTeams.filter(team=>team.ids.length);
-    if (!mapped.length) {
+    if (!mapped.length && (!isAcc || input.action === "post")) {
+      if (isAcc) return reply({error:"Map at least one ACC Discord role to a specific GT3 model in League setup."},400);
       const expected = game === "F1" ? "Mercedes or " + tier + " Full Time Mercedes" :
         game === "Le Mans Ultimate" ? "Mercedes LMU" : "Porsche ACC";
       return reply({error:"No Discord team roles matched " + game + ". Expected a role such as " + expected + "."},400);
     }
-    if (mapped.length > 25 || mapped.some(team=>team.ids.join(",").length>950)) {
+    if ((!isAcc && mapped.length > 25) || mapped.some(team=>team.ids.join(",").length>950)) {
       return reply({error:"Too many team roles to fit in one Discord check-in."},400);
     }
     if (typeof round!=="string" || round.length>40) return reply({error:"Keep the round label under 40 characters."},400);
@@ -286,10 +315,10 @@ Deno.serve(async (request) => {
       const prefix = emoji ? "<"+(emoji.animated?"a":"")+":"+emoji.name+":"+emoji.id+"> " : "";
       return {name:team.name,value:(prefix+team.ids.map(id=>"<@&"+id+">").join(" ")).trim() || "—"};
     };
-    const lineupFields = (isFormula(game) || isLmu ? classTeams : mapped).map(teamField);
+    const lineupFields = (isFormula(game) || isLmu || isAcc ? classTeams : mapped).map(teamField);
     const time = Math.floor(startsAt/1000);
     const classEmoji = name => classEmojiFor(emojis,name);
-    const classIcons = Object.fromEntries(["Hypercar","LMGT3","Reserve"].map(name=>[name,classEmojiText(classEmoji(name))]));
+    const classIcons = Object.fromEntries(["Hypercar","LMGT3","GT3","Reserve"].map(name=>[name,classEmojiText(classEmoji(name))]));
     const roster = {...rosterEmbed([],lineupFields,isFormula(game),4096,classIcons),image};
     if (!await savePostConfig(guild,nonce,{game,fields:lineupFields,fullTimeId:fullTimeRoles[0].id,classIcons},service)) {
       return reply({error:"Could not save the check-in role mappings."},502);
@@ -297,7 +326,7 @@ Deno.serve(async (request) => {
     const checkInButtons = isLmu ? [
       {type:2,style:2,label:"Check in · Hypercar",emoji:classEmoji("Hypercar"),custom_id:"f7r-team-hyper:"+time+":"+nonce},
       {type:2,style:2,label:"Check in · LMGT3",emoji:classEmoji("LMGT3"),custom_id:"f7r-team-gt3:"+time+":"+nonce}
-    ] : [{type:2,style:2,label:"Participating",custom_id:"f7r-team-rsvp:"+time+":"+nonce}];
+    ] : [{type:2,style:2,label:isAcc?"Check in · GT3":"Participating",...(isAcc?{emoji:classEmoji("GT3")} : {}),custom_id:"f7r-team-rsvp:"+time+":"+nonce}];
     const payload = {
       content:"**F7R race check-in**\n**Race & round:** " + game + " · " + track.trim() + (round.trim() ? " · "+round.trim() : "") + (customLineup ? " · "+customLineup.name : "") +
         "\n**Date and time:** <t:" + time + ":F>" +

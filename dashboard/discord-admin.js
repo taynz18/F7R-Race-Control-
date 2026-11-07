@@ -471,6 +471,7 @@ async function loadGameSettings() {
     if (generation !== checkGeneration || $('attendance-game').value !== game) return;
     settingsGame = game;
     settingsOptions = data;
+    $('settings-car-models').replaceChildren(...(data.models ?? []).map(model=>new Option(model)));
     settingsDraft = data.config;
     const circuits = settingsDraft.circuits.length ? settingsDraft.circuits : ['F1','F2'].includes(game) ? defaultF1Circuits : [];
     $('settings-circuits').value = circuits.join('\n');
