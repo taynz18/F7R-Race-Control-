@@ -155,6 +155,16 @@ function fillDiscordOptions(id, rows, prefix) {
   }
   if (rows.some(row => row.id === previous)) select.value = previous;
 }
+async function requestDiscordAttendance(action, details) {
+  const { data, error } = await client.functions.invoke('f7r-discord-attendance', {
+    body: { action, ...details }
+  });
+  if (error) {
+    const body = await error.context?.json?.().catch(() => null);
+    throw Error(body?.error || 'Discord attendance service is unavailable.');
+  }
+  return data;
+}
 async function discordAction(action, details = {}) {
   if (!verified || discordBusy) return;
   discordBusy = true;
@@ -162,14 +172,8 @@ async function discordAction(action, details = {}) {
   const generation = checkGeneration;
   if (action !== 'roster' || !activeRoster) status.textContent = 'Contacting Discord attendance service…';
   try {
-    const { data, error } = await client.functions.invoke('f7r-discord-attendance', {
-      body: { action, ...details }
-    });
+    const data = await requestDiscordAttendance(action, details);
     if (generation !== checkGeneration) return;
-    if (error) {
-      const body = await error.context?.json?.().catch(() => null);
-      throw Error(body?.error || 'Discord attendance service is unavailable.');
-    }
     if (action === 'options') {
       fillDiscordOptions('attendance-channel', data.channels, '#');
       status.textContent = 'Discord channels loaded.';
@@ -179,6 +183,7 @@ async function discordAction(action, details = {}) {
       if ($('attendance-game').value !== details.game) return;
       emojiDraft = details;
       $('attendance-send').hidden = !isPreview;
+      $('attendance-queue-add').hidden = !isPreview;
       $('attendance-emoji-save').disabled = !data.emojiAvailable;
       $('attendance-eligibility').textContent = isPreview ? 'Full-time seats require ' + data.fullTimeRole + ' and a team role.' : 'Saved defaults for ' + details.game;
       if (!isPreview) $('attendance-summary').textContent = '';
@@ -367,3 +372,82 @@ $('attendance-roster').onclick = () => {
 
 $('attendance-message').oninput = () => { activeRoster = null; };
 setInterval(() => { if (activeRoster && verified) discordAction('roster', activeRoster); }, 5000);
+
+const attendanceBatch = [];
+let postingBatch = false;
+
+function renderAttendanceBatch() {
+  $('attendance-batch').hidden = attendanceBatch.length === 0;
+  $('attendance-batch-send').disabled = postingBatch || attendanceBatch.every(entry => entry.url);
+  const list = $('attendance-batch-list');
+  list.replaceChildren();
+  for (const entry of attendanceBatch) {
+    const item = document.createElement('li');
+    item.textContent = entry.label + ' · ' + (entry.url ? 'Posted' : entry.error || 'Queued');
+    if (entry.url) {
+      const link = document.createElement('a');
+      link.href = entry.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Open in Discord ↗';
+      item.append(' ', link);
+    } else {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'secondary';
+      remove.textContent = 'Remove';
+      remove.disabled = postingBatch;
+      remove.onclick = () => {
+        attendanceBatch.splice(attendanceBatch.indexOf(entry), 1);
+        renderAttendanceBatch();
+      };
+      item.append(' ', remove);
+    }
+    list.append(item);
+  }
+}
+
+$('attendance-queue-add').onclick = () => {
+  if (!verified || !attendanceDraft || discordBusy || $('attendance-preview').hidden) return;
+  attendanceBatch.push({
+    draft: {...attendanceDraft, emojiIds: {...attendanceDraft.emojiIds}},
+    label: $('attendance-summary').textContent
+  });
+  attendanceDraft = null;
+  emojiDraft = null;
+  $('attendance-preview').hidden = true;
+  $('discord-status').textContent = 'Added to the queue. Set up and preview the next race.';
+  renderAttendanceBatch();
+};
+
+$('attendance-batch-send').onclick = async () => {
+  if (!verified || discordBusy || postingBatch) return;
+  const pending = attendanceBatch.filter(entry => !entry.url);
+  if (!pending.length || !window.confirm('Post ' + pending.length + ' check-in(s) to the Discord channels shown in the queue?')) return;
+  postingBatch = discordBusy = true;
+  const generation = checkGeneration;
+  const status = $('attendance-batch-status');
+  let posted = 0;
+  renderAttendanceBatch();
+  try {
+    for (const entry of pending) {
+      if (generation !== checkGeneration || !verified) break;
+      status.textContent = 'Posting check-in ' + (posted + 1) + ' of ' + pending.length + '…';
+      try {
+        const data = await requestDiscordAttendance('post', entry.draft);
+        entry.url = data.url;
+        entry.error = '';
+        posted++;
+      } catch (error) {
+        entry.error = error.message;
+        break;
+      }
+      renderAttendanceBatch();
+    }
+    status.textContent = posted + ' of ' + pending.length + ' posted.' +
+      (posted === pending.length ? '' : ' The remaining check-ins are still queued.');
+  } finally {
+    postingBatch = discordBusy = false;
+    renderAttendanceBatch();
+  }
+};

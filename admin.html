@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#0c111b">
 
 <title>F7R Race Control · Flags</title><link rel="stylesheet" href="admin.css?v=8">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=16"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="admin.js?v=17"></script>
 <link rel="icon" type="image/png" href="./assets/f7r-logo.png?v=f7r1"></head><body>
 <div id="race-atmosphere" aria-hidden="true"></div>
 <header><a class="brand" href="./admin.html"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL<span class="brand-caption">Your grid. In sync.</span></span></a><span class="tag"><span class="tag-dot" aria-hidden="true"></span> FLAG OPERATIONS</span></header>
@@ -52,8 +52,16 @@
 <div id="attendance-preview" hidden>
 <h3>Check-in preview</h3><p id="attendance-summary"></p><p id="attendance-artwork-preview" class="small muted" hidden></p><p id="attendance-eligibility"></p><p class="small muted" id="attendance-emoji-help">Choose a Discord emoji for each team. Save your mappings for all Race Control admins.</p><ul id="attendance-teams"></ul>
 <button class="secondary" id="attendance-emoji-save" type="button">Save team emojis</button>
+<button class="secondary" id="attendance-queue-add" type="button">Add to posting queue</button>
 <button class="primary" id="attendance-send" type="button">Post to Discord ↗</button>
 </div>
+<section id="attendance-batch" hidden aria-labelledby="attendance-batch-title">
+<h3 id="attendance-batch-title">Posting queue</h3>
+<p class="small muted">Set up each race and its channel, then publish the queued check-ins together. Keep this tab open while posting.</p>
+<ol id="attendance-batch-list"></ol>
+<button id="attendance-batch-send" class="primary" type="button">Post queued check-ins ↗</button>
+<p id="attendance-batch-status" role="status"></p>
+</section>
 <p id="discord-status" role="status"></p><a id="attendance-link" hidden target="_blank" rel="noopener noreferrer">Open check-in in Discord ↗</a>
 <h3>Check-in roster</h3>
 <label for="attendance-message">Discord message link or ID</label>
