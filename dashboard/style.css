@@ -46,7 +46,32 @@ header{border-bottom-color:#37425c66}.heading h1{background:linear-gradient(105d
 #race-surface.safety-active.local-yellow{background:radial-gradient(ellipse at 35% 0%,#ffd34d16,transparent 50%)}
 #race-surface.local-yellow .safety-banner{background:linear-gradient(110deg,#ffd54b,#bc902e 65%,#40371b);box-shadow:0 8px 30px #e6b52912}
 
-aside .control-room-link{display:block;width:100%;margin:12px 0;padding:12px;text-align:left;text-decoration:none;font:inherit;color:#eee;border:1px solid #65402c;border-radius:6px;background:linear-gradient(120deg,#38221e,#1b202b)}aside .control-room-link:hover,aside .control-room-link:focus-visible{border-color:#ffbf55;color:#ffda91}
+aside .control-room-link{display:block;width:100%;margin:12px 0;padding:12px;text-align:left;text-decoration:none;font:inherit;border-radius:6px}
+aside :is(.control-room-link,#live-tab,#flags-tab,#setup-tab){
+  --nav-accent:#a5b4d0;
+  --nav-texture:repeating-linear-gradient(132deg,transparent 0 8px,var(--nav-stripe) 8px 9px,transparent 9px 17px);
+  --nav-stripe:color-mix(in srgb,var(--nav-accent) 13%,transparent);
+  --nav-tint:20%;
+  color:#f1f4fb;
+  border:1px solid color-mix(in srgb,var(--nav-accent) 46%,#263044);
+  background:var(--nav-texture),linear-gradient(112deg,color-mix(in srgb,var(--nav-accent) var(--nav-tint),#151c2a),#151c2a 88%);
+}
+aside :is(#live-tab,[href="./index.html"]){--nav-accent:#ff5d78}
+aside [href="./history.html"]{--nav-accent:#6fb4ff}
+aside [href="./race-data.html"]{--nav-accent:#51d9c7}
+aside :is(#flags-tab,[href="./admin.html"]){--nav-accent:#f4ce68}
+aside [href="./discord.html"]{--nav-accent:#98a2ff}
+aside #setup-tab{--nav-accent:#9dbad4}
+aside [href="./grid.html"]{--nav-accent:#9cdd6a}
+aside [href="./tournament.html"]{--nav-accent:#c798ff}
+aside [href="./league.html"]{--nav-accent:#f593bf}
+aside :is(.control-room-link,#live-tab,#flags-tab,#setup-tab):is(.active,:hover,:focus-visible){
+  --nav-tint:34%;
+  border-color:var(--nav-accent);
+}
+aside :is(.control-room-link,#live-tab,#flags-tab,#setup-tab).active{box-shadow:inset 3px 0 var(--nav-accent)}
+aside :is(.control-room-link,#live-tab,#flags-tab,#setup-tab):focus-visible{outline:2px solid var(--nav-accent);outline-offset:2px}
+
 
 .position-cell{min-width:74px}.position-change{display:inline-flex;align-items:center;margin-left:8px;font-size:14px;font-weight:900;letter-spacing:-.03em;line-height:1.1}.position-change[hidden]{display:none}.position-up{color:#c0ff24;text-shadow:0 0 5px #aaff34a6,0 0 12px #b7ff3b77}.position-down{color:#ff4055;text-shadow:0 0 7px #ff314c80}.pit-badge{display:inline-block;padding:3px 7px;border:1px solid #c57aff99;border-radius:5px;background:linear-gradient(125deg,#7632ad70,#4e226b55);color:#d9a4ff;font-size:10px;font-weight:900;letter-spacing:.09em;line-height:1.2;white-space:nowrap;box-shadow:0 0 9px #a244e72b}.driver h2 .pit-badge{margin-left:9px;vertical-align:middle}
 
