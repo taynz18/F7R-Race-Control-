@@ -3,6 +3,14 @@ export function lapTime(ms){if(!isNumber(ms)||ms<=0)return '—';return Math.flo
 export function reading(n,suffix='',digits=0){return isNumber(n)?n.toFixed(digits)+suffix:'—'}
 export function driverName(d,race){if(d.telemetry_public===false)return 'Player';const mapped=race?.driver_names?.[String(d.slot)];return typeof mapped==='string'&&mapped.trim()?mapped.slice(0,64):typeof d.name==='string'&&d.name.trim()?d.name.slice(0,64):'Player'}
 export function energy(d){if(!d.telemetry_public)return 'Private';if(isNumber(d.ers_percent))return d.ers_percent.toFixed(0)+'%';return isNumber(d.ers_joules)?(d.ers_joules/1e6).toFixed(2)+' MJ':'—'}
+export function batteryCharge(driver,data){
+ if(driver.telemetry_public!==true||driver.status_stale===true)return null;
+ if(isNumber(driver.ers_percent)&&driver.ers_percent>=0&&driver.ers_percent<=100)return {percent:Math.round(driver.ers_percent),estimated:false};
+ // Use the 4 MJ usable energy window as a labelled estimate for modern F1 cars.
+ if(![2025,2026].includes(data?.format)||![0,13].includes(data?.formula)||
+    !isNumber(driver.ers_joules)||driver.ers_joules<0||driver.ers_joules>4_000_001)return null;
+ return {percent:Math.min(100,Math.round(driver.ers_joules/40_000)),estimated:true};
+}
 export function feedState(snapshot,race,now=Date.now(),demo=false){if(demo)return 'DEMO DATA';if(!snapshot)return 'WAITING FOR RECEIVER';if(race?.status==='finished')return 'RACE FINISHED';return now-Date.parse(snapshot.received_at)>8000?'STALE · LAST KNOWN DATA':'LIVE'}
 export function acceptsSnapshot(current,next){
  if(!next)return false;if(!current)return true;if(next.session_id!==current.session_id)return false;

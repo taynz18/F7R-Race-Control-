@@ -18,7 +18,7 @@ export function mapGeometry(data){
 }
 const NS='http://www.w3.org/2000/svg';
 function svgNode(name,attrs={}){const n=document.createElementNS(NS,name);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,String(v));return n}
-export function renderTrackMap(data,{selected=null,onSelect=()=>{},race=null,stale=false,demo=false}={}){
+export function renderTrackMap(data,{selected=null,onSelect=()=>{},race=null,stale=false,demo=false,previous=null}={}){
  const wrap=document.createElement('div'),meta=circuitFor(data?.track_id),geo=mapGeometry(data);
  const head=document.createElement('div');head.className='track-map-heading';
  if(meta.logo){const logo=document.createElement('img');logo.src='./assets/circuits/'+meta.logo;logo.alt=meta.name+' circuit logo';head.append(logo)}
@@ -29,10 +29,22 @@ export function renderTrackMap(data,{selected=null,onSelect=()=>{},race=null,sta
  const svg=svgNode('svg',{viewBox:'0 0 960 460',class:'track-map-svg',role:'group','aria-label':meta.name+' driver positions'});
  for(const line of geo.paths){if(line.length<2)continue;const p=line.map(geo.project);svg.append(svgNode('polyline',{points:p.map(v=>v.x.toFixed(2)+','+v.y.toFixed(2)).join(' '),fill:'none',stroke:'#5f6c82','stroke-width':9,'stroke-linecap':'round','stroke-linejoin':'round'}))}
  if(!geo.drivers.length){const message=svgNode('text',{x:480,y:230,'text-anchor':'middle',fill:'#a4afc2','font-size':18});message.textContent='Waiting for live car positions';svg.append(message)}
+ const animate=!stale&&!demo&&previous&&!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+ const oldPositions=new Map(animate?(previous.drivers||[]).filter(d=>!d.motion_stale&&d.world_position).map(d=>[d.slot,d.world_position]):[]);
  // Selected car is drawn last so it remains visible in a crowded grid.
  for(const d of [...geo.drivers].sort((a,b)=>(a.slot===selected)-(b.slot===selected))){
   const point=geo.project(d.world_position),team=teamFor(d.team_id),name=driverName(d,race);
   const group=svgNode('g',{class:'track-driver'+(d.slot===selected?' selected':''),transform:'translate('+point.x.toFixed(2)+' '+point.y.toFixed(2)+')',tabindex:0,role:'button','aria-label':'Inspect '+name+' · P'+(d.position||'—')});
+  const old=oldPositions.get(d.slot);
+  if(old){
+   const from=geo.project(old),step=Math.hypot(point.x-from.x,point.y-from.y);
+   if(step>0.5&&step<100){
+    group.animate?.([
+     {transform:'translate('+from.x+'px, '+from.y+'px)'},
+     {transform:'translate('+point.x+'px, '+point.y+'px)'}
+    ],{duration:430,easing:'linear'});
+   }
+  }
   const tooltip=svgNode('title');tooltip.textContent='P'+(d.position||'—')+' · '+name+' · '+team.name+(d.pit_status?' · PIT':'');
   group.append(tooltip,svgNode('circle',{r:d.slot===selected?15:11,fill:team.color,stroke:d.slot===selected?'#ffffff':'#0b0d12','stroke-width':d.slot===selected?3:2}));
   const number=svgNode('text',{'text-anchor':'middle',dy:4,fill:'#ffffff','font-size':10,'font-weight':700,'paint-order':'stroke',stroke:'#10141c','stroke-width':2});number.textContent=d.position||'·';group.append(number);
