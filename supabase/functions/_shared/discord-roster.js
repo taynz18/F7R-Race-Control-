@@ -70,9 +70,9 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}, openEntr
     }))});
     const changes = [
       ...active.filter(row=>row.confirmed_at).map(row=>clean(row.driver_name)+" → "+clean(row.team)),
-      ...checkedOut.map(row=>clean(row.driver_name)+(stamp(row.checked_in_at) ? " · In "+stamp(row.checked_in_at) : "")+" · Out "+stamp(row.checked_out_at))
+      ...checkedOut.map(row=>clean(row.driver_name)+(stamp(row.checked_in_at) ? " · In "+stamp(row.checked_in_at) : "")+" · "+stamp(row.checked_out_at))
     ];
-    if (changes.length) fields.push({name:reserveIcon+" Confirmed reserves and check-outs",value:fieldValue(changes)});
+    if (changes.length) fields.push({name:reserveIcon+" Confirmed reserves and not participating",value:fieldValue(changes)});
     return {title:"Live check-in lineup",color:0xf21b32,description:totals,fields};
   }
   const lines = [];
@@ -101,12 +101,12 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}, openEntr
     for (const driver of confirmed) lines.push("↳ "+clean(driver.driver_name)+" → "+clean(driver.team));
   }
   const departed = rows.filter(row=>row.checked_out_at);
-  lines.push("**Checked out**");
+  lines.push("**Not participating**");
   if (!departed.length) lines.push("None yet");
   if (departed.length) {
     for (const driver of departed) {
       const entered = stamp(driver.checked_in_at);
-      lines.push("↳ "+clean(driver.driver_name)+(entered ? " · In "+entered : "")+" · Out "+stamp(driver.checked_out_at));
+      lines.push("↳ "+clean(driver.driver_name)+(entered ? " · In "+entered : "")+" · "+stamp(driver.checked_out_at));
     }
   }
   let description = [totals,"",...lines].join("\n");
@@ -198,6 +198,11 @@ export async function refreshDiscordRoster(interaction, guild, service, config) 
   const checkIn = button => /^f7r-team-(?:rsvp|hyper|gt3):/.test(button.custom_id ?? "");
   if ((components ?? originalComponents).some(row=>row.components?.some(button=>checkIn(button) && button.style!==2))) {
     components = (components ?? originalComponents).map(row=>({...row,components:row.components.map(button=>checkIn(button) ? {...button,style:2} : button)}));
+  }
+  const isDecline = button => button.custom_id?.startsWith("f7r-team-out:");
+  if ((components ?? originalComponents).some(row=>row.components?.some(button=>isDecline(button) && button.label!=="Not participating"))) {
+    components = (components ?? originalComponents).map(row=>({...row,components:row.components.map(button=>
+      isDecline(button) ? {...button,label:"Not participating"} : button)}));
   }
   const query = new URLSearchParams({select:"driver_name,placement,team,seat,checked_in_at,checked_out_at,confirmed_at",guild_id:"eq."+guild,
     message_id:"eq."+interaction.message.id,order:"checked_in_at.asc.nullslast,driver_id.asc"});

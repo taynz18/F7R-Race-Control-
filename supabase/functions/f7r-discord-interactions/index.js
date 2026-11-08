@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
         body:JSON.stringify({
           p_guild:guild,p_message:interaction.message.id,p_driver:member.user.id,
           p_name:member.nick || member.user.global_name || member.user.username,p_team:team || raceClass || null,
-          p_full_time:placement==="Full-time",p_f1:["F1","F2"].includes(config.game),
+          p_full_time:checkingOut ? !openEntry && Boolean(config.fullTimeId) && eligible : placement==="Full-time",p_f1:["F1","F2"].includes(config.game),
           p_out:Boolean(checkingOut)
         })
       });
@@ -95,8 +95,8 @@ Deno.serve(async (req) => {
             {headers:{apikey:service,Authorization:"Bearer "+service}});
           const recordedTeam = recorded.ok ? (await recorded.json())[0]?.team : null;
           const recordedClass = /^(Hypercar|LMGT3)(?: · |$)/.exec(recordedTeam ?? "")?.[1];
-          if (openEntry && recordedTeam && recordedTeam!==team) content = "You\'re already checked in with "+recordedTeam+". Check out first to change cars.";
-          else if (recordedClass && raceClass && recordedClass!==raceClass) content = "You're already checked in for "+recordedClass+". Check out first to change class.";
+          if (openEntry && recordedTeam && recordedTeam!==team) content = "You\'re already checked in with "+recordedTeam+". Select Not participating first to change cars.";
+          else if (recordedClass && raceClass && recordedClass!==raceClass) content = "You're already checked in for "+recordedClass+". Select Not participating first to change class.";
         }
         if (!await refreshDiscordRoster(interaction,guild,service,config).catch(()=>false)) {
           content += " The Discord lineup could not refresh. Your response is saved in Race Control.";

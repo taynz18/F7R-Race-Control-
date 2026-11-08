@@ -219,10 +219,10 @@ async function discordAction(action, details = {}) {
       const roster = $('attendance-drivers');
       roster.replaceChildren();
       activeRoster = details;
-      const groups = [...data.teams, {name: 'Reserves'}, {name: 'Confirmed reserves'}, {name: 'Checked out'}];
+      const groups = [...data.teams, {name: 'Reserves'}, {name: 'Confirmed reserves'}, {name: 'Not participating'}];
       for (const group of groups) {
         const drivers = data.drivers.filter(row => {
-          if (group.name === 'Checked out') return Boolean(row.checked_out_at);
+          if (group.name === 'Not participating') return Boolean(row.checked_out_at);
           if (row.checked_out_at) return false;
           if (group.name === 'Reserves') return row.placement === 'Reserve' && !row.confirmed_at;
           if (group.name === 'Confirmed reserves') return Boolean(row.confirmed_at);
@@ -243,7 +243,7 @@ async function discordAction(action, details = {}) {
         }
         heading.append(' ' + group.name + ' · ' + drivers.length);
         const list = document.createElement('ul');
-        const f1Team = data.f1 && !['Reserves','Confirmed reserves','Checked out'].includes(group.name);
+        const f1Team = data.f1 && !['Reserves','Confirmed reserves','Not participating'].includes(group.name);
         const total = f1Team ? Math.max(2, drivers.length) : drivers.length;
         for (let index = 0; index < total; index++) {
           const item = document.createElement('li');

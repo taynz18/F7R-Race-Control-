@@ -344,13 +344,14 @@ Deno.serve(async (request) => {
       {type:2,style:2,label:"Check in · Hypercar",emoji:classEmoji("Hypercar"),custom_id:"f7r-team-hyper:"+time+":"+nonce},
       {type:2,style:2,label:"Check in · LMGT3",emoji:classEmoji("LMGT3"),custom_id:"f7r-team-gt3:"+time+":"+nonce}
     ] : [{type:2,style:2,label:isAcc?"Check in · GT3":"Participating",...(isAcc?{emoji:classEmoji("GT3")} : {}),custom_id:"f7r-team-rsvp:"+time+":"+nonce}];
+    const mentionRole = openEntry ? null : fullTimeRoles[0].id;
     const payload = {
       content:"**F7R race check-in**\n**Race & round:** " + game + " · " + track.trim() + (round.trim() ? " · "+round.trim() : "") + (customLineup ? " · "+customLineup.name : "") +
         "\n**Date and time:** <t:" + time + ":F>" +
-        (openEntry ? "\n**Open entry** · Choose your car and join the race." : "") + (notes.trim() ? "\n"+notes.trim() : ""),
-      allowed_mentions:{parse:[]}, nonce, enforce_nonce:true,
+        (openEntry ? "\n**Open entry** · Choose your car and join the race." : "\n**Full-time drivers:** <@&"+mentionRole+">") + (notes.trim() ? "\n"+notes.trim() : ""),
+      allowed_mentions:{parse:[],roles:mentionRole?[mentionRole]:[]}, nonce, enforce_nonce:true,
       embeds:[roster],
-      components:[{type:1,components:[...checkInButtons,{type:2,style:4,label:"Check out",custom_id:"f7r-team-out:"+time+":"+nonce}]}]
+      components:[{type:1,components:[...checkInButtons,{type:2,style:4,label:"Not participating",custom_id:"f7r-team-out:"+time+":"+nonce}]}]
     };
     let body = JSON.stringify(payload);
     let headers = discordHeaders;
