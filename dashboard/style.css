@@ -47,26 +47,26 @@ header{border-bottom-color:#37425c66}.heading h1{background:linear-gradient(105d
 #race-surface.local-yellow .safety-banner{background:linear-gradient(110deg,#ffd54b,#bc902e 65%,#40371b);box-shadow:0 8px 30px #e6b52912}
 
 aside .control-room-link{display:block;width:100%;margin:12px 0;padding:12px;text-align:left;text-decoration:none;font:inherit;border-radius:6px}
-aside :is(.control-room-link,#live-tab,#flags-tab,#setup-tab){
+aside :where(.control-room-link,#live-tab,#flags-tab,#setup-tab){
   --nav-accent:#a5b4d0;
   --nav-texture:repeating-linear-gradient(132deg,transparent 0 8px,var(--nav-stripe) 8px 9px,transparent 9px 17px);
   --nav-stripe:color-mix(in srgb,var(--nav-accent) 13%,transparent);
-  --nav-tint:20%;
+  --nav-tint:31%;
   color:#f1f4fb;
-  border:1px solid color-mix(in srgb,var(--nav-accent) 46%,#263044);
+  border:1px solid color-mix(in srgb,var(--nav-accent) 60%,#263044);
   background:var(--nav-texture),linear-gradient(112deg,color-mix(in srgb,var(--nav-accent) var(--nav-tint),#151c2a),#151c2a 88%);
 }
 aside :is(#live-tab,[href="./index.html"]){--nav-accent:#ff5d78}
 aside [href="./history.html"]{--nav-accent:#6fb4ff}
-aside [href="./race-data.html"]{--nav-accent:#51d9c7}
-aside :is(#flags-tab,[href="./admin.html"]){--nav-accent:#f4ce68}
+aside [href="./race-data.html"]{--nav-accent:#35dbc1}
+aside :is(#flags-tab,[href="./admin.html"]){--nav-accent:#ffda54}
 aside [href="./discord.html"]{--nav-accent:#98a2ff}
 aside #setup-tab{--nav-accent:#9dbad4}
-aside [href="./grid.html"]{--nav-accent:#9cdd6a}
+aside [href="./grid.html"]{--nav-accent:#71e462}
 aside [href="./tournament.html"]{--nav-accent:#c798ff}
-aside [href="./league.html"]{--nav-accent:#f593bf}
+aside [href="./league.html"]{--nav-accent:#ff82b8}
 aside :is(.control-room-link,#live-tab,#flags-tab,#setup-tab):is(.active,:hover,:focus-visible){
-  --nav-tint:34%;
+  --nav-tint:45%;
   border-color:var(--nav-accent);
 }
 aside :is(.control-room-link,#live-tab,#flags-tab,#setup-tab).active{box-shadow:inset 3px 0 var(--nav-accent)}
