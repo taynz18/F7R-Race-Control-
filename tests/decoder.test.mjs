@@ -21,7 +21,7 @@ test('older frames ignored',()=>{const dec=feed();assert.equal(dec.accept(packet
 test('different session cannot overwrite the grid',()=>{const dec=feed();assert.throws(()=>dec.accept(packet(2,2026,101,2n)),/session changed/);assert.equal(dec.uid,'9007199254740993')});
 test('invalid version, size, format rejected',()=>{assert.throws(()=>header(packet(2).subarray(0,100)),/size/);const b=packet(2);b.writeUInt16LE(2024,0);assert.throws(()=>header(b),/Unsupported/);b.writeUInt16LE(2026,0);b[5]=2;assert.throws(()=>header(b),/version/);assert.throws(()=>header(Buffer.alloc(2)),/Short/)});
 test('2025 format fallback',()=>{const dec=feed(2025),st=packet(7,2025);st.writeFloatLE(44,34);dec.accept(st,1000);assert.equal(dec.snapshot(1001).data.format,2025);assert.equal(dec.snapshot(1001).data.drivers[0].fuel_kg,44)});
-test('24th driver is decoded',()=>{const dec=new Decoder(),p=packet(4),l=packet(2);p[29]=24;const o=30+23*60;p[o+42]=1;p[o+43]=1;p.write('Last Driver',o+10);dec.accept(p,1000);dec.accept(l,1000);assert.equal(dec.snapshot(1001).data.drivers[23].name,'Last Driver')});
+test('24th driver is decoded',()=>{const dec=new Decoder(),p=packet(4),l=packet(2);p[29]=24;const o=30+23*60;p[o+42]=1;p[o+43]=1;p.write('Last Driver',o+10);dec.accept(p,1000);dec.accept(l,1000);assert.equal(dec.snapshot(1001).data.drivers.find(driver=>driver.slot===23).name,'Last Driver')});
 test('nonfinite sensors become null',()=>{const dec=feed(),st=packet(7);st.writeFloatLE(NaN,34);dec.accept(st,1000);assert.equal(dec.snapshot(1001).data.drivers[0].fuel_kg,null)});
 
 
@@ -83,4 +83,21 @@ for(const format of [2025,2026])test('sector yellow flags use game split distanc
  const {marshal_zones,game_signal_age_ms}=dec.snapshot(1100).data;
  assert.deepEqual(marshal_zones.map(z=>z.sector),[1,2,3]);
  assert.equal(game_signal_age_ms,100);
+});
+
+for(const format of [2025,2026])test('a shrinking car count keeps leaders in higher slots '+format,()=>{
+ const dec=feed(format),participants=packet(4,format,101),laps=packet(2,format,101);
+ const is26=format===2026,stride=is26?60:57,shift=is26?3:0;
+ participants[29]=2;
+ for(const [slot,position] of [[16,1],[17,2]]){
+  const p=30+slot*stride,l=29+slot*57;
+  participants.write('Leader '+position,p+7+shift);
+  participants[p+40+shift]=1;
+  laps[l+32]=position;
+  laps[l+45]=3;
+ }
+ laps[29+18*57+32]=3;
+ laps[29+18*57+45]=1;
+ dec.accept(participants,1100);dec.accept(laps,1100);
+ assert.deepEqual(dec.snapshot(1101).data.drivers.map(d=>[d.slot,d.position,d.name]),[[16,1,'Leader 1'],[17,2,'Leader 2']]);
 });

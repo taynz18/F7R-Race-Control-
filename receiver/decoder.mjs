@@ -45,11 +45,16 @@ export class Decoder{
     }).filter(z=>z.start!==null&&z.flag>=-1&&z.flag<=3):null;
     const metadata=this.parts.get(1)?.b;
     const drivers=[];
-    for(let i=0;i<Math.min(p[29],layout.cars);i++){
+    // The participant count can shrink while remaining cars keep their original slots.
+    for(let i=0;i<layout.cars;i++){
       const o=30+i*layout.participant,is26=this.format===2026,shift=is26?3:0;
       const ai=p[o]===1,publicData=p[o+39+shift]===1,showName=p[o+40+shift]===1;
       const raw=p.subarray(o+7+shift,o+39+shift).toString('utf8').split('\0')[0].replace(/[\u0000-\u001f]/g,'').trim();
       const l=29+i*57,s=29+i*layout.status,d=29+i*46,t=29+i*layout.telemetry,e=29+i*10;
+      const position=lap[l+32],resultStatus=lap[l+45];
+      const hasParticipant=p.subarray(o,o+layout.participant).some(byte=>byte!==0);
+      const hasResult=position>=1&&position<=layout.cars&&resultStatus>=2&&resultStatus<=7;
+      if(!hasResult&&(i>=p[29]||resultStatus===1||!hasParticipant))continue;
       const shared=ai||publicData;
       const mo=29+i*(this.format===2026?54:60),x=motion?finite(motion.readFloatLE(mo),-100000,100000):null,z=motion?finite(motion.readFloatLE(mo+8),-100000,100000):null;
       const validPosition=x!==null&&z!==null&&(x!==0||z!==0)&&lap[l+45]!==0&&lap[l+45]!==1;
@@ -58,14 +63,14 @@ export class Decoder{
         const bin=Math.min(191,Math.floor(distance/trackLength*192));
         this.mapPoints.set(bin,{i:bin,x:Math.round(x*10)/10,z:Math.round(z*10)/10});
       }
-      const car={slot:i,network_id:is26?p.readUInt16LE(o+3):p[o+2],team_id:is26?p.readUInt16LE(o+5):p[o+3],
-        race_number:p[o+5+shift],platform:p[o+43+shift],name:(ai||showName)?raw:null,
+      const car={slot:i,network_id:is26?p.readUInt16LE(o+3):p[o+2],team_id:hasParticipant?(is26?p.readUInt16LE(o+5):p[o+3]):null,
+        race_number:hasParticipant?p[o+5+shift]:null,platform:hasParticipant?p[o+43+shift]:null,name:(ai||showName)?raw:null,
         world_position:validPosition?{x,z}:null,lap_distance:distance,motion_stale:!motion,
-        name_shared:ai||showName,telemetry_public:shared,position:lap[l+32],lap:lap[l+33],
+        name_shared:ai||showName,telemetry_public:shared,position,lap:lap[l+33],
         last_lap_ms:lap.readUInt32LE(l),current_lap_ms:lap.readUInt32LE(l+4),
         sector1_ms:lap.readUInt16LE(l+8)+lap[l+10]*60000,sector2_ms:lap.readUInt16LE(l+11)+lap[l+13]*60000,
         gap_ms:lap.readUInt16LE(l+17)+lap[l+19]*60000,pit_status:lap[l+34],penalties:lap[l+38],
-        result_status:lap[l+45],speed_kph:tel?tel.readUInt16LE(t):null,
+        result_status:resultStatus,speed_kph:tel?tel.readUInt16LE(t):null,
         compound:status?status[s+26]:null,tyre_age:shared&&status?status[s+27]:null,
         fuel_kg:shared&&status?finite(status.readFloatLE(s+5),0,200):null,
         fuel_laps:shared&&status?finite(status.readFloatLE(s+13),-100,200):null,
