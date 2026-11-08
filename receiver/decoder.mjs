@@ -34,8 +34,8 @@ export class Decoder{
     // Both supported Session layouts place sector splits at the same offsets.
     const sector2=safetySession?.readFloatLE(745),sector3=safetySession?.readFloatLE(749);
     const hasSectorSplits=sector2>0&&sector2<sector3&&sector3<trackLength;
-    const marshalZones=safetySession?Array.from({length:Math.min(safetySession[48],21)},(_,i)=>{
-      const start=finite(safetySession.readFloatLE(49+i*5),0,1),flag=safetySession.readInt8(53+i*5);
+    const marshalZones=safetySession?Array.from({length:Math.min(safetySession[47],21)},(_,i)=>{
+      const start=finite(safetySession.readFloatLE(48+i*5),0,1),flag=safetySession.readInt8(52+i*5);
       const zone={start,flag};
       if(start!==null&&hasSectorSplits){
         const distance=start*trackLength;
@@ -89,7 +89,7 @@ export class Decoder{
       track_length:trackLength,track_map:{bins:192,points:[...this.mapPoints.values()].sort((a,b)=>a.i-b.i)},
       weather:session?session[29]:null,track_temperature:session?session.readInt8(30):null,
       // EA PacketSessionData: 21 packed five-byte marshal zones precede safetyCarStatus.
-      safety_car_status:safetySession&&safetySession[154]<=3?safetySession[154]:null,
+      safety_car_status:safetySession&&safetySession[153]<=3?safetySession[153]:null,
       marshal_zones:marshalZones,
       game_signal_age_ms:safetySession?now-this.parts.get(1).at:null,
       total_laps:session?session[32]:null,track_id:session?session.readInt8(36):null}};
