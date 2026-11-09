@@ -1,0 +1,16 @@
+.dotd{max-width:1140px}
+.dotd [hidden]{display:none}
+.dotd-hero,.dotd-panel{border:1px solid #bb95f85c;border-radius:18px;padding:clamp(16px,4vw,34px);margin-bottom:22px}
+.dotd-hero{background:repeating-linear-gradient(132deg,transparent 0 15px,#bd95ff16 15px 16px,transparent 16px 28px),linear-gradient(120deg,#322149,#151d2f 75%);display:block}
+.dotd-hero h1{font-size:clamp(2rem,6vw,3.6rem);margin:.3em 0}
+.dotd-hero p:first-child,.dotd #dotd-clock{color:#dfc3ff;font-weight:700}
+.dotd-panel{background:#151c2a}
+.dotd-panel label:not(.dotd-option){display:block;margin:12px 0 6px}
+.dotd select,.dotd textarea,.dotd input:not([type="radio"]){box-sizing:border-box;width:100%;padding:11px;border:1px solid #7784a0;border-radius:8px;color:#f6f3ff;background:#101725;font:inherit}
+.dotd fieldset{border:0;padding:0;margin:0}
+.dotd-option{display:flex;gap:10px;align-items:center;padding:12px;margin:8px 0;border:1px solid #657293;border-radius:8px;overflow-wrap:anywhere}
+.dotd-option:has(:checked){background:#362754;border-color:#c9a4ff}
+.dotd button{margin-top:12px}
+.dotd #dotd-results-list{padding-left:1.5rem}
+.dotd #dotd-results-list li{padding:8px 0;overflow-wrap:anywhere}
+.dotd .dotd-bar{height:7px;display:block;margin-top:6px;border-radius:5px;background:linear-gradient(to right,#c397ff var(--share),#313a50 var(--share))}

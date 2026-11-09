@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>F7R · Driver of the Day</title>
+<link rel="icon" type="image/png" href="./assets/f7r-favicon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./assets/f7r-home-180.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="./dashboard/style.css?v=dotd1">
+<link rel="stylesheet" href="./dashboard/dotd.css?v=1">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script defer src="./dashboard/session.js?v=1"></script>
+<script defer type="module" src="./dashboard/dotd.js?v=1"></script>
+</head>
+<body>
+<aside><img src="./assets/f7r-logo.png" alt="F7R"><small>RACE CONTROL</small>
+<a class="control-room-link" href="./index.html">◉ Live telemetry</a>
+<a class="control-room-link" href="./history.html">◷ Previous sessions</a>
+<a class="control-room-link" href="./race-data.html">▥ Race Data</a>
+<a class="control-room-link active" href="./dotd.html" aria-current="page">★ Driver of the Day</a>
+<a class="control-room-link" href="./grid.html">⇄ Grid randomiser</a>
+<a class="control-room-link" href="./tournament.html">♜ F7R Tournament</a>
+<a class="control-room-link" href="./league.html">🏆 League Archive</a>
+</aside>
+<main class="dotd">
+<header class="dotd-hero"><p>F7R RACE CONTROL</p><h1>Driver of the Day</h1><p>One vote per race. Results are revealed when voting closes.</p></header>
+<p id="dotd-status" role="status"></p>
+<section class="dotd-panel">
+<label for="dotd-race">Race poll</label>
+<select id="dotd-race" disabled><option>Loading polls…</option></select>
+<h2 id="dotd-title"></h2>
+<p id="dotd-clock"></p>
+<a href="./index.html?next=dotd" id="dotd-signin" hidden>Sign in to vote</a>
+<form id="dotd-vote" hidden><fieldset><legend>Choose your driver</legend><div id="dotd-options"></div></fieldset>
+<button type="submit">Submit vote</button></form>
+<section id="dotd-results" hidden aria-labelledby="dotd-results-title">
+<h3 id="dotd-results-title">Final results</h3><p id="dotd-summary"></p><ol id="dotd-results-list"></ol>
+<button id="dotd-download" type="button">Download results PNG</button>
+</section>
+</section>
+<form class="dotd-panel" id="dotd-create" hidden>
+<h2>Open a race poll</h2>
+<label for="dotd-race-title">Race name</label><input id="dotd-race-title" maxlength="100" placeholder="Tier 1 · Round 16 · Interlagos" required>
+<label for="dotd-nominees">Nominees</label><textarea id="dotd-nominees" rows="5" maxlength="650" placeholder="Enter 2–10 drivers, one name per line" required></textarea>
+<label for="dotd-minutes">Voting time in minutes</label><input id="dotd-minutes" type="number" value="30" min="1" max="10080" required>
+<button type="submit">Open voting</button>
+</form>
+</main></body></html>

@@ -64,6 +64,7 @@ aside [href="./discord.html"]{--nav-accent:#98a2ff}
 aside #setup-tab{--nav-accent:#9dbad4}
 aside [href="./grid.html"]{--nav-accent:#71e462}
 aside [href="./tournament.html"]{--nav-accent:#c798ff}
+aside [href="./dotd.html"]{--nav-accent:#f6bb68}
 aside [href="./league.html"]{--nav-accent:#ff82b8}
 aside :is(.control-room-link,#live-tab,#flags-tab,#setup-tab):is(.active,:hover,:focus-visible){
   --nav-tint:45%;

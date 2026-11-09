@@ -152,6 +152,10 @@ async function openAccount(user,g=++generation){
     await startFlags(client,isFlagAdmin,user.id);
     if(g!==generation){await stopFlags();return}
     const nextPage=window.location?.search ? new URLSearchParams(window.location.search).get('next') : null;
+    if(nextPage==='dotd'){
+      const poll=new URLSearchParams(window.location.search).get('poll');
+      window.location.assign('./dotd.html'+(poll?'?poll='+encodeURIComponent(poll):''));return;
+    }
     if(nextPage==='history'||nextPage==='race-data'){window.location.assign('./'+nextPage+'.html');return}
     await refreshRaces();
 }
