@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="./dashboard/dotd.css?v=1">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script defer src="./dashboard/session.js?v=1"></script>
-<script defer type="module" src="./dashboard/dotd.js?v=1"></script>
+<script defer type="module" src="./dashboard/dotd.js?v=2"></script>
 </head>
 <body>
 <aside><img src="./assets/f7r-logo.png" alt="F7R"><small>RACE CONTROL</small>
@@ -40,7 +40,21 @@
 </section>
 <form class="dotd-panel" id="dotd-create" hidden>
 <h2>Open a race poll</h2>
-<label for="dotd-race-title">Race name</label><input id="dotd-race-title" maxlength="100" placeholder="Tier 1 · Round 16 · Interlagos" required>
+<label for="dotd-series">Race series</label>
+<select id="dotd-series" required>
+<option value="">Choose a race series</option>
+<option>Tier 1</option>
+<option>Tier 2</option>
+<option>Tier 3</option>
+<option>Tier 4</option>
+<option>LMU Hyper Car</option>
+<option>LMU GT3</option>
+<option>Le Mans Ultimate</option>
+<option>F2 Realistic</option>
+<option>F1 Realistic</option>
+<option>Assetto Corsa</option>
+</select>
+<label for="dotd-race-title">Race name</label><input id="dotd-race-title" maxlength="78" placeholder="Round 16 · Interlagos" required>
 <label for="dotd-nominees">Nominees</label><textarea id="dotd-nominees" rows="5" maxlength="650" placeholder="Enter 2–10 drivers, one name per line" required></textarea>
 <label for="dotd-minutes">Voting time in minutes</label><input id="dotd-minutes" type="number" value="30" min="1" max="10080" required>
 <button type="submit">Open voting</button>

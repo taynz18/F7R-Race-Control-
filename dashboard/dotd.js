@@ -1,3 +1,30 @@
+const seriesPalettes = new Map([["Tier 1",["#491c29","#ff586b","#ffc3cb"]],
+["Tier 2",["#49281a","#ff8b48","#ffcfac"]],
+["Tier 3",["#453718","#ffd451","#ffedac"]],
+["Tier 4",["#263c1b","#a9e35b","#e0f7bb"]],
+["LMU Hyper Car",["#451a39","#ff67b7","#ffc3e5"]],
+["LMU GT3",["#301b49","#c497ff","#e6caff"]],
+["Le Mans Ultimate",["#411d38","#ee83b6","#ffd0e5"]],
+["F2 Realistic",["#1c3b56","#73cfff","#c5ebff"]],
+["F1 Realistic",["#122851","#648fff","#c1d2ff"]],
+["Assetto Corsa",["#133b32","#47d5a1","#baf5db"]]]);
+const defaultPalette = ['#301b49', '#c497ff', '#e6caff'];
+
+function raceTitle(series, name) {
+  const title = name.trim();
+  const prefix = series + ' · ';
+  return title.toLowerCase().startsWith(prefix.toLowerCase()) ? title : prefix + title;
+}
+
+function paletteFor(title) {
+  for (const [series, palette] of seriesPalettes) {
+    const name = series.toLowerCase();
+    const normalized = title.trim().toLowerCase();
+    if (normalized === name || normalized.startsWith(name + ' ')) return palette;
+  }
+  return defaultPalette;
+}
+
 const $ = id => document.getElementById('dotd-' + id);
 let client, user, polls = [], current, results = [], vote, loading = false, closed = false;
 const status = message => { $('status').textContent = message; };
@@ -165,7 +192,7 @@ $('create').onsubmit = async event => {
   button.disabled = true;
   try {
     const {data, error} = await client.rpc('f7r_dotd_create', {
-      race_title: $('race-title').value.trim(),
+      race_title: raceTitle($('series').value, $('race-title').value),
       candidates,
       minutes: $('minutes').valueAsNumber
     });
@@ -188,18 +215,19 @@ $('create').onsubmit = async event => {
 $('download').onclick = async () => {
   if (!current || !results.length) return;
   const title = current.title;
+  const [wash, accent, light] = paletteFor(title);
   const {total, rows, headline} = resultRows(current, results);
   const canvas = node('canvas');
   canvas.width = 1200;
   canvas.height = 350 + rows.length * 64;
   const ctx = canvas.getContext('2d');
   const bg = ctx.createLinearGradient(0, 0, 1200, canvas.height);
-  bg.addColorStop(0, '#301b49');
+  bg.addColorStop(0, wash);
   bg.addColorStop(1, '#0c1425');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 1200, canvas.height);
   ctx.save();
-  ctx.strokeStyle = '#c79bff22';
+  ctx.strokeStyle = accent + '22';
   for (let x = 100; x < 1200 + canvas.height; x += 48) {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - canvas.height, canvas.height); ctx.stroke();
   }
@@ -210,10 +238,10 @@ $('download').onclick = async () => {
   const write = (text, x, y, font, colour, width) => {
     ctx.font = font; ctx.fillStyle = colour; ctx.fillText(text, x, y, width);
   };
-  write('F7R RACE CONTROL  /  FINAL VOTE', 64, 62, 'bold 20px Arial', '#d8b9ff', 800);
+  write('F7R RACE CONTROL  /  FINAL VOTE', 64, 62, 'bold 20px Arial', light, 800);
   write('DRIVER OF THE DAY', 64, 132, 'bold 56px Arial', '#ffffff', 1050);
   write(title, 64, 181, '27px Arial', '#d8cbed', 1060);
-  write(headline, 64, 247, 'bold 44px Arial', '#e6caff', 1060);
+  write(headline, 64, 247, 'bold 44px Arial', light, 1060);
   write(total + (total === 1 ? ' vote cast' : ' votes cast'), 64, 282, '22px Arial', '#ffffff', 1060);
   rows.forEach((row, index) => {
     const y = 332 + index * 64;
@@ -223,7 +251,7 @@ $('download').onclick = async () => {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#404967';
     ctx.fillRect(64, y + 11, 1072, 7);
-    ctx.fillStyle = '#c497ff';
+    ctx.fillStyle = accent;
     ctx.fillRect(64, y + 11, 1072 * row.share / 100, 7);
   });
   const link = node('a');
