@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {resolveLivery} from '../dashboard/liveries.js';import {LIVERIES} from '../dashboard/livery-catalog.js';
+test('liveries retain exact season and entry identities',()=>{assert.match(resolveLivery('Ferrari',{uniqueId:'ferrari.2026'}),/f1_2026/);assert.equal(resolveLivery('Ferrari',{uniqueId:'ferrari.2023'}),null);assert.notEqual(resolveLivery('BMW',{uniqueId:'bmw.15.2026'}),resolveLivery('BMW',{uniqueId:'bmw.20.2026'}));});
+test('model variants and unknown cars remain distinct',()=>{assert.notEqual(resolveLivery('Ferrari 296 GT3'),resolveLivery('Ferrari 488 GT3'));assert.notEqual(resolveLivery('McLaren 720S GT3'),resolveLivery('McLaren 720S GT3 Evo'));assert.equal(resolveLivery('Unknown car'),null);});
+test('every supplied livery has a local PNG',()=>{assert.equal(Object.keys(LIVERIES).length,291);for(const file of new Set(Object.values(LIVERIES)))assert.equal(fs.readFileSync(new URL('../assets/liveries/'+file,import.meta.url)).subarray(0,8).toString('hex'),'89504e470d0a1a0a');});
+

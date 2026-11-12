@@ -23,6 +23,7 @@ on:
       - 'admin.js'
       - 'config.json'
       - 'assets/teams/**'
+      - 'assets/liveries/**'
       - 'assets/tyres/**'
       - 'assets/circuits/**'
       - 'assets/f7r-logo.png'
@@ -56,6 +57,7 @@ jobs:
           mkdir -p public/assets
           cp -R dashboard public/dashboard
           cp -R assets/teams public/assets/teams
+          cp -R assets/liveries public/assets/liveries
           cp -R assets/tyres public/assets/tyres
           cp -R assets/circuits public/assets/circuits
           cp -R assets/commentary public/assets/commentary
@@ -67,4 +69,5 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+
 

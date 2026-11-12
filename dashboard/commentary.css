@@ -7,3 +7,5 @@
 
 .briefing-race-history{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin:26px 0}.briefing-race-history>h3{grid-column:1/-1;color:#bcece0}.briefing-race-history article{padding:18px;border:1px solid #adcbd355;border-radius:12px;background:linear-gradient(125deg,#5ce0cc0c,transparent)}.briefing-race-history h4{margin:0 0 8px}.briefing-race-history small{color:#9db6c6}.briefing-race-history p{line-height:1.6}
 
+.briefing-driver .briefing-car{display:block;width:100%;height:72px;object-fit:contain;margin:8px 0 12px;filter:drop-shadow(0 7px 9px #0006)}
+
