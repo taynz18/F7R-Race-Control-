@@ -1,7 +1,7 @@
 import {TEAMS} from './teams.js?v=0.14.0';
 const $=id=>document.getElementById(id);
 const el=(tag,text)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;return n;};
-let client,current,sequence=0;
+let client,current,sequence=0,canReadSync=false;
 const cache=new Map();
 const msg=text=>{$('archive-message').textContent=text;};
 const points=v=>v?.formatted??v??'';
@@ -22,7 +22,32 @@ function render(){const i=current.index,stats=current.standings.seasonStatistics
  table($('archive-constructors'),['Pos','Team','Points','Wins','Podiums'],(stats.teamStandings||[]).map(d=>[d.position,car(d.teamName,d.teamInfo),points(d.points),d.positions?.wins??'—',d.positions?.podiums??'—']));
  picker($('archive-event'),current.events.map((e,j)=>[j,'R'+e.event.round+' · '+flag(e.event.track.country)+e.event.track.trackName+' · '+(e.event.eventDate||'Date unavailable')]));renderEvent();$('archive-content').hidden=false;
 }
-async function select(){const id=Number($('archive-season').value),seq=++sequence;current=null;$('archive-content').hidden=true;msg('Loading season…');try{let value=cache.get(id);if(!value){const {data,error}=await client.from('f7r_league_archive').select('payload_gzip_base64').eq('source_id',id).single();if(error)throw error;const bytes=Uint8Array.from(atob(data.payload_gzip_base64),c=>c.charCodeAt(0));value=JSON.parse(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text());cache.set(id,value);if(cache.size>3)cache.delete(cache.keys().next().value);}if(seq!==sequence)return;current=value;render();msg('RLT records · original points, standings and missing values preserved. Select a driver in a result to see their laps.');}catch(e){if(seq===sequence)msg('Could not load season: '+e.message);}}
-async function start(){try{const response=await fetch('./config.json',{cache:'no-store'});if(!response.ok)throw Error('Connection settings unavailable');const c=await response.json();client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:window.F7RAuth.options()});const {data:{session}}=await client.auth.getSession();if(!session||session.user.is_anonymous){msg('Sign in with your driver or admin account to view the shared archive.');return;}const {data,error}=await client.from('f7r_league_archive').select('source_id,name,archived,event_count,session_count').order('archived').order('name');if(error)throw error;picker($('archive-season'),data.map(s=>[s.source_id,s.name+(s.archived?' · Archived':' · Current')]));$('archive-season').disabled=!data.length;msg(data.length+' shared seasons available.');if(data.length)await select();}catch(e){msg('Could not connect to shared archive: '+e.message);}}
-$('archive-season').onchange=select;$('archive-event').onchange=renderEvent;$('archive-session').onchange=renderSession;$('archive-download').onclick=download;$('archive-refresh').onclick=()=>{cache.clear();start();};start();
+async function select(keepView=false){const oldEvent=$('archive-event').value,oldSession=$('archive-session').value;const id=Number($('archive-season').value),seq=++sequence;current=null;$('archive-content').hidden=true;msg('Loading season…');try{let value=cache.get(id);if(!value){const {data,error}=await client.from('f7r_league_archive').select('payload_gzip_base64').eq('source_id',id).single();if(error)throw error;const bytes=Uint8Array.from(atob(data.payload_gzip_base64),c=>c.charCodeAt(0));value=JSON.parse(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text());cache.set(id,value);if(cache.size>3)cache.delete(cache.keys().next().value);}if(seq!==sequence)return;current=value;render();if(keepView&&current.events[Number(oldEvent)]){$('archive-event').value=oldEvent;renderEvent();if(current.events[Number(oldEvent)].sessions[Number(oldSession)]){$('archive-session').value=oldSession;renderSession();}}msg('RLT records · original points, standings and missing values preserved. Select a driver in a result to see their laps.');}catch(e){if(seq===sequence)msg('Could not load season: '+e.message);}}
+async function start(){try{const response=await fetch('./config.json',{cache:'no-store'});if(!response.ok)throw Error('Connection settings unavailable');const c=await response.json();client=window.supabase.createClient(c.supabase_url,c.supabase_publishable_key,{auth:window.F7RAuth.options()});const {data:{session}}=await client.auth.getSession();if(!session||session.user.is_anonymous){msg('Sign in with your driver or admin account to view the shared archive.');return;}const {data,error}=await client.from('f7r_league_archive').select('source_id,name,archived,event_count,session_count').order('archived').order('name');if(error)throw error;const chosen=$('archive-season').value;picker($('archive-season'),data.map(s=>[s.source_id,s.name+(s.archived?' · Archived':' · Current')]));if(data.some(s=>String(s.source_id)===chosen))$('archive-season').value=chosen;$('archive-season').disabled=!data.length;canReadSync=true;await syncStatus();msg(data.length+' shared seasons available.');if(data.length)await select();}catch(e){msg('Could not connect to shared archive: '+e.message);}}
+async function pollLibrary(){
+ if(!client||!canReadSync||document.hidden)return;
+ await syncStatus();
+ try{
+  const {data,error}=await client.from('f7r_league_archive').select('source_id,name,archived,imported_at').order('archived').order('name');if(error)throw error;
+  const selected=$('archive-season').value;
+  picker($('archive-season'),data.map(s=>[s.source_id,s.name+(s.archived?' · Archived':' · Current')]));
+  if(data.some(s=>String(s.source_id)===selected))$('archive-season').value=selected;
+  const newest=data.find(s=>s.source_id===current?.index.seasonId);
+  if(newest&&Date.parse(newest.imported_at)>Date.parse(current.importedAt)){cache.delete(newest.source_id);await select(true);}
+ }catch{/* Keep the last available saved results on connection failure. */}
+}
+async function syncStatus(){
+ if(!client||!canReadSync)return;
+ try{
+  const {data,error}=await client.rpc('f7r_rlt_sync_status');if(error)throw error;
+  const parts=['AUTOMATIC RLT CLOUD SYNC · checks every 2 minutes'];
+  if(data.last_checked)parts.push('Last checked '+new Date(data.last_checked).toLocaleString());
+  if(data.last_success)parts.push('Last update '+new Date(data.last_success).toLocaleString());
+  if(data.pending)parts.push(data.pending+' season(s) queued');
+  if(data.last_error)parts.push('Retry pending: '+data.last_error);
+  $('archive-sync-status').textContent=parts.join(' · ');
+ }catch{$('archive-sync-status').textContent='Sync status unavailable. Saved seasons remain available.';}
+}
+setInterval(pollLibrary,60000);
+$('archive-season').onchange=()=>select();$('archive-event').onchange=renderEvent;$('archive-session').onchange=renderSession;$('archive-download').onclick=download;$('archive-refresh').onclick=()=>{cache.clear();start();};start();
 
