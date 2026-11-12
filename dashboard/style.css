@@ -84,3 +84,6 @@ aside{overflow-y:auto;scrollbar-width:thin;scrollbar-color:#384154 #10131c}.side
 .ers-battery{--battery-color:#4fe091;position:relative;display:inline-grid;place-items:center;min-width:46px;height:20px;margin-right:3px;padding:0 5px;box-sizing:border-box;border:1px solid var(--battery-color);border-radius:4px;background:linear-gradient(90deg,color-mix(in srgb,var(--battery-color) 32%,#111620) var(--charge),#111620 var(--charge));color:#fff;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;text-shadow:0 1px 3px #000;vertical-align:middle}
 .ers-battery::after{content:"";position:absolute;left:100%;top:5px;width:3px;height:8px;border-radius:0 2px 2px 0;background:var(--battery-color)}
 .ers-battery[data-level="mid"]{--battery-color:#ffd15a}.ers-battery[data-level="low"]{--battery-color:#ff6279}
+
+/* Commentary box */
+aside a[href="./commentary.html"]{border-color:#5ce0cc80;background:repeating-linear-gradient(135deg,transparent 0 24px,#5ce0cc0b 24px 26px),linear-gradient(115deg,#144c4666,#151b28);}
