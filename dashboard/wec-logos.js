@@ -47,6 +47,7 @@ const brandFiles={bmw:'bmw.15',ford:'ford.gt3.lmu',lexus:'lexus.lmu.gt3',corvett
 const brands={bmw:'BMW',ford:'Ford',lexus:'Lexus',corvette:'Corvette',chevrolet:'Chevrolet',peugeot:'Peugeot',porsche:'Porsche',toyota:'Toyota'};
 export function resolveTeam(name,info){
  const label=clean(name),source=clean(info?.uniqueId).replace(/\.\d{4}$/,''),teams=Object.values(TEAMS);
+ const f2keys=['art','campos','rodin','aix','dams','hitech','mp','prema','trident','var','invicta'];const f2=f2keys.find(k=>source===k+'.f2'||label===k||label===k+' f2');if(f2)return TEAMS['f2_'+f2];
  const base=teams.find(t=>clean(t.name)===label)||teams.find(t=>source.startsWith(t.key+'.'))||teams.find(t=>label.startsWith(clean(t.name)+' '))||teams.find(t=>t.key===clean(info?.origin).replaceAll(' ',''));
  let logo=WEC_LOGOS[source],brand=clean(info?.origin);if(!brand)brand=Object.keys(brandFiles).find(b=>label.startsWith(b+' ')||label===b)||'';
  if(!logo&&brandFiles[brand])logo=WEC_LOGOS[brandFiles[brand]];
