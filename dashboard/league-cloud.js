@@ -1,3 +1,4 @@
+import {resolveTeam,styleTeamLogo} from './wec-logos.js?v=1';
 import {TEAMS} from './teams.js?v=0.14.0';
 const $=id=>document.getElementById(id);
 const el=(tag,text)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;return n;};
@@ -9,7 +10,7 @@ const time=v=>v||'—';
 const color=v=>/^#[0-9a-f]{8}$/i.test(v||'')?'#'+v.slice(3):/^#[0-9a-f]{6}$/i.test(v||'')?v:'#7eb9ef';
 const countryNames={England:'GB',UK:'GB','United Kingdom':'GB',Netherlands:'NL',Italy:'IT',Germany:'DE',France:'FR',Spain:'ES',Australia:'AU',Austria:'AT',Belgium:'BE',Brazil:'BR',Canada:'CA',China:'CN',Hungary:'HU',Japan:'JP',Mexico:'MX',Monaco:'MC',Portugal:'PT',Qatar:'QA',Singapore:'SG','Saudi Arabia':'SA',Bahrain:'BH','United States':'US',USA:'US','United Arab Emirates':'AE',UAE:'AE',Finland:'FI',Poland:'PL'};
 function flag(country){const c=countryNames[country]||country;return /^[A-Z]{2}$/.test(c||'')?String.fromCodePoint(...[...c].map(c=>127397+c.charCodeAt(0)))+' ':'';}
-function car(name,info){const n=el('span');n.className='archive-team';const teams=Object.values(TEAMS),label=(name||'').trim().toLowerCase(),source=(info?.uniqueId||'').toLowerCase();const team=teams.find(t=>t.name.toLowerCase()===label)||teams.find(t=>source.startsWith(t.key+'.'))||teams.find(t=>label.startsWith(t.name.toLowerCase()+' '))||teams.find(t=>t.key===(info?.origin||'').toLowerCase().replaceAll(' ',''));if(team?.logo){const img=el('img');img.src='./assets/teams/'+team.logo;img.alt=team.name+' logo';n.append(img);}n.style.color=color(info?.primaryColor||team?.color);n.append(el('span',name||'—'));return n;}
+function car(name,info){const n=el('span');n.className='archive-team';const team=resolveTeam(name,info);if(team?.logo){const img=el('img');img.src='./assets/teams/'+team.logo;img.alt=team.name+' logo';styleTeamLogo(img,team);n.append(img);}n.style.color=color(info?.primaryColor||team?.color);n.append(el('span',name||'—'));return n;}
 function table(target,headers,rows){const wrap=el('div'),t=el('table');wrap.className='data-table';const h=t.createTHead().insertRow();headers.forEach(x=>h.append(el('th',x)));const b=t.createTBody();for(const row of rows){const tr=b.insertRow();for(const value of row){const td=tr.insertCell();value instanceof Node?td.append(value):td.textContent=value??'—';}}wrap.append(t);target.replaceChildren(wrap);}
 function picker(n,items){n.replaceChildren(...items.map(([value,label])=>{const o=el('option',label);o.value=value;return o;}));}
 function download(){if(!current)return;const u=URL.createObjectURL(new Blob([JSON.stringify(current,null,2)],{type:'application/json'}));const a=el('a');a.href=u;a.download='F7R-RLT-season-'+current.index.seasonId+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
@@ -50,4 +51,5 @@ async function syncStatus(){
 }
 setInterval(pollLibrary,60000);
 $('archive-season').onchange=()=>select();$('archive-event').onchange=renderEvent;$('archive-session').onchange=renderSession;$('archive-download').onclick=download;$('archive-refresh').onclick=()=>{cache.clear();start();};start();
+
 

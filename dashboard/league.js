@@ -1,3 +1,4 @@
+import {resolveTeam,styleTeamLogo} from './wec-logos.js?v=1';
 import {POINTS, pointsFor, validateArchive} from './league-model.js?v=2';
 import {TEAMS} from './teams.js?v=0.14.0';
 import {lapTime} from './model.js?v=0.10.1';
@@ -106,8 +107,7 @@ function table(container, columns, rows) {
 }
 
 function car(teamName) {
-  const team = Object.values(TEAMS).find(team => team.name === teamName ||
-    (team.key === 'redbull' && teamName === 'Red Bull'));
+  const team = resolveTeam(teamName);
   const text = node('span');
   if (team?.logo) {
     const image = node('img');
@@ -116,6 +116,7 @@ function car(teamName) {
     image.width = 26;
     image.height = 24;
     image.style.cssText = 'vertical-align:middle;object-fit:contain;margin-right:8px';
+    styleTeamLogo(image,team);
     text.append(image);
   }
   text.append(teamName ?? '');
@@ -317,3 +318,4 @@ async function initLibrary() {
   }
 }
 initLibrary();
+
