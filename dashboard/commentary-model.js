@@ -38,6 +38,17 @@ export function buildBriefing(current,history,track,selectedClass=''){
  const talk=[];
  if(lastRace.length){const winner=lastRace.find(r=>r.position===1&&finished(r));if(winner)talk.push({title:'Last recorded visit',text:`${winner.driver} won the ${winner.seasonName.trim()} ${winner.caption} here${winner.date?' on '+winner.date.slice(0,10):''}.`,source:winner.seasonName});}
  if(venueWinners.length)talk.push({title:'Venue specialist',text:`${venueWinners[0][0]} has ${venueWinners[0][1]} recorded win${venueWinners[0][1]===1?'':'s'} here in this series.`,source:scope.length+' imported seasons'});
+ // Venue records include former drivers, with ties retained and unknown identities excluded.
+ const records=(source,predicate)=>{const counts=new Map();for(const r of source)if(known(r.driver)&&predicate(r)){const id=r.driverKey;const old=counts.get(id)||{name:r.driver,count:0};old.count++;counts.set(id,old);}return [...counts.values()].sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));};
+ for(const [title,source,predicate,label] of [
+  ['Most podiums',races,r=>finished(r)&&r.position<=3,'podium finishes'],
+  ['Qualifying benchmark',qualis,r=>finished(r)&&r.position===1,'qualifying P1s'],
+  ['Most recorded appearances',races,()=>true,'recorded race entries']
+ ]){const ranked=records(source,predicate);if(ranked.length){const count=ranked[0].count,names=ranked.filter(r=>r.count===count).map(r=>r.name);talk.push({title,text:names.join(', ')+(names.length===1?' has ':' share ')+count+' '+label+' here.',source:'Completed venue sessions · this series only'});}}
+ const validLaps=races.filter(r=>r.fastest>0&&known(r.driver)).sort((a,b)=>a.fastest-b.fastest);
+ if(validLaps.length){const r=validLaps[0],ms=r.fastest;const time=Math.floor(ms/60000)+':'+((ms%60000)/1000).toFixed(3).padStart(6,'0');talk.push({title:'Fastest archived race lap',text:r.driver+' recorded '+time+' in '+r.seasonName.trim()+'.',source:'Recorded race laps · layouts and game versions may differ'});}
+ const visits=new Map();for(const r of recent){const id=r.seasonId+':'+r.session;if(!visits.has(id))visits.set(id,[]);visits.get(id).push(r);}
+ const raceHistory=[...visits.values()].slice(0,6).map(entries=>{const first=entries[0],classified=entries.filter(finished).sort((a,b)=>a.position-b.position);return {season:first.seasonName,date:first.date,caption:first.caption,entries:entries.length,podium:classified.filter(r=>r.position<=3).map(r=>({name:r.driver,position:r.position,className:r.className})),retirements:entries.filter(r=>/dnf|retir|dns|dsq|disqual/i.test(r.status||'')).length};});
  const currentSorted=[...entrants].sort((a,b)=>a.position-b.position);
  if(currentSorted.length&&(key||!currentSorted.some(d=>d.classInfo?.name))){
   const first=currentSorted[0],second=currentSorted[1];const numericPoints=d=>{const p=d?.points?.formatted??d?.points;return typeof p==='number'?p:typeof p==='string'&&/^[-+]?\d+(?:[.,]\d+)?$/.test(p.trim())?Number(p.trim().replace(',','.')):NaN;};const gap=numericPoints(first)-numericPoints(second);
@@ -45,5 +56,6 @@ export function buildBriefing(current,history,track,selectedClass=''){
  }
  const mover=[...cards].filter(c=>c.bestGain>0).sort((a,b)=>b.bestGain-a.bestGain)[0];
  if(mover)talk.push({title:'Through the field',text:`${mover.name} has gained ${mover.bestGain} places from grid to classification in a recorded finish here.`,source:'Saved grid and classification'});
- return {cards,talk,venueWinners,lastRace: lastRace.slice(0,3),raceCount:raceIds.size,driverStarts:races.length,scopeCount:scope.length,layouts:[...new Set(rows.map(r=>r.layout).filter(Boolean))],rows,sourceTimes:scope.map(s=>s.importedAt)};
+ return {cards,talk,raceHistory,venueWinners,lastRace: lastRace.slice(0,3),raceCount:raceIds.size,driverStarts:races.length,scopeCount:scope.length,layouts:[...new Set(rows.map(r=>r.layout).filter(Boolean))],rows,sourceTimes:scope.map(s=>s.importedAt)};
 }
+
