@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {rosterEmbed} from '../supabase/functions/_shared/discord-roster.js';
+test('Porsche 992 display keeps existing car identity and checked-in driver',()=>{const team='GT3 · Porsche 911 GT3 R (992)',fields=[{name:team,value:'<:porsche:1518597743512256512> <@&1550076348272214116>'}];const embed=rosterEmbed([{driver_name:'Driver One',team,placement:'Full-time'}],fields,false,4096,{});const text=JSON.stringify(embed);assert.match(text,/Porsche 992/);assert.doesNotMatch(text,/Porsche 911 GT3 R/);assert.match(text,/Driver One/);assert.equal(fields[0].name,team);assert.match(fields[0].value,/1550076348272214116/);});
+

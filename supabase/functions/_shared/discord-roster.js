@@ -54,7 +54,7 @@ export function rosterEmbed(rows, mapped, isF1, limit, classIcons = {}, openEntr
       let count = 0;
       for (const field of cars) {
         const emoji = /^<a?:\w+:\d{17,20}>/.exec(field.value)?.[0];
-        const car = clean(field.name.slice(className.length+3));
+        const car = clean(field.name.slice(className.length+3).replace(/^Porsche 911 GT3 R \(992\)$/, "Porsche 992"));
         const drivers = active.filter(driver=>driver.team===field.name);
         count += drivers.length;
         manufacturers.push("**"+(emoji ? emoji+" " : "")+car+"**",
