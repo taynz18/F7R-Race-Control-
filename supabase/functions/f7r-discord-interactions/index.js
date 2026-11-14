@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
         body:JSON.stringify({
           p_guild:guild,p_message:interaction.message.id,p_driver:member.user.id,
           p_name:member.nick || member.user.global_name || member.user.username,p_team:team || raceClass || null,
-          p_full_time:checkingOut ? !openEntry && Boolean(config.fullTimeId) && eligible : placement==="Full-time",p_f1:["F1","F2"].includes(config.game),
+          p_full_time:checkingOut ? !openEntry && Boolean(config.fullTimeId) && eligible : placement==="Full-time",p_f1:["F1","F2"].includes(config.game) || Boolean(config.twoSeats),
           p_out:Boolean(checkingOut)
         })
       });

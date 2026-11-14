@@ -96,7 +96,7 @@ Deno.serve(async (request) => {
       if (!postConfig?.fields.some(field=>field.name===input.team)) return reply({error:"Choose a team from this check-in."},400);
       const assigned = await fetch(url+"/rest/v1/rpc/f7r_confirm_discord_reserve",{
         method:"POST",headers:{apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"},
-        body:JSON.stringify({p_guild:guild,p_message:post.id,p_driver:input.driverId,p_team:input.team,p_f1:isFormula(postConfig.game)})
+        body:JSON.stringify({p_guild:guild,p_message:post.id,p_driver:input.driverId,p_team:input.team,p_f1:isFormula(postConfig.game) || Boolean(postConfig.twoSeats)})
       });
       if (!assigned.ok) return reply({error:"Could not confirm this reserve."},502);
       const outcome = await assigned.json();
@@ -251,7 +251,7 @@ Deno.serve(async (request) => {
           metadata.get(key).ids.push(role.id);
         }
       }
-      return [...metadata.values()].map(({name,brand,ids})=>{
+      return [...metadata.values()].filter(team=>team.ids.length).map(({name,brand,ids})=>{
         const key = "GT3 · "+name;
         const manufacturerEmoji = Object.keys(savedEmojis).find(label=>accKey(label)===accKey(brand) && savedEmojis[label]);
         const suggested = emojis.find(emoji=>accKey(emoji.name)===accKey(name)) ??
@@ -337,7 +337,7 @@ Deno.serve(async (request) => {
     const classEmoji = name => classEmojiFor(emojis,name);
     const classIcons = Object.fromEntries(["Hypercar","LMGT3","GT3","Reserve"].map(name=>[name,classEmojiText(classEmoji(name))]));
     const roster = {...rosterEmbed([],lineupFields,isFormula(game),4096,classIcons,openEntry),image};
-    if (!await savePostConfig(guild,nonce,{game,fields:lineupFields,fullTimeId:openEntry ? null : fullTimeRoles[0]?.id,classIcons,openEntry},service)) {
+    if (!await savePostConfig(guild,nonce,{game,twoSeats:isAcc && !openEntry,fields:lineupFields,fullTimeId:openEntry ? null : fullTimeRoles[0]?.id,classIcons,openEntry},service)) {
       return reply({error:"Could not save the check-in role mappings."},502);
     }
     const checkInButtons = isLmu ? [
