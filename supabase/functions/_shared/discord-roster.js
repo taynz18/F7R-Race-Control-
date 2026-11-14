@@ -153,7 +153,7 @@ export async function readPostConfig(message, guild, service) {
     {headers:configHeaders(service),signal:AbortSignal.timeout(1800)});
   if (!result.ok) throw Error("Attendance configuration is unavailable.");
   const config = (await result.json())[0]?.config ?? null;
-  if (config?.game?.startsWith("Assetto Corsa") && !config.openEntry) config.fields = config.fields.filter(field=>/<@&\\d{17,20}>/.test(field.value));
+  if (config?.game?.startsWith("Assetto Corsa") && !config.openEntry) config.fields = config.fields.filter(field=>/<@&\d{17,20}>/.test(field.value));
   return config;
 }
 
