@@ -1,5 +1,6 @@
 import {wecRoleTeams} from "../_shared/wec-teams.js";
 import {reminderSettings} from "../_shared/attendance-reminders.js";
+import {sendReserveConfirmation} from "../_shared/reserve-dm.js";
 import { refreshDiscordRoster, rosterEmbed, readPostConfig, savePostConfig, classEmojiFor, classEmojiText } from "../_shared/discord-roster.js";
 const accModels = [["Aston Martin V8 Vantage GT3","Aston Martin"],["Aston Martin V12 Vantage GT3","Aston Martin"],["Audi R8 LMS GT3","Audi"],["Audi R8 LMS GT3 Evo","Audi"],["Audi R8 LMS GT3 Evo II","Audi"],["Bentley Continental GT3 (2015)","Bentley"],["Bentley Continental GT3 (2018)","Bentley"],["BMW M4 GT3","BMW"],["BMW M6 GT3","BMW"],["Ferrari 296 GT3","Ferrari"],["Ferrari 488 GT3","Ferrari"],["Ferrari 488 GT3 Evo","Ferrari"],["Ford Mustang GT3","Ford"],["Honda NSX GT3","Honda"],["Honda NSX GT3 Evo","Honda"],["Jaguar Emil Frey G3","Jaguar"],["Lamborghini Huracán GT3","Lamborghini"],["Lamborghini Huracán GT3 Evo","Lamborghini"],["Lamborghini Huracán GT3 Evo2","Lamborghini"],["Lexus RC F GT3","Lexus"],["McLaren 650S GT3","McLaren"],["McLaren 720S GT3","McLaren"],["McLaren 720S GT3 Evo","McLaren"],["Mercedes-AMG GT3 (2015)","Mercedes"],["Mercedes-AMG GT3 Evo","Mercedes"],["Nissan GT-R Nismo GT3 (2015)","Nissan"],["Nissan GT-R Nismo GT3 (2018)","Nissan"],["Porsche 911 GT3 R (991)","Porsche"],["Porsche 911 GT3 R (991 II)","Porsche"],["Porsche 911 GT3 R (992)","Porsche"],["Reiter R-EX GT3","Reiter"]];
 const accRoleAliases = [["Aston Martin Vantage (ACC)","Aston Martin Vantage GT3","Aston Martin"],["Audi R8 ACC","Audi R8 GT3","Audi"],["Mclaren 720s ACC","McLaren 720S GT3","McLaren"],["Ferari 296 ACC","Ferrari 296 GT3","Ferrari"],["Ferrari 296 ACC","Ferrari 296 GT3","Ferrari"],["Ferrari 488 ACC","Ferrari 488 GT3","Ferrari"],["Ford Mustang ACC","Ford Mustang GT3","Ford"],["Lamborghini Huracan","Lamborghini Huracán GT3","Lamborghini"],["Mclaren 720s EVO ACC","McLaren 720S GT3 Evo","McLaren"],["Lexus RC ACC","Lexus RC F GT3","Lexus"],["Porsche 911 ACC","Porsche 911 GT3 R","Porsche"],["Nissan GTR Nismo ACC","Nissan GT-R Nismo GT3","Nissan"],["BMW M4 ACC","BMW M4 GT3","BMW"],["Porsche 992 ACC","Porsche 911 GT3 R (992)","Porsche"],["Mercedes AMG ACC","Mercedes-AMG GT3","Mercedes"]];
@@ -111,7 +112,8 @@ Deno.serve(async (request) => {
       const outcome = await assigned.json();
       if (outcome!=="Confirmed") return reply({error:outcome},409);
       const refreshed = await refreshDiscordRoster({message:post,channel_id:input.channelId},guild,service,postConfig).catch(()=>false);
-      return reply({refreshed});
+      const dmStatus = await sendReserveConfirmation({token,driverId:input.driverId,team:input.team,guild,channelId:input.channelId,messageId:post.id});
+      return reply({refreshed,dmStatus});
     }
     if (input.action === "roster") {
       if (!snowflake(input.messageId)) return reply({error: "Enter a valid Discord message ID."}, 400);

@@ -207,6 +207,9 @@ async function discordAction(action, details = {}) {
     } else if (action === 'confirm_reserve') {
       const change = details.moving ? 'Reserve moved' : 'Reserve confirmed';
       status.textContent = data.refreshed ? change + ' and Discord lineup updated.' : change + '. Discord could not refresh the message.';
+      if (data.dmStatus === 'sent') status.textContent += ' Confirmation DM sent to the driver.';
+      if (data.dmStatus === 'failed') status.textContent += ' Seat confirmed, but the DM could not be sent. The driver may have DMs disabled.';
+      if (data.dmStatus === 'uncertain') status.textContent += ' Seat confirmed. DM delivery could not be verified; check with the driver.';
       document.activeElement?.blur();
     } else if (action === 'post') {
       $('attendance-link').href = data.url;
