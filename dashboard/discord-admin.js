@@ -201,6 +201,9 @@ async function discordAction(action, details = {}) {
       status.textContent = isPreview ? 'Preview ready. Nothing has been posted.' : 'Choose emojis, then save your mappings.';
     } else if (action === 'emoji_save') {
       status.textContent = 'Team emojis saved for all Race Control admins.';
+    } else if (action === 'reminder_stop') {
+      status.textContent = 'Remaining reminder pings stopped. Attendance and votes are unchanged.';
+      $('attendance-reminder-status').textContent = 'Reminders cancelled.';
     } else if (action === 'confirm_reserve') {
       const change = details.moving ? 'Reserve moved' : 'Reserve confirmed';
       status.textContent = data.refreshed ? change + ' and Discord lineup updated.' : change + '. Discord could not refresh the message.';
@@ -214,11 +217,15 @@ async function discordAction(action, details = {}) {
       $('attendance-drivers').textContent = '';
       $('attendance-preview').hidden = true;
       attendanceDraft = null;
-      status.textContent = 'Check-in posted.';
+      status.textContent = data.warning || (data.remindersScheduled ? 'Check-in posted. Reminder pings scheduled.' : 'Check-in posted.');
     } else {
       const roster = $('attendance-drivers');
       roster.replaceChildren();
       activeRoster = details;
+      $('attendance-reminder-status').textContent = data.reminder === undefined ? 'Reminder status unavailable.' : data.reminder ?
+        `Reminders: ${data.reminder.status} · ${data.reminder.sent_count} of ${data.reminder.total_count} sent` +
+        (data.reminder.status === 'active' ? ' · Next: ' + new Date(data.reminder.next_at).toLocaleString() : '') +
+        (data.reminder.last_error ? ' · ' + data.reminder.last_error : '') : 'No reminder pings scheduled for this attendance.';
       const groups = [...data.teams, {name: 'Reserves'}, {name: 'Confirmed reserves'}, {name: 'Not participating'}];
       for (const group of groups) {
         const drivers = data.drivers.filter(row => {
@@ -346,12 +353,20 @@ $('attendance-form').onsubmit = event => {
   }
   const artwork = imageFile ? '' : $('attendance-artwork').value.trim();
   const round = $('attendance-round').value.trim();
+  const reminders = $('attendance-reminders-enabled').checked ? {
+    intervalHours:Number($('attendance-reminder-hours').value), count:Number($('attendance-reminder-count').value)
+  } : null;
+  if (reminders && (openEntry || startsAt <= Date.now() + reminders.intervalHours * 3600000)) {
+    $('discord-status').textContent = openEntry ? 'Reminder pings need a full-time lineup role.' : 'The first reminder must be before the race starts.';
+    return;
+  }
   attendanceDraft ??= {
-    game, track, startsAt, notes, artwork, imageFile, round, channelId: channel.value, tier, series, lineupRoleId, openEntry,
+    game, track, startsAt, notes, artwork, imageFile, round, reminders, channelId: channel.value, tier, series, lineupRoleId, openEntry,
     nonce: crypto.randomUUID().replaceAll('-', '').slice(0, 24)
   };
   $('attendance-summary').textContent = [
     game, track, round, new Date(startsAt).toLocaleString(), channel.selectedOptions[0].text,
+    reminders ? `Reminder pings: every ${reminders.intervalHours} hours, up to ${reminders.count}; stops at race time` : 'Reminder pings off',
     openEntry ? 'Open entry' : lineupRoleId ? $('attendance-lineup').selectedOptions[0].text : game === 'F1' ? tier : game === 'Le Mans Ultimate' ? series : '', notes
   ].filter(Boolean).join(' · ');
   attendanceDraft.emojiIds = Object.create(null);
@@ -385,6 +400,12 @@ $('attendance-roster').onclick = () => {
 };
 
 $('attendance-message').oninput = () => { activeRoster = null; };
+$('attendance-reminder-stop').onclick = () => {
+  const value = $('attendance-message').value.trim();
+  const messageId = /^(?:https:\/\/discord\.com\/channels\/\d+\/\d+\/)?(\d{17,20})\/?$/.exec(value)?.[1];
+  if (!messageId) { $('discord-status').textContent = 'Paste the attendance message link or ID first.'; return; }
+  discordAction('reminder_stop', {messageId});
+};
 setInterval(() => { if (activeRoster && verified && !$('attendance-drivers').contains(document.activeElement)) discordAction('roster', activeRoster); }, 5000);
 
 const attendanceBatch = [];

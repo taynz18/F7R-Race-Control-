@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer"><meta name="theme-color" content="#0c111b">
 <title>F7R Race Control · Discord</title><link rel="stylesheet" href="admin.css?v=16"><link rel="icon" type="image/png" sizes="64x64" href="./assets/f7r-favicon.png">
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="./dashboard/session.js?v=1"></script><script type="module" src="./dashboard/discord-admin.js?v=attendance-response1"></script><link rel="apple-touch-icon" sizes="180x180" href="./assets/f7r-home-180.png"><link rel="manifest" href="./manifest.webmanifest"></head>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script><script defer src="./dashboard/session.js?v=1"></script><script type="module" src="./dashboard/discord-admin.js?v=attendance-reminders1"></script><link rel="apple-touch-icon" sizes="180x180" href="./assets/f7r-home-180.png"><link rel="manifest" href="./manifest.webmanifest"></head>
 <body class="discord-desk"><header><a class="brand" href="./"><img class="brand-logo" src="./assets/f7r-logo.png" alt="F7R"><span>RACE CONTROL</span></a>
 <a class="secondary" href="./">Back to Race Control ↗</a></header><main>
 <div class="intro"><p class="eyebrow">DISCORD OPERATIONS</p><h1>Race-day attendance.</h1><p class="lede">Plan check-ins, build your lineups and confirm reserve seats.</p></div>
@@ -58,6 +58,15 @@
 <p id="attendance-artwork-help" class="small muted">PNG, JPG, WebP or GIF, up to 2 MB. An uploaded image takes priority over a link.</p>
 <label for="attendance-artwork">Or use a direct HTTPS image link</label>
 <input id="attendance-artwork" type="url" maxlength="1500" placeholder="https://…/race-day.png">
+<fieldset><legend>Attendance reminder pings (optional)</legend>
+<label><input id="attendance-reminders-enabled" type="checkbox"> Remind full-time drivers to vote</label>
+<label for="attendance-reminder-hours">Hours between pings</label>
+<input id="attendance-reminder-hours" type="number" min="1" max="720" step="1" value="24" list="reminder-intervals">
+<datalist id="reminder-intervals"><option value="24"><option value="48"><option value="72"></datalist>
+<label for="attendance-reminder-count">Total reminder pings</label>
+<input id="attendance-reminder-count" type="number" min="1" max="20" step="1" value="2">
+<p class="small muted">24 hours × 2 sends one reminder after 24 hours and another after 48 hours, then stops. Reminders tag this lineup’s full-time driver role and link to this attendance. They stop when the race starts and work while Race Control is closed. Off by default.</p>
+</fieldset>
 <button class="secondary" id="attendance-preview-button" type="submit">Preview check-in</button>
 </form>
 <button class="secondary" id="attendance-emoji-setup" type="button">Set up team emojis for selected game</button>
@@ -79,6 +88,8 @@
 <label for="attendance-message">Discord message link or ID</label>
 <input id="attendance-message" placeholder="Paste the Discord message link">
 <button class="secondary" id="attendance-roster" type="button">Load roster</button>
+<p id="attendance-reminder-status" role="status"></p>
+<button class="secondary" id="attendance-reminder-stop" type="button">Stop remaining reminder pings for this attendance</button>
 <div id="attendance-drivers" aria-live="polite"></div>
 </section>
 <details class="card" id="discord-settings"><summary>League setup · circuits, lineups and car roles</summary>
@@ -98,3 +109,4 @@
 <button type="button" class="secondary" id="settings-car-add">Add or update car mapping</button><ul id="settings-cars"></ul>
 <button type="button" class="primary" id="settings-save">Save game settings</button>
 </div><p id="settings-status" role="status"></p></details></div><p id="message" role="status"></p></main></body></html>
+

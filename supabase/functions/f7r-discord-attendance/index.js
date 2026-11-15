@@ -1,4 +1,5 @@
 import {wecRoleTeams} from "../_shared/wec-teams.js";
+import {reminderSettings} from "../_shared/attendance-reminders.js";
 import { refreshDiscordRoster, rosterEmbed, readPostConfig, savePostConfig, classEmojiFor, classEmojiText } from "../_shared/discord-roster.js";
 const accModels = [["Aston Martin V8 Vantage GT3","Aston Martin"],["Aston Martin V12 Vantage GT3","Aston Martin"],["Audi R8 LMS GT3","Audi"],["Audi R8 LMS GT3 Evo","Audi"],["Audi R8 LMS GT3 Evo II","Audi"],["Bentley Continental GT3 (2015)","Bentley"],["Bentley Continental GT3 (2018)","Bentley"],["BMW M4 GT3","BMW"],["BMW M6 GT3","BMW"],["Ferrari 296 GT3","Ferrari"],["Ferrari 488 GT3","Ferrari"],["Ferrari 488 GT3 Evo","Ferrari"],["Ford Mustang GT3","Ford"],["Honda NSX GT3","Honda"],["Honda NSX GT3 Evo","Honda"],["Jaguar Emil Frey G3","Jaguar"],["Lamborghini Huracán GT3","Lamborghini"],["Lamborghini Huracán GT3 Evo","Lamborghini"],["Lamborghini Huracán GT3 Evo2","Lamborghini"],["Lexus RC F GT3","Lexus"],["McLaren 650S GT3","McLaren"],["McLaren 720S GT3","McLaren"],["McLaren 720S GT3 Evo","McLaren"],["Mercedes-AMG GT3 (2015)","Mercedes"],["Mercedes-AMG GT3 Evo","Mercedes"],["Nissan GT-R Nismo GT3 (2015)","Nissan"],["Nissan GT-R Nismo GT3 (2018)","Nissan"],["Porsche 911 GT3 R (991)","Porsche"],["Porsche 911 GT3 R (991 II)","Porsche"],["Porsche 911 GT3 R (992)","Porsche"],["Reiter R-EX GT3","Reiter"]];
 const accRoleAliases = [["Aston Martin Vantage (ACC)","Aston Martin Vantage GT3","Aston Martin"],["Audi R8 ACC","Audi R8 GT3","Audi"],["Mclaren 720s ACC","McLaren 720S GT3","McLaren"],["Ferari 296 ACC","Ferrari 296 GT3","Ferrari"],["Ferrari 296 ACC","Ferrari 296 GT3","Ferrari"],["Ferrari 488 ACC","Ferrari 488 GT3","Ferrari"],["Ford Mustang ACC","Ford Mustang GT3","Ford"],["Lamborghini Huracan","Lamborghini Huracán GT3","Lamborghini"],["Mclaren 720s EVO ACC","McLaren 720S GT3 Evo","McLaren"],["Lexus RC ACC","Lexus RC F GT3","Lexus"],["Porsche 911 ACC","Porsche 911 GT3 R","Porsche"],["Nissan GTR Nismo ACC","Nissan GT-R Nismo GT3","Nissan"],["BMW M4 ACC","BMW M4 GT3","BMW"],["Porsche 992 ACC","Porsche 911 GT3 R (992)","Porsche"],["Mercedes AMG ACC","Mercedes-AMG GT3","Mercedes"]];
@@ -79,12 +80,19 @@ Deno.serve(async (request) => {
       return reply({error: "Approved race admin access required."}, 403);
     }
     const input = await request.json().catch(() => null);
-    if (!["options", "preview", "post", "roster", "emoji_setup", "emoji_save", "confirm_reserve", "game_settings", "save_game_settings"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
+    if (!["options", "preview", "post", "roster", "reminder_stop", "emoji_setup", "emoji_save", "confirm_reserve", "game_settings", "save_game_settings"].includes(input?.action)) return reply({error: "Invalid action."}, 400);
     const token = Deno.env.get("F7R_DISCORD_BOT_TOKEN");
     const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
     if (!token || !snowflake(guild)) return reply({error: "Set the bot token and F7R server ID in Supabase."}, 503);
     const discordHeaders = {Authorization: "Bot " + token, "Content-Type": "application/json"};
     const api = "https://discord.com/api/v10";
+    if (input.action === 'reminder_stop') {
+      if (!snowflake(input.messageId)) return reply({error:'Enter an attendance message link or ID.'},400);
+      const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      const query = new URLSearchParams({guild_id:'eq.'+guild,message_id:'eq.'+input.messageId});
+      const stopped = await fetch(url+'/rest/v1/f7r_discord_reminders?'+query,{method:'PATCH',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({status:'cancelled',claim:null,lease_until:null})});
+      return stopped.ok ? reply({stopped:true}) : reply({error:'Could not stop reminders. Try again.'},502);
+    }
     if (input.action === "confirm_reserve") {
       if (!snowflake(input.channelId) || !snowflake(input.messageId) || !snowflake(input.driverId)) return reply({error:"Open the roster with its Discord message link."},400);
       const channel = await fetch(api+"/channels/"+input.channelId,{headers:discordHeaders});
@@ -123,7 +131,10 @@ Deno.serve(async (request) => {
         f1 = isFormula(postConfig.game);
         teams = f1 ? (postConfig.game==="F2"?f2Teams:f1Teams).map(([name,logo])=>({name,logo})) : postConfig.fields.map(({name})=>({name}));
       }
-      return reply({drivers,teams,f1});
+      const reminderQuery = new URLSearchParams({select:'status,sent_count,total_count,next_at,interval_hours,last_error',guild_id:'eq.'+guild,message_id:'eq.'+input.messageId});
+      const reminderResult = await fetch(url+'/rest/v1/f7r_discord_reminders?'+reminderQuery,{headers:{apikey:service,Authorization:'Bearer '+service}});
+      const reminder = reminderResult.ok ? (await reminderResult.json())[0] || null : undefined;
+      return reply({drivers,teams,f1,reminder});
     }
     const guildPath = api + "/guilds/" + guild;
     const [channelResponse, roleResponse] = await Promise.all([
@@ -293,6 +304,9 @@ Deno.serve(async (request) => {
     const fullTimeRoles = lineupRoleId ? roles.filter(role=>customLineup && role.id===customLineup.roleId) :
       preferred.length ? preferred : roles.filter(role=>compactRole(role.name)===eligibilityName);
     if (!openEntry && fullTimeRoles.length !== 1) return reply({error:lineupRoleId ? "The saved lineup role is unavailable. Reload attendance settings." : "Expected one Discord role named " + fullTimeRole + "."},400);
+    let reminders;
+    try { reminders = reminderSettings(input.reminders,startsAt,openEntry ? null : fullTimeRoles[0]?.id); }
+    catch (error) { return reply({error:error.message},400); }
     const teams = configuredTeams(!lineupRoleId && typeof tier==="string" ? tier : "", fullTimeRoles[0]?.id);
     const classTeams = buildRaceTeams(teams, fullTimeRoles[0]?.id);
     const mapped = classTeams.filter(team=>team.ids.length);
@@ -366,8 +380,16 @@ Deno.serve(async (request) => {
     const message = await fetch(api+"/channels/"+channel.id+"/messages",{method:"POST",headers,body});
     if (!message.ok) return reply({error:message.status===429?"Discord is rate limiting requests. Try again shortly.":"Could not post. Check the bot's View Channel and Send Messages permissions."},502);
     const posted=await message.json();
-    return reply({url:"https://discord.com/channels/"+guild+"/"+channel.id+"/"+posted.id, messageId:posted.id});
+    let warning;
+    if (reminders) {
+      try {
+        const queued = await fetch(url+'/rest/v1/f7r_discord_reminders',{method:'POST',headers:{apikey:service,Authorization:'Bearer '+service,'Content-Type':'application/json',Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({guild_id:guild,message_id:posted.id,channel_id:channel.id,role_id:mentionRole,starts_at:new Date(startsAt).toISOString(),interval_hours:reminders.intervalHours,total_count:reminders.count,next_at:new Date(Date.now()+reminders.intervalHours*3600000).toISOString()})});
+        if (!queued.ok) warning='Attendance posted, but reminders could not be scheduled.';
+      } catch { warning='Attendance posted, but reminders could not be scheduled.'; }
+    }
+    return reply({url:"https://discord.com/channels/"+guild+"/"+channel.id+"/"+posted.id, messageId:posted.id,warning,remindersScheduled:Boolean(reminders && !warning)});
   } catch {
     return reply({error:"Discord attendance service is unavailable."},502);
   }
 });
+
