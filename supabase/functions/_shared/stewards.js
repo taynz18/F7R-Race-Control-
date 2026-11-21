@@ -61,8 +61,16 @@ export async function caseAccess(s,c,driverId) {
  return {...access,route:r,member:m};
 }
 export async function notifyDefence(s,c) {
- const status=await s.dm(c.accused_id,{content:`**F7R case #${c.number}: defence requested**\nA report has been submitted concerning you in **${safeText(c.data.race)}**, ${safeText(c.data.lap)}. Please submit your own account and video evidence links. Your submission goes privately to the stewards.`,components:rowButtons([button('Submit defence','f7r-stew-defend:'+c.id)])});
- await s.db('f7r_steward_cases?id=eq.'+c.id,'PATCH',{data:{...c.data,defence_invitation:status}});
+ if(c.status!=='awaiting_defence'||!c.data.report?.locked)throw Error('Submit and lock the report before inviting the other driver.');
+ const channel=c.data.report_ticket;
+ if(!channel)throw Error('The report ticket is missing. Ask an admin to recover the case.');
+ // Remove the reporter before admitting the other driver; never grant access to both.
+ await s.discord('/channels/'+channel+'/permissions/'+c.reporter_id,'PUT',{type:1,allow:'0',deny:'1024'});
+ await s.discord('/channels/'+channel+'/permissions/'+c.accused_id,'PUT',{type:1,allow:String(1024+2048+32768+65536+16384),deny:'0'});
+ await s.discord('/channels/'+channel+'/messages','POST',{content:`<@${c.accused_id}> **Defence requested · Case #${c.number}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\nThe reporting driver has submitted their evidence and left this ticket. Use Submit defence to add your account, then upload your clips or paste evidence links here. **Video evidence is mandatory.** Stewards can see the full case.`,allowed_mentions:{parse:[],users:[c.accused_id]},components:rowButtons([button('Submit defence','f7r-stew-defend:'+c.id,1)])});
+ const status=await s.dm(c.accused_id,{content:`**F7R case #${c.number}: defence requested**\nA report has been submitted concerning you in **${safeText(c.data.race)}**, ${safeText(c.data.lap)}. Open your private ticket: https://discord.com/channels/${s.guild}/${channel}\nSubmit your account and video evidence in that ticket. The reporting driver no longer has access.`,components:rowButtons([button('Submit defence','f7r-stew-defend:'+c.id)])});
+ const latest=await s.incident(c.id);
+ await s.db('f7r_steward_cases?id=eq.'+c.id,'PATCH',{data:{...latest.data,defence_ticket:channel,defence_invitation:status}});
  return status;
 }
 export async function reviewChannel(s,c,r) {
@@ -70,10 +78,12 @@ export async function reviewChannel(s,c,r) {
  if(!appeal&&!c.data.defence?.locked&&c.status!=='discussion'&&c.status!=='voting'&&c.status!=='tied'&&c.status!=='closed')throw Error('The reported driver must submit a defence before opening the review room.');
  if(c.review_channel_id)return c.review_channel_id;
  const allow=String(1024+2048+65536),roles=[...new Set([...(appeal?[]:r.config.steward_roles),...r.config.leader_roles])];
- const channel=await s.discord('/guilds/'+s.guild+'/channels','POST',{
+ const shared=c.data.report_ticket;
+ const channel=shared?{id:shared}:await s.discord('/guilds/'+s.guild+'/channels','POST',{
    name:'case-'+c.number,type:0,...(r.config.category_id?{parent_id:r.config.category_id}:{}),
    permission_overwrites:[{id:s.guild,type:0,deny:'1024',allow:'0'},...roles.map(id=>({id,type:0,allow,deny:'0'})),{id:APP_ID,type:1,allow,deny:'0'},...[c.reporter_id,c.accused_id].filter(id=>id!==APP_ID).map(id=>({id,type:1,allow:'0',deny:'1024'}))]
  });
+ if(shared)for(const driver of [c.reporter_id,c.accused_id].filter(id=>id!==APP_ID))await s.discord('/channels/'+shared+'/permissions/'+driver,'PUT',{type:1,allow:'0',deny:'1024'});
  await s.db('f7r_steward_cases?id=eq.'+c.id,'PATCH',{review_channel_id:channel.id});
  const statement=(title,id,data)=>{let list='';for(const [index,url] of (data.links||[]).entries()){const line=`[Evidence ${index+1}](${url})\n`;if(list.length+line.length<=900)list+=line;}return {title,description:`Driver: <@${id}>\n${safeText(data.statement)}`,fields:[{name:'Video evidence',value:data.no_video?'No video evidence provided. Take this into account when assessing the case.':list||'See the private clip ticket or Race Control for evidence.'}]};};
  await s.discord('/channels/'+channel.id+'/messages','POST',{
@@ -98,12 +108,12 @@ export async function sendOutcomes(s,c,actor,leader,target='accused') {
  return statuses;
 }
 export async function evidenceTicket(s,c,r,phase) {
- const key=phase+'_ticket',existing=c.data[key];
+ const key=phase+'_ticket',existing=c.data[key]||(phase==='defence'?c.data.report_ticket:null);
  const driver=phase==='report'?c.reporter_id:c.accused_id,appeal=c.data.kind==='penalty_appeal';
  const roles=[...new Set([...(appeal?[]:r.config.steward_roles),...r.config.leader_roles])],allow=String(1024+2048+32768+65536+16384);
- const channel=existing?{id:existing}:await s.discord('/guilds/'+s.guild+'/channels','POST',{name:`case-${c.number}-${phase}`,type:0,...(r.config.category_id?{parent_id:r.config.category_id}:{}),permission_overwrites:[{id:s.guild,type:0,deny:'1024',allow:'0'},...roles.map(id=>({id,type:0,allow,deny:'0'})),{id:APP_ID,type:1,allow,deny:'0'},...[...new Set([c.reporter_id,c.accused_id])].filter(id=>id!==APP_ID).map(id=>({id,type:1,allow:id===driver?allow:'0',deny:id===driver?'0':'1024'}))]});
- if(!existing){const latest=await s.incident(c.id);await s.db('f7r_steward_cases?id=eq.'+c.id,'PATCH',{data:{...latest.data,[key]:channel.id}});}
- await s.discord('/channels/'+channel.id+'/messages','POST',{content:`<@${driver}> **${appeal?'In-game penalty appeal':phase==='report'?'Report':'Defence'} · Case #${c.number}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\n\nAttach up to five video clips directly here, or paste up to five HTTPS evidence links. **Mention <@${APP_ID}> in each clip message** so the bot can read your evidence. **Video evidence is mandatory.** Press Submit below when ready. This locks your statement and removes your access. The other driver cannot see this room.`,embeds:[{description:safeText(c.data[phase].statement)}],allowed_mentions:{parse:[],users:[driver]},components:rowButtons([button(phase==='report'?'Submit report / appeal':'Submit defence','f7r-stew-finish-'+phase+':'+c.id,1),...(phase==='report'?[button('Report another incident','f7r-stew-report:'+c.route_id)]:[])])});
+ const channel=existing?{id:existing}:await s.discord('/guilds/'+s.guild+'/channels','POST',{name:`case-${c.number}`,type:0,...(r.config.category_id?{parent_id:r.config.category_id}:{}),permission_overwrites:[{id:s.guild,type:0,deny:'1024',allow:'0'},...roles.map(id=>({id,type:0,allow,deny:'0'})),{id:APP_ID,type:1,allow,deny:'0'},...[...new Set([c.reporter_id,c.accused_id])].filter(id=>id!==APP_ID).map(id=>({id,type:1,allow:id===driver?allow:'0',deny:id===driver?'0':'1024'}))]});
+ if(c.data[key]!==channel.id){const latest=await s.incident(c.id);await s.db('f7r_steward_cases?id=eq.'+c.id,'PATCH',{data:{...latest.data,[key]:channel.id}});}
+ await s.discord('/channels/'+channel.id+'/messages','POST',{content:`<@${driver}> **${appeal?'In-game penalty appeal':phase==='report'?'Report':'Defence'} · Case #${c.number}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\n\nAttach up to five video clips directly here, or paste up to five HTTPS evidence links. **Mention <@${APP_ID}> in each clip message** so the bot can read your evidence. **Video evidence is mandatory.** Press Submit below when ready. This locks your statement and removes your access. Stewards retain access throughout. After you submit, the next stage continues in this same ticket.`,embeds:[{description:safeText(c.data[phase].statement)}],allowed_mentions:{parse:[],users:[driver]},components:rowButtons([button(phase==='report'?'Submit report / appeal':'Submit defence','f7r-stew-finish-'+phase+':'+c.id,1),...(phase==='report'?[button('Report another incident','f7r-stew-report:'+c.route_id)]:[])])});
  return channel.id;
 }
 export async function collectEvidence(s,c,phase,driver) {

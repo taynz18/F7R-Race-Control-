@@ -17,7 +17,7 @@ export async function stewardInteraction(i,s,waitUntil) {
  if(i.guild_id&&i.guild_id!==s.guild)return reply('This is only available in the F7R server.');
  const [kind,reference,selectedTarget,expectedRevision]=custom.split(':');
  const defer=work=>{
-   waitUntil((async()=>{let result;try{result=await work();}catch(error){result=error.message||'The case could not be updated.';}await fetch('https://discord.com/api/v10/webhooks/'+APP_ID+'/'+i.token+'/messages/@original',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...typeof result==='string'?{content:result}:result,allowed_mentions:{parse:[]}})});})().catch(()=>console.error('Steward interaction response failed')));
+   waitUntil((async()=>{let result;try{result=await work();}catch(error){console.error('Steward workflow failed',kind,error.message);result=error.message||'The case could not be updated.';}const response=await fetch('https://discord.com/api/v10/webhooks/'+APP_ID+'/'+i.token+'/messages/@original',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...typeof result==='string'?{content:result}:result,allowed_mentions:{parse:[]}})});if(!response.ok)console.error('Steward response delivery failed',kind,response.status);})().catch(()=>console.error('Steward interaction response failed')));
    return Response.json({type:5,data:{flags:64}});
  };
  try {
@@ -45,8 +45,8 @@ export async function stewardInteraction(i,s,waitUntil) {
      const c=(await s.db('f7r_steward_cases','POST',{guild_id:s.guild,route_id:route.id,interaction_id:i.id,reporter_id:user.id,accused_id:appeal?APP_ID:v.driver,data,status:'awaiting_report_evidence'}))[0];
      let channel;try{channel=await evidenceTicket(s,c,route,'report');}catch{return {content:`Draft #${c.number} saved. The private clip ticket could not open. Check the bot’s Manage Channels permission, then retry.`,components:rowButtons([button('Retry private ticket','f7r-stew-ticket-report:'+c.id),anotherReport(route.id)])};}
      const link=`https://discord.com/channels/${s.guild}/${channel}`;
-     await s.dm(user.id,{content:`**F7R ${appeal?'appeal':'report'} #${c.number} · finish your submission**\nVideo evidence is mandatory. Open your private ticket, attach your clips, then press Submit.\n${link}`,components:rowButtons([ticketLink(s.guild,channel),anotherReport(route.id)])});
-     return {content:`Draft #${c.number} saved. Video evidence is mandatory. Attach your clips in the private ticket, then press Submit there. You can open another report while this ticket stays open.\n${link}`,components:rowButtons([ticketLink(s.guild,channel),anotherReport(route.id)])};
+     await s.dm(user.id,{content:`**F7R ${appeal?'appeal':'report'} #${c.number} · finish your submission**\nVideo evidence is mandatory. Open your private ticket in the reporting group’s incident section, attach your clips, then press Submit.\n${link}`,components:rowButtons([ticketLink(s.guild,channel),anotherReport(route.id)])});
+     return {content:`Draft #${c.number} saved. Video evidence is mandatory. Attach your clips in the private ticket, then press Submit there. This ticket is in the reporting group’s incident section. You can open another report while this ticket stays open.\n${link}`,components:rowButtons([ticketLink(s.guild,channel),anotherReport(route.id)])};
    });
    if(['f7r-stew-ticket-report','f7r-stew-ticket-defence'].includes(kind))return defer(async()=>{
      const c=await s.incident(reference),phase=kind.endsWith('report')?'report':'defence',driver=phase==='report'?c.reporter_id:c.accused_id;

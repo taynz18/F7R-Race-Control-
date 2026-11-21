@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
+import {notifyDefence,verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
 import {stewardInteraction} from '../supabase/functions/_shared/steward-interactions.js';
 const driver='123456789012345678',accused='223456789012345678',steward='323456789012345678',leader='423456789012345678';
 const config={enabled:true,driver_roles:['driver'],steward_roles:['steward'],leader_roles:['leader']};
@@ -148,5 +148,29 @@ test('one driver can open separate report tickets and return to start another wi
    const again=await(await stewardInteraction({type:3,user:{id:driver},data:{custom_id:'f7r-stew-report:f1'}},service,()=>{})).json();assert.equal(again.type,9);
    await stewardInteraction(submit('first',accused),service,p=>tasks.push(p));await tasks.pop();assert.equal(rows.length,2);
  }finally{globalThis.fetch=original;}
+});
+
+test('report, defence and steward review stay in one category ticket with sequential driver access',async()=>{
+ const raw=structuredClone(c);raw.status='awaiting_report_evidence';const calls=[];let channels=0;
+ const s={guild:'guild',incident:async()=>raw,db:async(path,method,body)=>{Object.assign(raw,body);return[raw];},dm:async()=> 'sent',discord:async(path,method,body)=>{calls.push({path,method,body});if(path==='/guilds/guild/channels'){channels++;return{id:'same-ticket'};}return{id:'message'};}};
+ const route={config:{...config,name:'Tier 4',category_id:'tier4-incidents'}};
+ await evidenceTicket(s,raw,route,'report');
+ assert.equal(calls[0].body.parent_id,'tier4-incidents');assert.equal(calls[0].body.name,'case-1001');
+ assert.ok(calls[0].body.permission_overwrites.some(p=>p.id==='steward'&&p.allow!=='0'));
+ raw.status='awaiting_defence';raw.data.report.locked=true;
+ const before=calls.length;await notifyDefence(s,raw);
+ assert.equal(calls[before].path,'/channels/same-ticket/permissions/'+driver);assert.equal(calls[before].body.deny,'1024');
+ assert.equal(calls[before+1].path,'/channels/same-ticket/permissions/'+accused);assert.equal(calls[before+1].body.deny,'0');
+ assert.equal(raw.data.defence_ticket,raw.data.report_ticket);
+ raw.status='awaiting_defence_evidence';await evidenceTicket(s,raw,route,'defence');assert.equal(channels,1);
+ raw.status='discussion';raw.data.defence.locked=true;
+ const review=await reviewChannel(s,raw,route);assert.equal(review,'same-ticket');assert.equal(raw.review_channel_id,'same-ticket');assert.equal(channels,1);
+ const permissionCalls=calls.filter(c=>c.method==='PUT');assert.ok(permissionCalls.slice(-2).every(p=>p.body.deny==='1024'));
+ const final=calls.at(-1).body;assert.equal(final.embeds.length,2);assert.ok(final.components[0].components.some(b=>b.label==='Start / view verdict'));
+});
+test('failed reporter removal never admits the reported driver',async()=>{
+ const raw={...c,status:'awaiting_defence',data:{...c.data,report:{locked:true},report_ticket:'ticket'}},calls=[];
+ await assert.rejects(()=>notifyDefence({discord:async path=>{calls.push(path);throw Error('Permission denied');}},raw),/Permission denied/);
+ assert.deepEqual(calls,['/channels/ticket/permissions/'+driver]);
 });
 
