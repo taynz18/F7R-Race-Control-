@@ -3,7 +3,12 @@ const origins=new Set(['https://racecontrol.f7r.co.uk','https://taynz18.github.i
 export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
  const origin=request.headers.get('origin'),headers={'Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info,x-f7r-admin-token','Access-Control-Allow-Methods':'POST,OPTIONS'};
  if(origins.has(origin))headers['Access-Control-Allow-Origin']=origin;
- const reply=(body,status=200)=>Response.json(body,{status,headers});
+ let voteLeader=false,viewer;
+ const reply=(body,status=200)=>{
+   if(body.incident&&!voteLeader){body=structuredClone(body);const c=body.incident;for(const v of [c,c.data?.reporter_verdict].filter(Boolean))v.votes=viewer&&v.votes?.[viewer]?{[viewer]:v.votes[viewer]}:{};}
+   if(body.tally&&!voteLeader)body={...body,tally:{count:body.tally.count,totals:{},winners:[]}};
+   return Response.json(body,{status,headers});
+ };
  if(origin&&!origins.has(origin))return reply({error:'Origin not allowed.'},403);
  if(request.method==='OPTIONS')return new Response(null,{status:204,headers});
  if(request.method!=='POST')return reply({error:'Use POST.'},405);
@@ -65,6 +70,7 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
      const deleted=await deleteTicket(s,raw,driverId||'admin:'+user.id,access.leader,input.reason,input.revision);return reply({incident:deleted});
    }
    const a=driverId?await caseAccess(s,raw,driverId):{leader:false,steward:false,route:routes.find(r=>r.id===c.route_id)};
+   voteLeader=a.leader;viewer=driverId;
    if(action==='case')return reply({incident:await refreshEvidence(s,raw),access:a,penalties:penalties(c.penalty_set||a.route.config.default_set),tally:tally(c.votes)});
    if(action==='open_review')return reply({channel:await reviewChannel(s,raw,a.route)});
    if(action==='invite_defence') {
@@ -91,6 +97,7 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
      return reply({incident:updated,delivery});
    }
    if(action==='brief') {
+     if(!a.leader)throw Error('Only a Head Steward or CEO can generate a draft from private vote reasons.');
      const votes=tally(c.votes),key=env('OPENAI_API_KEY');
      if(!key)return reply({draft:c.data.kind==='penalty_appeal'?`In-game penalty: ${c.data.original_penalty}.\n\n[Explain why the original penalty should be kept or removed, based on the driver’s explanation and available footage.]`:`Proposed outcome for the ${target==='reporter'?'reporting':'reported'} driver: ${votes.winners.join(' / ')||'Not yet voted'}.\n\n[Explain the incident, the applicable rule and the stewards’ agreed reasons here before approving.]`,ai:false,note:'AI is not configured. This is an editable template, not an AI summary.'});
      await ensureMessageReading(s);let discordDiscussion=[];
@@ -109,4 +116,3 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
  }catch(error){return reply({error:error.message||'Stewards Room is unavailable.'},400);}
 }
 Deno.serve(request=>handleStewards(request));
-

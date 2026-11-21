@@ -30,7 +30,7 @@ test('involved stewards cannot retrieve their own case',async()=>{
  await withFetch(backend(['steward'],{...c,reporter_id:driver}),async()=>assert.equal((await handleStewards(request({action:'case',id:caseId},token),env)).status,400));
 });
 test('AI missing configuration gives an explicit template without calling AI',async()=>{
- await withFetch(backend(),async()=>{
+ await withFetch(backend(['head']),async()=>{
    const result=await(await handleStewards(request({action:'brief',id:caseId},token),env)).json();assert.equal(result.ai,false);assert.match(result.note,/not configured/);
  });
 });
@@ -82,7 +82,7 @@ test('reporter target returns its own tally and routes votes without changing th
    return backend(['steward'],raw)(url);
  },async()=>{
    const result=await(await handleStewards(request({action:'case',id:caseId,target:'reporter'},token),env)).json();
-   assert.deepEqual(result.tally.totals,{'50 seconds':1});assert.equal(result.incident.outcome,'No further action');
+   assert.deepEqual(result.tally.totals,{});assert.equal(result.tally.count,1);assert.equal(result.incident.outcome,'No further action');
    const voted=await handleStewards(request({action:'vote',id:caseId,target:'reporter',penalty:'50 seconds',reason:'Reporting driver was responsible.'},token),env);assert.equal(voted.status,200);
  });
 });
@@ -133,3 +133,7 @@ test('admin ticket deletion requires explicit confirmation and deletes only its 
  });
 });
 
+test('ordinary website stewards see vote count and own vote only, including separate verdict',async()=>{
+ const incident={...c,votes:{[driver]:{penalty:'Warning',reason:'Own reason'},other:{penalty:'Race ban',reason:'Private reason'}},data:{...c.data,reporter_verdict:{status:'voting',votes:{other:{penalty:'Season ban',reason:'Secret second vote'}}}}};
+ await withFetch(backend(['steward'],incident),async()=>{const r=await(await handleStewards(request({action:'case',id:caseId},token),env)).json();assert.equal(r.tally.count,2);assert.deepEqual(r.tally.totals,{});assert.deepEqual(Object.keys(r.incident.votes),[driver]);assert.deepEqual(r.incident.data.reporter_verdict.votes,{});assert.ok(!JSON.stringify(r).includes('Private reason'));});
+});

@@ -35,8 +35,11 @@ export async function draftExplanation(s,c,target='accused',send=fetch) {
 }
 export async function postVoteProgress(s,raw,target='accused') {
  const c=verdictView(raw,target),votes=tally(c.votes),channel=raw.review_channel_id||raw.data.report_ticket;if(!channel)return;
- const route=await s.route(raw.route_id),leaders=route?.config?.leader_roles||[];
- await s.discord('/channels/'+channel+'/messages','POST',{content:'**Vote progress · '+(target==='reporter'?'reporting':'reported')+' driver · Case #'+raw.number+'**\n'+votes.count+' steward vote(s) received.\n'+(Object.entries(votes.totals).map(([p,n])=>p+': '+n).join('\n')||'No votes yet.')+'\n'+(votes.winners.length>1?'Currently tied. Head Steward / CEO decides the tie.':'Voting remains open until a Head Steward / CEO finalises.')+'\n'+leaders.map(id=>'<@&'+id+'>').join(' '),components:rowButtons([button('View votes / finalise','f7r-stew-verdict:'+raw.id+':'+target)]),allowed_mentions:{parse:[],roles:leaders}});
+ const payload={content:'**Vote progress · '+(target==='reporter'?'reporting':'reported')+' driver · Case #'+raw.number+'**\n'+votes.count+' steward vote(s) submitted.\nVoting remains open until a Head Steward / CEO finalises. Individual choices are private.',components:rowButtons([button('Vote / review verdict','f7r-stew-verdict:'+raw.id+':'+target)]),allowed_mentions:{parse:[]}};
+ const messages=await s.discord('/channels/'+channel+'/messages?limit=100');
+ const previous=messages.filter(m=>m.author?.id===APP_ID&&m.content?.startsWith('**Vote progress · '+(target==='reporter'?'reporting':'reported')+' driver · Case #'+raw.number+'**'));
+ if(previous.length){for(const m of previous)await s.discord('/channels/'+channel+'/messages/'+m.id,'PATCH',payload);}
+ else await s.discord('/channels/'+channel+'/messages','POST',payload);
 }
 export function accessFor(roles,config,driverId,incident) {
  const leader=(config.leader_roles||[]).some(id=>roles.includes(id));

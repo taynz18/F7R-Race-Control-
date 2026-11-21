@@ -276,5 +276,9 @@ test('Discord AI preparation defers and allows only leadership; reviewed draft p
  }finally{globalThis.fetch=savedFetch;}
 });
 test('vote progress posts independent target totals and leadership notification',async()=>{
- let body;await postVoteProgress({route:async()=>({config}),discord:async(p,m,b)=>body=b},{...c,review_channel_id:'room',votes:{[steward]:{penalty:'Warning'}},data:{...c.data,reporter_verdict:{status:'voting',votes:{[leader]:{penalty:'5 seconds'},[steward]:{penalty:'Warning'}}}}},'reporter');assert.match(body.content,/reporting driver/);assert.match(body.content,/2 steward/);assert.match(body.content,/Currently tied/);assert.deepEqual(body.allowed_mentions.roles,['leader']);
+ let body;await postVoteProgress({route:async()=>({config}),discord:async(p,m,b)=>{if(!m)return [];body=b;}},{...c,review_channel_id:'room',votes:{[steward]:{penalty:'Warning'}},data:{...c.data,reporter_verdict:{status:'voting',votes:{[leader]:{penalty:'5 seconds'},[steward]:{penalty:'Warning'}}}}},'reporter');assert.match(body.content,/reporting driver/);assert.match(body.content,/2 steward/);assert.ok(!body.content.includes('Warning'));assert.ok(!body.content.includes('5 seconds'));assert.ok(!body.content.includes('tied'));assert.deepEqual(body.allowed_mentions,{parse:[]});
+});
+
+test('existing ticket progress is edited with count only and no pings or penalty choices',async()=>{
+ const calls=[];await postVoteProgress({discord:async(path,method,body)=>{if(!method)return [{id:'old',author:{id:APP_ID},content:'**Vote progress · reported driver · Case #1001** old totals'}];calls.push({path,method,body});}}, {...c,review_channel_id:'room',votes:{one:{penalty:'Race ban'},two:{penalty:'Warning'}}});assert.equal(calls.length,1);assert.equal(calls[0].method,'PATCH');assert.match(calls[0].body.content,/2 steward vote/);assert.ok(!calls[0].body.content.includes('Race ban'));assert.deepEqual(calls[0].body.allowed_mentions,{parse:[]});
 });
