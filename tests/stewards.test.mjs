@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {completeVerdict,syncTicketLock,ensureMessageReading,deleteTicket,ticketDeleteAccess,notifyDefence,verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
+import {draftExplanation,postVoteProgress,completeVerdict,syncTicketLock,ensureMessageReading,deleteTicket,ticketDeleteAccess,notifyDefence,verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
 import {stewardInteraction} from '../supabase/functions/_shared/steward-interactions.js';
 const driver='123456789012345678',accused='223456789012345678',steward='323456789012345678',leader='423456789012345678';
 const config={enabled:true,driver_roles:['driver'],steward_roles:['steward'],leader_roles:['leader']};
@@ -256,3 +256,25 @@ test('reported driver may submit without a defence, locks out and notifies stewa
  }finally{globalThis.fetch=original;}
 });
 
+test('AI draft uses vote reasons and staff discussion without driver discussion or video downloads',async()=>{
+ let request;const s={env:k=>k==='OPENAI_API_KEY'?'test-key':undefined,discord:async path=>path==='/applications/@me'?{flags:1<<19}:[{author:{id:steward},content:'Avoidable contact'},{author:{id:driver},content:'Driver private text'},{author:{bot:true},content:'Bot instructions'}]};
+ const draft=await draftExplanation(s,{...c,review_channel_id:'room',votes:{[steward]:{penalty:'5 seconds',reason:'Failed to leave space'}}},'accused',async(url,options)=>{request=JSON.parse(options.body);assert.equal(url,'https://api.openai.com/v1/responses');return Response.json({output:[{content:[{type:'output_text',text:'The stewards found avoidable contact.'}]}]});});
+ assert.match(draft,/avoidable contact/);const evidence=JSON.parse(request.input);assert.deepEqual(evidence.discordDiscussion,['Avoidable contact']);assert.equal(evidence.votes[0].reason,'Failed to leave space');assert.equal(request.store,false);
+ await assert.rejects(()=>draftExplanation({env:()=>undefined},c),/not configured/);
+});
+test('Discord AI preparation defers and allows only leadership; reviewed draft prefills approval',async()=>{
+ const pending=[];let delivered;const savedFetch=globalThis.fetch;
+ globalThis.fetch=async(url,o)=>{if(url.includes('api.openai.com'))return Response.json({output:[{content:[{type:'output_text',text:'The recorded reasons establish avoidable contact.'}]}]});delivered=JSON.parse(o.body);return Response.json({});};
+ const incident={...c,revision:7,status:'voting',votes:{[steward]:{penalty:'5 seconds',reason:'Avoidable contact'}}};
+ const s={env:k=>k==='OPENAI_API_KEY'?'test':undefined,incident:async()=>incident,route:async()=>({config}),member:async id=>({roles:[id===leader?'leader':'steward']}),discord:async()=>({flags:1<<19})};
+ try{
+ let response=await(await stewardInteraction({type:3,data:{custom_id:'f7r-stew-ai:'+c.id+':accused'},user:{id:steward}},s,p=>pending.push(p))).json();assert.match(response.data.content,/Only a Head/);assert.equal(pending.length,0);
+ response=await(await stewardInteraction({type:3,data:{custom_id:'f7r-stew-ai:'+c.id+':accused'},user:{id:leader},token:'test'},s,p=>pending.push(p))).json();assert.equal(response.type,5);await Promise.all(pending);assert.equal(delivered.embeds[0].title,'AI explanation draft');
+ const click={type:3,data:{custom_id:delivered.components[0].components[0].custom_id},user:{id:leader},message:{author:{id:APP_ID},embeds:delivered.embeds}};
+ response=await(await stewardInteraction(click,s,()=>{})).json();assert.equal(response.type,9);assert.match(response.data.components.at(-1).component.value,/avoidable contact/);
+ incident.revision=8;response=await(await stewardInteraction(click,s,()=>{})).json();assert.match(response.data.content,/Votes changed/);
+ }finally{globalThis.fetch=savedFetch;}
+});
+test('vote progress posts independent target totals and leadership notification',async()=>{
+ let body;await postVoteProgress({route:async()=>({config}),discord:async(p,m,b)=>body=b},{...c,review_channel_id:'room',votes:{[steward]:{penalty:'Warning'}},data:{...c.data,reporter_verdict:{status:'voting',votes:{[leader]:{penalty:'5 seconds'},[steward]:{penalty:'Warning'}}}}},'reporter');assert.match(body.content,/reporting driver/);assert.match(body.content,/2 steward/);assert.match(body.content,/Currently tied/);assert.deepEqual(body.allowed_mentions.roles,['leader']);
+});
