@@ -1,14 +1,14 @@
 import {APP_ID,verdictView,tally,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
 const reply=content=>Response.json({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
 const label=(name,component)=>({type:18,label:name,component});
-const text=(id,style,max,required=true)=>({type:4,custom_id:id,style,required,max_length:max});
+const text=(id,style,max,required=true)=>({type:4,custom_id:id,style,required,max_length:max,...(required?{min_length:id==='explanation'?20:id==='reason'?10:1}:{}),...(id==='statement'?{placeholder:'Describe what happened.'}:{})});
 const modal=(id,title,components)=>Response.json({type:9,data:{custom_id:id,title,components}});
 function values(interaction) {
  const fields={};for(const label of interaction.data.components||[])for(const c of [label.component,...(label.components||[])].filter(Boolean))fields[c.custom_id]=c.values?.[0]??c.value;return fields;
 }
 const anotherReport=route=>button('Report another incident','f7r-stew-report:'+route,1);
 const ticketLink=(guild,channel)=>({type:2,style:5,label:'Open private video ticket',url:'https://discord.com/channels/'+guild+'/'+channel});
-const required=(value,name,min=1,max=1500)=>{if(typeof value!=='string'||value.trim().length<min||value.length>max)throw Error('Check '+name+'.');return value.trim();};
+const required=(value,name,min=1,max=1500)=>{if(typeof value!=='string'||value.trim().length<min||value.length>max)throw Error(['statement','defence'].includes(name)?'Enter an incident description, up to '+max+' characters. Short descriptions are accepted.':'Check '+name+'.');return value.trim();};
 export async function stewardInteraction(i,s,waitUntil) {
  const custom=i.data?.custom_id||'',command=i.type===2&&i.data?.name==='verdict';
  if(!custom.startsWith('f7r-stew-')&&!command)return null;
@@ -42,7 +42,7 @@ export async function stewardInteraction(i,s,waitUntil) {
      if(prior.length)return `Report already saved as case #${prior[0].number}.`;
      const open=await s.db('f7r_steward_cases?select=id&guild_id=eq.'+s.guild+'&reporter_id=eq.'+user.id+'&status=neq.closed');
      if(open.length>=10)throw Error('You have ten open cases. Ask a steward before submitting another.');
-     const data={kind:appeal?'penalty_appeal':'incident',...(appeal?{original_penalty:required(v.original_penalty,'original penalty',1,150)}:{}),race:required(v.race,'race',1,150),lap:required(v.lap,'lap / corner',1,150),report:{statement:required(v.statement,'statement',10),links:evidenceLinks(v.links)},reporter_name:user.global_name||user.username,accused_name:accused?.user.global_name||accused?.user.username};
+     const data={kind:appeal?'penalty_appeal':'incident',...(appeal?{original_penalty:required(v.original_penalty,'original penalty',1,150)}:{}),race:required(v.race,'race',1,150),lap:required(v.lap,'lap / corner',1,150),report:{statement:required(v.statement,'statement',1),links:evidenceLinks(v.links)},reporter_name:user.global_name||user.username,accused_name:accused?.user.global_name||accused?.user.username};
      const c=(await s.db('f7r_steward_cases','POST',{guild_id:s.guild,route_id:route.id,interaction_id:i.id,reporter_id:user.id,accused_id:appeal?APP_ID:v.driver,data,status:'awaiting_report_evidence'}))[0];
      let channel;try{channel=await evidenceTicket(s,c,route,'report');}catch{return {content:`Draft #${c.number} saved. The private clip ticket could not open. Check the bot’s Manage Channels permission, then retry.`,components:rowButtons([button('Retry private ticket','f7r-stew-ticket-report:'+c.id),anotherReport(route.id)])};}
      const link=`https://discord.com/channels/${s.guild}/${channel}`;
@@ -74,7 +74,7 @@ export async function stewardInteraction(i,s,waitUntil) {
    }
    if(kind==='f7r-stew-defence'&&i.type===5)return defer(async()=>{
      const c=await s.incident(reference),v=values(i);await s.member(user.id);
-     const updated=await s.action(c,user.id,false,'defence_draft',{statement:required(v.statement,'defence',10),links:evidenceLinks(v.links)});
+     const updated=await s.action(c,user.id,false,'defence_draft',{statement:required(v.statement,'defence',1),links:evidenceLinks(v.links)});
      let channel;try{channel=await evidenceTicket(s,updated,await s.route(c.route_id),'defence');}catch{return {content:'Defence draft saved. The private clip ticket could not open. Check bot permissions, then retry.',components:rowButtons([button('Retry private ticket','f7r-stew-ticket-defence:'+c.id)])};}
      return 'Defence draft saved. Video evidence is mandatory. Attach your clips in the private ticket and press Submit there.\nhttps://discord.com/channels/'+s.guild+'/'+channel;
    });

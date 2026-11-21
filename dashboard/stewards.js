@@ -117,8 +117,13 @@ function selectRoute(){
  const r=setup.routes.find(r=>r.id===$('route-picker').value),c=r?.config;
  $('report-channel-search').value='';$('review-category-search').value='';filterChannelChoices();
  $('route-id').value=r?.id||'';$('route-id').readOnly=Boolean(r);$('route-name').value=c?.name||'';$('default-set').value=c?.default_set||'F1';$('report-channel').value=c?.report_channel||'';$('review-category').value=c?.category_id||'';$('route-enabled').checked=c?.enabled||false;
- document.querySelectorAll('[data-role-group]').forEach(input=>{input.checked=Boolean(c?.[input.dataset.roleGroup]?.includes(input.value));});
+ document.querySelectorAll('[data-role-group]').forEach(input=>{input.checked=Boolean(c?.[input.dataset.roleGroup]?.includes(input.value));});showTicketDestination();
 }
+function showTicketDestination(){
+ const category=setup?.channels.find(c=>c.id===$('review-category').value&&c.type===4);
+ $('ticket-destination').textContent=category?'New case channels will open inside: '+category.name+'. Both drivers and steward review use the same case channel in this category.':'No category selected. New case channels will appear at the server’s top level. Choose a category to keep this tier’s tickets together.';
+}
+$('review-category').onchange=showTicketDestination;
 function filterChannelChoices() {
  if(!setup)return;
  for(const [id,type,placeholder]of[['report-channel',0,'Choose reporting channel'],['review-category',4,'No category']]){
@@ -129,6 +134,7 @@ function filterChannelChoices() {
    if(selected)$(id).value=previous;
    $(id+'-count').textContent=`${matches.length} of ${setup.channels.filter(c=>c.type===type).length} ${type===0?'channels':'categories'} match`+(selected&&!matches.includes(selected)?'. Current selection kept.':'.');
  }
+ showTicketDestination();
 }
 $('report-channel-search').oninput=$('review-category-search').oninput=filterChannelChoices;
 $('route-picker').onchange=selectRoute;

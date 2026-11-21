@@ -29,7 +29,7 @@ test('evidence stores HTTPS links only and never fetches them',()=>{
 test('report modal is private and restricts the driver role',async()=>{
  const i={type:3,data:{custom_id:'f7r-stew-report:f1'},member:{user:{id:driver}}};
  const s={route:async()=>({id:'f1',config}),member:async()=>({roles:['driver']})};
- let response=await (await stewardInteraction(i,s,()=>{})).json();assert.equal(response.type,9);assert.equal(response.data.components[0].component.type,5);
+ let response=await (await stewardInteraction(i,s,()=>{})).json();assert.equal(response.type,9);assert.equal(response.data.components[0].component.type,5);assert.equal(response.data.components.find(x=>x.component.custom_id==='statement').component.min_length,1);
  s.member=async()=>({roles:[]});response=await(await stewardInteraction(i,s,()=>{})).json();assert.equal(response.data.flags,64);assert.match(response.data.content,/role/);
 });
 test('only the reported driver can open the defence and cannot resubmit it',async()=>{
@@ -138,7 +138,7 @@ test('eligible drivers can report members without the group role and open separa
    return rows;
  },discord:async(path,method,body)=>{if(path.endsWith('/channels')){const channel={id:'ticket-'+(channels.length+1)};channels.push({channel,body});return channel;}return {id:'message'};},
  dm:async(id,body)=>{dms.push({id,body});return 'sent';}};
- const submit=(id,other)=>({id,type:5,user:{id:driver},token:'test',data:{custom_id:'f7r-stew-submit:f1',components:Object.entries({driver:other,race:'Monza',lap:'Lap 1',statement:'A separate incident account.',links:''}).map(([custom_id,value])=>({component:{custom_id,value}}))}});
+ const submit=(id,other)=>({id,type:5,user:{id:driver},token:'test',data:{custom_id:'f7r-stew-submit:f1',components:Object.entries({driver:other,race:'Monza',lap:'Lap 1',statement:'test',links:''}).map(([custom_id,value])=>({component:{custom_id,value}}))}});
  const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{replies.push(JSON.parse(options.body));return Response.json({});};
  try{
    for(const [id,other] of [['first',accused],['second',leader]]){assert.equal((await(await stewardInteraction(submit(id,other),service,p=>tasks.push(p))).json()).type,5);await tasks.pop();}
@@ -186,5 +186,14 @@ test('report target flexibility never permits unapproved reporters, bots or self
    service.member=async id=>({roles:[],user:{id}});
    assert.match(await submit(base),/desk is unavailable/);
  }finally{console.error=error;globalThis.fetch=original;}
+});
+
+test('empty descriptions get a clear error before creating a case or channel',async()=>{
+ const pending=[],replies=[],original=globalThis.fetch,log=console.error;globalThis.fetch=async(url,options)=>{replies.push(JSON.parse(options.body));return Response.json({});};console.error=()=>{};
+ const s={route:async()=>({id:'f1',config}),member:async id=>({roles:['driver'],user:{id}}),db:async(path,method)=>{assert.notEqual(method,'POST');return[];},discord:async()=>{throw Error('Must not create a ticket for rejected form');}};
+ try{
+ await stewardInteraction({type:5,id:'short',user:{id:driver},token:'test',data:{custom_id:'f7r-stew-submit:f1',components:Object.entries({driver:accused,race:'Monza',lap:'Lap 1',statement:' ',links:''}).map(([custom_id,value])=>({component:{custom_id,value}}))}},s,p=>pending.push(p));await Promise.all(pending);
+ assert.match(replies[0].content,/Enter an incident description/);
+ }finally{globalThis.fetch=original;console.error=log;}
 });
 
