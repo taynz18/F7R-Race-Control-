@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel} from '../supabase/functions/_shared/stewards.js';
+import {accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
 import {stewardInteraction} from '../supabase/functions/_shared/steward-interactions.js';
 const driver='123456789012345678',accused='223456789012345678',steward='323456789012345678',leader='423456789012345678';
 const config={enabled:true,driver_roles:['driver'],steward_roles:['steward'],leader_roles:['leader']};
@@ -23,7 +23,8 @@ test('one vote per steward and ties retain all joint leaders',()=>{
 });
 test('evidence stores HTTPS links only and never fetches them',()=>{
  assert.deepEqual(evidenceLinks('https://example.com/a\nhttps://example.com/b'),['https://example.com/a','https://example.com/b']);
- for(const value of ['', 'javascript:alert(1)','http://example.com','https://user:pass@example.com'])assert.throws(()=>evidenceLinks(value));
+ assert.deepEqual(evidenceLinks(''),[]);
+ for(const value of ['javascript:alert(1)','http://example.com','https://user:pass@example.com'])assert.throws(()=>evidenceLinks(value));
 });
 test('report modal is private and restricts the driver role',async()=>{
  const i={type:3,data:{custom_id:'f7r-stew-report:f1'},member:{user:{id:driver}}};
@@ -55,4 +56,33 @@ test('final notifications are claimed before delivery and cannot send twice',asy
 test('no new interaction can bypass the attendance signature verification',async()=>{
  const {readFile}=await import('node:fs/promises');const code=await readFile(new URL('../supabase/functions/f7r-discord-interactions/index.js',import.meta.url),'utf8');
  assert.ok(code.indexOf('crypto.subtle.verify')<code.indexOf('return await stewardInteraction'));
+});
+test('private clip tickets allow only the submitting driver and deny the other driver',async()=>{
+ const calls=[],s={guild:'guild',incident:async()=>c,db:async()=>{},discord:async(path,method,body)=>{calls.push({path,body});return {id:'ticket'};}};
+ await evidenceTicket(s,c,{config},'report');
+ const p=calls[0].body.permission_overwrites;
+ assert.ok(p.some(x=>x.id===driver&&x.allow!=='0'&&x.deny==='0'));
+ assert.ok(p.some(x=>x.id===accused&&x.deny==='1024'));
+ assert.match(calls[1].body.content,/No video/);
+ assert.ok(calls[1].body.content.length<=2000);
+});
+test('clips remain on Discord; only links and source metadata are captured',async()=>{
+ const incident={...c,data:{...c.data,report_ticket:'ticket'}};
+ const s={discord:async()=>[{id:'message',author:{id:driver},content:'<@'+APP_ID+'>',attachments:[{id:'clip',filename:'contact.mp4',content_type:'video/mp4',url:'https://cdn.discordapp.com/clip'}]},{id:'other',author:{id:accused},content:'',attachments:[{id:'unrelated'}]}]};
+ const result=await collectEvidence(s,incident,'report',driver);
+ assert.equal(result.clips.length,1);assert.equal(result.clips[0].message_id,'message');assert.equal(result.no_video,false);assert.ok(!JSON.stringify(result).includes('base64'));
+ s.discord=async()=>[];const empty=await collectEvidence(s,{...incident,data:{report:{links:[]},report_ticket:'ticket'}},'report',driver);assert.equal(empty.no_video,true);
+ s.discord=async()=>[{author:{id:driver},content:'',attachments:[]}];await assert.rejects(()=>collectEvidence(s,incident,'report',driver),/Mention/);
+});
+test('Discord attachment links are refreshed from their original messages',async()=>{
+ const incident=structuredClone(c);incident.data.report={external_links:[],clips:[{channel_id:'channel',message_id:'message',attachment_id:'clip',url:'https://cdn.discordapp.com/old'}]};
+ await refreshEvidence({discord:async()=>({attachments:[{id:'clip',url:'https://cdn.discordapp.com/fresh'}]})},incident);
+ assert.deepEqual(incident.data.report.links,['https://cdn.discordapp.com/fresh']);
+});
+test('in-game appeals are visible only to leaders and notify only the appealing driver',async()=>{
+ const appeal={...c,data:{...c.data,kind:'penalty_appeal',original_penalty:'10 seconds'},accused_id:APP_ID,outcome:'In-game penalty removed',explanation:'The footage confirms the penalty was incorrectly applied.'};
+ assert.equal(accessFor(['steward'],config,steward,appeal).steward,false);
+ assert.equal(accessFor(['leader'],config,leader,appeal).leader,true);
+ const recipients=[];await sendOutcomes({action:async()=>{},dm:async(id)=>{recipients.push(id);return 'sent';}},appeal,leader,true);
+ assert.deepEqual(recipients,[driver]);
 });

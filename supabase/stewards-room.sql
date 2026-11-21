@@ -7,7 +7,7 @@ create table public.f7r_steward_cases (
  id uuid primary key default gen_random_uuid(), number bigint generated always as identity(start with 1001) unique,
  guild_id text not null, route_id text not null, interaction_id text not null unique,
  reporter_id text not null, accused_id text not null, data jsonb not null,
- status text not null default 'awaiting_defence' check(status in ('awaiting_defence','discussion','voting','tied','closed')),
+ status text not null default 'awaiting_defence' check(status in ('awaiting_report_evidence','awaiting_defence','awaiting_defence_evidence','discussion','voting','tied','closed')),
  penalty_set text check(penalty_set in ('F1','Endurance')), votes jsonb not null default '{}',
  comments jsonb not null default '[]', outcome text, explanation text, decided_by text,
  review_channel_id text, notifications jsonb not null default '{}', revision integer not null default 0,
@@ -27,25 +27,34 @@ revoke all on public.f7r_steward_routes,public.f7r_steward_cases,public.f7r_stew
 grant all on public.f7r_steward_routes,public.f7r_steward_cases,public.f7r_steward_sessions to service_role;
 grant usage,select on sequence public.f7r_steward_cases_number_seq to service_role;
 
-create function public.f7r_steward_action(p_id uuid,p_actor text,p_leader boolean,p_action text,p_value jsonb,p_revision integer default null)
+create or replace function public.f7r_steward_action(p_id uuid,p_actor text,p_leader boolean,p_action text,p_value jsonb,p_revision integer default null)
 returns public.f7r_steward_cases language plpgsql security invoker set search_path=public,pg_temp as $$
 declare c public.f7r_steward_cases; winners text[]; top_count integer; choice text; max_seconds integer;
 begin
  select * into c from f7r_steward_cases where id=p_id for update;
  if not found then raise exception 'Case not found'; end if;
- if p_actor in (c.reporter_id,c.accused_id) and p_action<>'defence' then raise exception 'Involved drivers cannot review their own case'; end if;
+ if p_actor in (c.reporter_id,c.accused_id) and p_action not in ('defence','defence_draft','finish_report') then raise exception 'Involved drivers cannot review their own case'; end if;
  if p_revision is not null and c.revision<>p_revision then raise exception 'Case changed. Refresh and review the latest votes before continuing'; end if;
- if p_action='defence' then
+ if p_action='finish_report' then
+   if p_actor<>c.reporter_id or c.status<>'awaiting_report_evidence' then raise exception 'Report already submitted or unavailable'; end if;
+   c.data=jsonb_set(c.data,'{report}',(c.data->'report')||p_value||'{"locked":true}'::jsonb);
+   c.status=case when c.data->>'kind'='penalty_appeal' then 'discussion' else 'awaiting_defence' end;
+ elsif p_action='defence_draft' then
    if p_actor<>c.accused_id or c.status<>'awaiting_defence' then raise exception 'Defence already submitted or unavailable'; end if;
-   c.data=jsonb_set(c.data,'{defence}',p_value); c.status='discussion';
+   c.data=jsonb_set(c.data,'{defence}',p_value); c.status='awaiting_defence_evidence';
+ elsif p_action='defence' then
+   if p_actor<>c.accused_id or c.status not in ('awaiting_defence','awaiting_defence_evidence') then raise exception 'Defence already submitted or unavailable'; end if;
+   c.data=jsonb_set(c.data,'{defence}',coalesce(c.data->'defence','{}')||p_value||'{"locked":true}'::jsonb); c.status='discussion';
  elsif p_action='comment' then
    if c.status='closed' then raise exception 'Case is closed'; end if;
    if jsonb_array_length(c.comments)>=200 then raise exception 'Discussion limit reached'; end if;
    c.comments=c.comments||jsonb_build_array(jsonb_build_object('author',p_actor,'text',p_value->>'text','at',now()));
  elsif p_action='start_vote' then
+   if c.data->>'kind'='penalty_appeal' then raise exception 'In-game appeals are decided only by a Head Steward or CEO'; end if;
    if c.status<>'discussion' or coalesce(p_value->>'set','') not in ('F1','Endurance') then raise exception 'Submit the defence before starting a verdict vote'; end if;
    c.penalty_set=p_value->>'set'; c.status='voting';
  elsif p_action='vote' then
+   if c.data->>'kind'='penalty_appeal' then raise exception 'In-game appeals do not use a steward penalty vote'; end if;
    if c.status<>'voting' then raise exception 'Voting is not open'; end if;
    choice=p_value->>'penalty'; max_seconds=case when c.penalty_set='F1' then 20 else 50 end;
    if choice is null then raise exception 'Choose a penalty'; end if;
@@ -54,7 +63,13 @@ begin
      if split_part(choice,' ',1)::integer not between 5 and max_seconds or split_part(choice,' ',1)::integer%5<>0 then raise exception 'Invalid time penalty for this rule set'; end if;
    end if;
    c.votes=jsonb_set(c.votes,array[p_actor],jsonb_build_object('penalty',choice,'reason',p_value->>'reason','at',now()));
+ elsif p_action='appeal_decision' then
+   if not p_leader or c.data->>'kind' is distinct from 'penalty_appeal' or c.status<>'discussion' then raise exception 'Only a Head Steward or CEO can decide a submitted in-game appeal'; end if;
+   if coalesce(p_value->>'penalty','') not in ('In-game penalty kept','In-game penalty removed') then raise exception 'Choose Keep penalty or Remove penalty'; end if;
+   if length(trim(coalesce(p_value->>'explanation','')))<20 then raise exception 'Add an approved explanation of at least 20 characters'; end if;
+   c.status='closed'; c.outcome=p_value->>'penalty';c.explanation=p_value->>'explanation';c.decided_by=p_actor;
  elsif p_action in ('close_vote','tie_break') then
+   if c.data->>'kind'='penalty_appeal' then raise exception 'Use the in-game appeal decision'; end if;
    if not p_leader then raise exception 'Only a Head Steward or CEO can close voting or decide a tie'; end if;
    if c.status not in ('voting','tied') then raise exception 'Voting is not open'; end if;
    select max(n) into top_count from (select count(*) n from jsonb_each(c.votes) v group by v.value->>'penalty') t;

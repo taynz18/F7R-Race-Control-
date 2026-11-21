@@ -1,6 +1,6 @@
 import {filterChannels} from './channel-search.js';
 const $=id=>document.getElementById(id);
-const stateNames={awaiting_defence:'Awaiting defence',discussion:'Discussion',voting:'Voting open',tied:'Tied · decision needed',closed:'Closed'};
+const stateNames={awaiting_report_evidence:'Report / appeal · adding clips',awaiting_defence:'Awaiting defence',awaiting_defence_evidence:'Defence · adding clips',discussion:'Ready for review',voting:'Voting open',tied:'Tied · decision needed',closed:'Closed'};
 let config,client,token=sessionStorage.getItem('f7r-steward-access'),desk,setup,current,busy=false;
 const fragment=new URLSearchParams(location.hash.slice(1));
 if(fragment.has('access')){token=fragment.get('access');sessionStorage.setItem('f7r-steward-access',token);history.replaceState(null,'',location.pathname);}
@@ -15,7 +15,7 @@ async function api(action,details={}) {
 }
 async function run(work) {
  if(busy)return;busy=true;status('Working…');
- try{await work();}catch(error){status(error.message);}finally{busy=false;}
+ try{await work();}catch(error){status(error.message);if(!$('setup').hidden)$('setup-result').textContent=error.message;}finally{busy=false;}
 }
 function options(id,items,placeholder) {
  const select=$(id);select.replaceChildren();if(placeholder!==undefined)select.add(new Option(placeholder,''));
@@ -25,7 +25,7 @@ function renderList() {
  const list=$('case-list');list.replaceChildren();
  for(const c of desk.cases.filter(c=>(!$('group-filter').value||c.route_id===$('group-filter').value)&&(!$('state-filter').value||c.status===$('state-filter').value))) {
    const button=node('button',undefined,'steward-case');button.type='button';
-   const title=node('span');title.append(node('strong',`#${c.number} · ${c.race}`),node('small',(desk.routes.find(r=>r.id===c.route_id)?.config.name||c.route_id)+' · '+c.lap));
+   const title=node('span');title.append(node('strong',`${c.kind==='penalty_appeal'?'Appeal ':''}#${c.number} · ${c.race}`),node('small',(desk.routes.find(r=>r.id===c.route_id)?.config.name||c.route_id)+' · '+c.lap));
    button.append(title,node('span',stateNames[c.status]||c.status,'steward-status'));button.onclick=()=>run(()=>loadCase(c.id));list.append(button);
  }
 }
@@ -40,30 +40,39 @@ function links(id,urls) {
  const list=$(id);list.replaceChildren();for(const url of urls||[]){let parsed;try{parsed=new URL(url);}catch{continue;}if(parsed.protocol!=='https:')continue;const li=node('li'),a=node('a',url);a.href=parsed.href;a.target='_blank';a.rel='noopener noreferrer';li.append(a);list.append(li);}
 }
 async function loadCase(id) {
- current=await api('case',{id});const c=current.incident,a=current.access;
+ current=await api('case',{id});const c=current.incident,a=current.access,appeal=c.data.kind==='penalty_appeal';
  $('case-detail').hidden=false;$('case-group').textContent=a.route.config.name;
- $('case-title').textContent=`Case #${c.number} · ${c.data.race}`;$('case-meta').textContent=c.data.lap+' · '+stateNames[c.status];
+ $('case-title').textContent=`${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${c.data.race}`;$('case-meta').textContent=c.data.lap+' · '+stateNames[c.status];
  $('case-access').textContent=a.steward?(a.leader?'Head Steward / CEO access · you can close voting and decide ties.':'Steward access · discussion and one vote per case.'):'Admin oversight · use your Discord steward access link to take part in the verdict.';
  $('report-driver').textContent=c.data.reporter_name||who(c.reporter_id);$('report-text').textContent=c.data.report.statement;links('report-links',c.data.report.links);
+ $('report-heading').textContent=(appeal?'Appeal':'Report')+(c.status==='awaiting_report_evidence'?' · draft, collecting clips':' · locked');
+ $('original-penalty').hidden=!appeal;$('original-penalty').textContent=appeal?'Original in-game penalty: '+c.data.original_penalty:'';
+ $('defence-section').hidden=appeal;
+ $('defence-heading').textContent=c.status==='awaiting_defence_evidence'?'Defence · draft, collecting clips':'Defence'+(c.data.defence?' · locked':' · awaiting submission');
+ for(const phase of ['report','defence']){const ticket=$(phase+'-ticket');ticket.hidden=!c.data[phase+'_ticket'];if(c.data[phase+'_ticket'])ticket.href=`https://discord.com/channels/${c.guild_id}/${c.data[phase+'_ticket']}`;if(c.data[phase]?.no_video)$(phase+'-text').textContent+='\n\nNo video evidence provided.';}
  $('defence-driver').textContent=c.data.accused_name||who(c.accused_id);$('defence-text').textContent=c.data.defence?.statement||'Awaiting the reported driver’s statement.';links('defence-links',c.data.defence?.links);
+ if(c.data.defence?.no_video)$('defence-text').textContent+='\n\nNo video evidence provided.';
  $('defence-invite').textContent=c.data.defence_invitation?'Defence invitation: '+c.data.defence_invitation:'';
  $('invite').hidden=c.status!=='awaiting_defence'||c.data.defence_invitation==='sent'||(!desk.admin&&!a.leader);
- $('open-review').disabled=!c.data.defence;
+ $('open-review').disabled=appeal?c.status==='awaiting_report_evidence':!['discussion','voting','tied','closed'].includes(c.status);
  $('review-link').hidden=!c.review_channel_id;if(c.review_channel_id)$('review-link').href=`https://discord.com/channels/${c.guild_id}/${c.review_channel_id}`;
  $('comments').replaceChildren(...c.comments.map(x=>node('p',`${who(x.author)} · ${new Date(x.at).toLocaleString()}\n${x.text}`,'steward-entry')));
  $('comment-form').hidden=!a.steward||c.status==='closed';
- $('vote-state').textContent=`${c.penalty_set?c.penalty_set+' rules · ':''}${current.tally.count} steward vote(s). Any number of stewards may vote. Only a Head Steward or CEO closes voting.`;
+ $('verdict-heading').textContent=appeal?'In-game penalty review':'Verdict vote';
+ $('vote-state').textContent=appeal?'Only a Head Steward or CEO decides whether the in-game penalty stays or is removed. This appeal does not use a steward penalty vote.':`${c.penalty_set?c.penalty_set+' rules · ':''}${current.tally.count} steward vote(s). Any number of stewards may vote. Only a Head Steward or CEO closes voting.`;
  $('tally').replaceChildren(...Object.entries(current.tally.totals).map(([penalty,count])=>node('span',`${penalty}: ${count}`,'steward-status')));
- $('start-form').hidden=!a.steward||c.status!=='discussion';$('penalty-set').value=a.route.config.default_set;
- $('vote-form').hidden=!a.steward||c.status!=='voting';options('penalty',current.penalties);
+ $('start-form').hidden=appeal||!a.steward||c.status!=='discussion';$('penalty-set').value=a.route.config.default_set;
+ $('vote-form').hidden=appeal||!a.steward||c.status!=='voting';options('penalty',current.penalties);
  const own=c.votes[desk.driverId];if(own){$('penalty').value=own.penalty;$('vote-reason').value=own.reason;}else $('vote-reason').value='';
  $('votes').replaceChildren(...Object.entries(c.votes).map(([id,v])=>node('p',`${who(id)} · ${v.penalty}\n${v.reason}`,'steward-entry')));
- $('approval').hidden=!a.leader||!['voting','tied'].includes(c.status);$('explanation').value='';$('brief-note').textContent=desk.aiAvailable?'AI drafting is connected. Every draft needs a steward’s review and approval.':'AI summarisation is not connected yet. The draft button provides an editable template; you can write and approve the explanation now.';
- const tied=c.status==='tied';$('tie-label').hidden=$('tie-choice').hidden=!tied;options('tie-choice',current.tally.winners);
- $('close-vote').textContent=tied?'Cast deciding vote and send outcome DMs':'Close voting and send outcome DMs';
+ $('approval').hidden=!a.leader||!(appeal?c.status==='discussion':['voting','tied'].includes(c.status));$('explanation').value='';$('brief-note').textContent=desk.aiAvailable?'AI drafting is connected. Every draft needs a steward’s review and approval.':'AI summarisation is not connected yet. The draft button provides an editable template; you can write and approve the explanation now.';
+ $('approval-help').textContent=appeal?'Review the driver’s explanation and clips. Select Keep or Remove and explain the decision. Any result correction must still be applied by league administration.':'Review the votes and explanation before closing. A tied vote stays pending until a Head Steward or CEO selects one of the tied outcomes.';
+ $('explanation-label').textContent=appeal?'Approved appeal explanation to send to the driver':'Approved explanation to send to both drivers';
+ const tied=c.status==='tied';$('tie-label').hidden=$('tie-choice').hidden=!tied&&!appeal;options('tie-choice',appeal?['In-game penalty kept','In-game penalty removed']:current.tally.winners);$('tie-label').textContent=appeal?'Keep or remove the original in-game penalty':'Deciding vote · tied outcomes only';
+ $('close-vote').textContent=appeal?'Decide appeal and send driver DM':tied?'Cast deciding vote and send outcome DMs':'Close voting and send outcome DMs';
  $('decision').hidden=c.status!=='closed';$('decision-outcome').textContent=c.outcome||'';$('decision-text').textContent=c.explanation||'';
- $('delivery').textContent=c.status==='closed'?`Outcome DMs · reporting driver: ${c.notifications.reporter||'not attempted'} · reported driver: ${c.notifications.accused||'not attempted'}`:'';
- $('send-pending').hidden=!a.leader||c.status!=='closed'||Boolean(c.notifications.reporter&&c.notifications.accused);
+ $('delivery').textContent=c.status==='closed'?`Outcome DMs · ${appeal?'appealing':'reporting'} driver: ${c.notifications.reporter||'not attempted'}`+(appeal?'':` · reported driver: ${c.notifications.accused||'not attempted'}`):'';
+ $('send-pending').hidden=!a.leader||c.status!=='closed'||Boolean(c.notifications.reporter&&(appeal||c.notifications.accused));
  $('case-detail').scrollIntoView({behavior:'smooth',block:'start'});status(`Case #${c.number} loaded.`);
 }
 async function change(action,details={}){const id=current.incident.id;await api(action,{id,...details});await loadDesk();await loadCase(id);}
@@ -80,8 +89,9 @@ $('send-pending').onclick=()=>run(()=>change('send_pending'));
 $('brief').onclick=()=>run(async()=>{const result=await api('brief',{id:current.incident.id});$('explanation').value=result.draft;$('brief-note').textContent=(result.ai?'AI draft. ':'Template. ')+result.note;status('Draft ready. Review and edit it before approving.');});
 $('close-vote').onclick=()=>run(async()=>{
  const c=current.incident;if($('explanation').value.trim().length<20)throw Error('Write or approve an explanation of at least 20 characters.');
- if(!window.confirm('Close voting on case #'+c.number+'? If there is a winner, the approved outcome and explanation will be sent to both drivers.'))return;
- await change(c.status==='tied'?'tie_break':'close_vote',{penalty:$('tie-choice').value,explanation:$('explanation').value,revision:c.revision});
+ const appeal=c.data.kind==='penalty_appeal';
+ if(!window.confirm(appeal?'Finalise this in-game penalty appeal and DM the driver your decision?':'Close voting on case #'+c.number+'? If there is a winner, the approved outcome and explanation will be sent to both drivers.'))return;
+ await change(appeal?'appeal_decision':c.status==='tied'?'tie_break':'close_vote',{penalty:$('tie-choice').value,explanation:$('explanation').value,revision:c.revision});
  status(current.incident.status==='tied'?'Voting is tied. Select a tied outcome and cast the deciding vote.':'Decision recorded. Check the outcome DM delivery status below.');
 });
 async function loadSetup() {
@@ -112,15 +122,23 @@ function filterChannelChoices() {
 }
 $('report-channel-search').oninput=$('review-category-search').oninput=filterChannelChoices;
 $('route-picker').onchange=selectRoute;
+function routeFormConfig(enabled=$('route-enabled').checked){
+ if(!$('route-form').reportValidity())throw Error('Complete the group reference, name and reporting channel first.');
+ const roles=key=>[...document.querySelectorAll(`[data-role-group="${key}"]:checked`)].map(x=>x.value);
+ const config={name:$('route-name').value,default_set:$('default-set').value,report_channel:$('report-channel').value,category_id:$('review-category').value,enabled,driver_roles:roles('driver_roles'),steward_roles:roles('steward_roles'),leader_roles:roles('leader_roles')};
+ if(!config.driver_roles.length||!config.steward_roles.length||!config.leader_roles.length)throw Error('Select at least one driver role, one steward role, and one Head Steward / CEO role.');
+ return {id:$('route-id').value,config};
+}
 $('route-form').onsubmit=event=>{event.preventDefault();run(async()=>{
- const id=$('route-id').value,roles=key=>[...document.querySelectorAll(`[data-role-group="${key}"]:checked`)].map(x=>x.value);
- await api('save_route',{id,config:{name:$('route-name').value,default_set:$('default-set').value,report_channel:$('report-channel').value,category_id:$('review-category').value,enabled:$('route-enabled').checked,driver_roles:roles('driver_roles'),steward_roles:roles('steward_roles'),leader_roles:roles('leader_roles')}});
+ const values=routeFormConfig(),id=values.id;await api('save_route',values);
  await loadSetup();$('route-picker').value=id;selectRoute();await loadDesk();$('setup-result').textContent='Reporting group saved. Nothing has been posted. Publish the desk when ready.';status('Group saved.');
 });};
 $('publish').onclick=()=>run(async()=>{
- const id=$('route-picker').value;if(!id)throw Error('Save and select a reporting group first.');
- if(!window.confirm('Publish the Report Incident desk to this group’s selected Discord channel?'))return;
- const result=await api('publish_panel',{id});const a=node('a','Open the Discord reporting desk ↗');a.href=result.url;a.target='_blank';a.rel='noopener noreferrer';$('setup-result').replaceChildren(a);status('Reporting desk published.');
+ const values=routeFormConfig(true),id=values.id;
+ if(!window.confirm('Save, enable and publish '+values.config.name+' in the selected Discord reporting channel? Existing desks for this group will be updated.'))return;
+ await api('save_route',values);$('route-enabled').checked=true;
+ const result=await api('publish_panel',{id});await loadSetup();$('route-picker').value=id;selectRoute();
+ const a=node('a','Open the Discord reporting desk ↗');a.href=result.url;a.target='_blank';a.rel='noopener noreferrer';$('setup-result').replaceChildren(a);if(result.warning)$('setup-result').append(document.createTextNode(' '+result.warning));status(result.warning||'Reporting desk published.');
 });
 try{
  const r=await fetch('config.json',{cache:'no-store'});if(!r.ok)throw Error('Configuration unavailable.');config=await r.json();client=window.supabase.createClient(config.supabase_url,config.supabase_publishable_key,{auth:window.F7RAuth.options()});

@@ -35,3 +35,22 @@ test('AI missing configuration gives an explicit template without calling AI',as
 test('ordinary stewards cannot change reporting roles',async()=>{
  await withFetch(backend(),async()=>assert.equal((await handleStewards(request({action:'save_route'},token),env)).status,403));
 });
+test('publishing updates the same desk and slash-command failure does not block it',async()=>{
+ let stored={...route,config:{...route.config,enabled:true,report_channel:'channel'}},posts=0,edits=0;
+ await withFetch(async(url,options={})=>{
+   if(url.endsWith('/auth/v1/user'))return Response.json({id:'admin'});
+   if(url.includes('flag_admins'))return Response.json([{user_id:'admin'}]);
+   if(url.includes('f7r_steward_routes')){if(options.method==='PATCH')stored={...stored,config:JSON.parse(options.body).config};return Response.json([stored]);}
+   if(url.endsWith('/roles'))return Response.json([{id:'bot',permissions:'8'}]);
+   if(url.endsWith('/members/1004676760815796334'))return Response.json({roles:['bot']});
+   if(url.endsWith('/channels'))return Response.json([{id:'channel',type:0}]);
+   if(url.includes('/commands'))return Response.json({message:'Forbidden'},{status:403});
+   if(url.includes('/channels/channel/messages')){const body=JSON.parse(options.body);assert.ok(body.components[0].components.some(b=>b.label==='Appeal in-game penalty'));if(options.method==='PATCH')edits++;else posts++;return Response.json({id:'message'});}
+   throw Error('Unexpected request '+url);
+ },async()=>{
+   const first=await(await handleStewards(request({action:'publish_panel',id:route.id},'admin-jwt'),env)).json();
+   assert.ok(first.url);assert.match(first.warning,/registration failed/);
+   const second=await(await handleStewards(request({action:'publish_panel',id:route.id},'admin-jwt'),env)).json();assert.equal(second.url,first.url);
+ });
+ assert.equal(posts,1);assert.equal(edits,1);
+});

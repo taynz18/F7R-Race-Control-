@@ -1,4 +1,4 @@
-import {createService,idOK,accessFor,digest,caseAccess,penalties,tally,button,rowButtons,notifyDefence,reviewChannel,sendOutcomes} from '../_shared/stewards.js';
+import {createService,idOK,accessFor,digest,caseAccess,penalties,tally,button,rowButtons,notifyDefence,reviewChannel,sendOutcomes,refreshEvidence} from '../_shared/stewards.js';
 const origins=new Set(['https://racecontrol.f7r.co.uk','https://taynz18.github.io']);
 export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
  const origin=request.headers.get('origin'),headers={'Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,OPTIONS'};
@@ -28,8 +28,8 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
    const allowed=admin?routes:routes.filter(r=>accessFor(member.roles,r.config,driverId).steward);
    if(action==='logout') {if(driverId)await s.db('f7r_steward_sessions?token_hash=eq.'+await digest(bearer),'DELETE');return reply({ok:true});}
    if(action==='list') {
-     const cases=await s.db('f7r_steward_cases?select=id,number,route_id,status,created_at,outcome,reporter_id,accused_id,race:data->>race,lap:data->>lap&guild_id=eq.'+s.guild+'&order=created_at.desc&limit=200');
-     return reply({admin,driverId,routes:allowed,cases:cases.filter(c=>allowed.some(r=>r.id===c.route_id)&&(!driverId||![c.reporter_id,c.accused_id].includes(driverId))).map(c=>({id:c.id,number:c.number,route_id:c.route_id,status:c.status,race:c.race??c.data?.race,lap:c.lap??c.data?.lap,created_at:c.created_at,outcome:c.outcome})),aiAvailable:Boolean(env('OPENAI_API_KEY'))});
+     const cases=await s.db('f7r_steward_cases?select=id,number,route_id,status,created_at,outcome,reporter_id,accused_id,kind:data->>kind,race:data->>race,lap:data->>lap&guild_id=eq.'+s.guild+'&order=created_at.desc&limit=200');
+     return reply({admin,driverId,routes:allowed,cases:cases.filter(c=>allowed.some(r=>r.id===c.route_id)&&(!driverId||![c.reporter_id,c.accused_id].includes(driverId))&&(admin||c.kind!=='penalty_appeal'||accessFor(member.roles,allowed.find(r=>r.id===c.route_id).config,driverId).leader)).map(c=>({id:c.id,number:c.number,route_id:c.route_id,status:c.status,kind:c.kind,race:c.race??c.data?.race,lap:c.lap??c.data?.lap,created_at:c.created_at,outcome:c.outcome})),aiAvailable:Boolean(env('OPENAI_API_KEY'))});
    }
    if(['setup_options','save_route','publish_panel'].includes(action)) {
      if(!admin)return reply({error:'Approved race admin access required for setup.'},403);
@@ -41,22 +41,25 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
        for(const key of ['driver_roles','steward_roles','leader_roles'])if(!Array.isArray(c[key])||!c[key].length||c[key].length>20||c[key].some(id=>!idOK(id)||!roles.some(r=>r.id===id&&id!==s.guild)))throw Error('Choose valid driver, steward and Head Steward / CEO roles.');
        if(!channels.some(ch=>ch.id===c.report_channel&&ch.type===0)||c.category_id&&!channels.some(ch=>ch.id===c.category_id&&ch.type===4))throw Error('Choose a reporting channel and an optional review category.');
        const clean={name:c.name.trim(),default_set:c.default_set,enabled:c.enabled,driver_roles:[...new Set(c.driver_roles)],steward_roles:[...new Set(c.steward_roles)],leader_roles:[...new Set(c.leader_roles)],report_channel:c.report_channel,category_id:c.category_id||null};
+       const previous=routes.find(r=>r.id===id)?.config;if(previous?.report_channel===c.report_channel&&previous.panel_message_id)clean.panel_message_id=previous.panel_message_id;
        if(routes.some(r=>r.id===id))await s.db('f7r_steward_routes?guild_id=eq.'+s.guild+'&id=eq.'+id,'PATCH',{config:clean});
        else await s.db('f7r_steward_routes','POST',{guild_id:s.guild,id,config:clean});
        return reply({saved:true});
      }
      const r=routes.find(r=>r.id===input.id);if(!r?.config.enabled)throw Error('Save and enable this reporting group first.');
-     await s.discord('/applications/1004676760815796334/guilds/'+s.guild+'/commands','POST',{name:'verdict',description:'Start or vote on the verdict in an F7R case review room',type:1});
-     const post=await s.discord('/channels/'+r.config.report_channel+'/messages','POST',{
-       content:`**F7R Stewards Room · ${r.config.name}**\nReport an incident with the race, lap / corner, other driver and evidence links. Reports and defences are submitted separately and locked. Stewards discuss privately and both drivers receive the approved outcome by DM.`,
-       allowed_mentions:{parse:[]},components:rowButtons([button('Report Incident','f7r-stew-report:'+r.id,1),button('Stewards Room','f7r-stew-access:desk')])
-     });
-     return reply({url:'https://discord.com/channels/'+s.guild+'/'+r.config.report_channel+'/'+post.id});
+     const bot=await s.member('1004676760815796334');let botPermissions=0n;for(const role of roles)if(role.id===s.guild||bot.roles.includes(role.id))botPermissions|=BigInt(role.permissions||'0');
+     if(!(botPermissions&8n)&&((botPermissions&16n)===0n||(botPermissions&268435456n)===0n))throw Error('The F7R bot needs Manage Channels and Manage Permissions (Manage Roles) to create and close private clip tickets. Grant those permissions in Discord, then publish again.');
+     let warning;try{await s.discord('/applications/1004676760815796334/guilds/'+s.guild+'/commands','POST',{name:'verdict',description:'Start a steward verdict or decide an in-game penalty appeal',type:1});}catch{warning='Desk published, but /verdict registration failed. The case buttons and Race Control still work.';}
+     const payload={content:`**F7R Stewards Room · ${r.config.name}**\nReport an incident or appeal an incorrect in-game penalty. Submit your explanation, then upload any clips in your private Discord ticket. Video is optional. Statements lock when submitted and the outcome is sent by DM.`,allowed_mentions:{parse:[]},components:rowButtons([button('Report Incident','f7r-stew-report:'+r.id,1),button('Appeal in-game penalty','f7r-stew-appeal:'+r.id),button('Stewards Room','f7r-stew-access:desk')])};
+     let post;if(r.config.panel_message_id){try{post=await s.discord('/channels/'+r.config.report_channel+'/messages/'+r.config.panel_message_id,'PATCH',payload);}catch(error){if(error.status!==404)throw error;}}
+     if(!post)post=await s.discord('/channels/'+r.config.report_channel+'/messages','POST',payload);
+     await s.db('f7r_steward_routes?guild_id=eq.'+s.guild+'&id=eq.'+r.id,'PATCH',{config:{...r.config,panel_message_id:post.id}});
+     return reply({url:'https://discord.com/channels/'+s.guild+'/'+r.config.report_channel+'/'+post.id,warning});
    }
    const c=await s.incident(input.id);
    if(!allowed.some(r=>r.id===c.route_id))return reply({error:'You are not assigned to this group.'},403);
    const a=driverId?await caseAccess(s,c,driverId):{leader:false,steward:false,route:routes.find(r=>r.id===c.route_id)};
-   if(action==='case')return reply({incident:c,access:a,penalties:penalties(c.penalty_set||a.route.config.default_set),tally:tally(c.votes)});
+   if(action==='case')return reply({incident:await refreshEvidence(s,c),access:a,penalties:penalties(c.penalty_set||a.route.config.default_set),tally:tally(c.votes)});
    if(action==='open_review')return reply({channel:await reviewChannel(s,c,a.route)});
    if(action==='invite_defence') {
      if(!admin&&!a.leader)throw Error('Head Steward / CEO access required.');
@@ -74,7 +77,7 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
      if(!penalties(c.penalty_set).includes(input.penalty)||typeof input.reason!=='string'||input.reason.trim().length<10||input.reason.length>1500)throw Error('Select a penalty and explain your vote in 10–1,500 characters.');
      return reply({incident:await s.action(c,driverId,a.leader,'vote',{penalty:input.penalty,reason:input.reason.trim()})});
    }
-   if(['close_vote','tie_break'].includes(action)) {
+   if(['close_vote','tie_break','appeal_decision'].includes(action)) {
      if(!Number.isInteger(input.revision)||typeof input.explanation!=='string'||input.explanation.length>1800)throw Error('Refresh the case and add an approved explanation (up to 1,800 characters).');
      const updated=await s.action(c,driverId,a.leader,action,{penalty:input.penalty,explanation:input.explanation},input.revision);
      const delivery=updated.status==='closed'?await sendOutcomes(s,updated,driverId,a.leader):null;
@@ -82,7 +85,7 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
    }
    if(action==='brief') {
      const votes=tally(c.votes),key=env('OPENAI_API_KEY');
-     if(!key)return reply({draft:`Proposed outcome: ${votes.winners.join(' / ')||'Not yet voted'}.\n\n[Explain the incident, the applicable rule and the stewards’ agreed reasons here before approving.]`,ai:false,note:'AI is not configured. This is an editable template, not an AI summary.'});
+     if(!key)return reply({draft:c.data.kind==='penalty_appeal'?`In-game penalty: ${c.data.original_penalty}.\n\n[Explain why the original penalty should be kept or removed, based on the driver’s explanation and available footage.]`:`Proposed outcome: ${votes.winners.join(' / ')||'Not yet voted'}.\n\n[Explain the incident, the applicable rule and the stewards’ agreed reasons here before approving.]`,ai:false,note:'AI is not configured. This is an editable template, not an AI summary.'});
      let discordDiscussion=[];
      if(c.review_channel_id){try{discordDiscussion=(await s.discord('/channels/'+c.review_channel_id+'/messages?limit=100')).filter(m=>!m.author?.bot&&m.content).reverse().map(m=>m.content.slice(0,2000));}catch{throw Error('Could not read the Discord discussion. Add the agreed reasons in Race Control first, or draft the explanation manually.');}}
      const evidence={race:c.data.race,lap:c.data.lap,report:c.data.report.statement,defence:c.data.defence?.statement,discussion:c.comments.map(x=>x.text),discordDiscussion,votes:Object.values(c.votes),leadingOutcomes:votes.winners};
