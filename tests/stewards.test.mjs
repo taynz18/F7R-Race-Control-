@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {notifyDefence,verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
+import {ensureMessageReading,deleteTicket,ticketDeleteAccess,notifyDefence,verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
 import {stewardInteraction} from '../supabase/functions/_shared/steward-interactions.js';
 const driver='123456789012345678',accused='223456789012345678',steward='323456789012345678',leader='423456789012345678';
 const config={enabled:true,driver_roles:['driver'],steward_roles:['steward'],leader_roles:['leader']};
@@ -40,7 +40,7 @@ test('only the reported driver can open the defence and cannot resubmit it',asyn
  s.incident=async()=>c;assert.equal((await(await stewardInteraction(i,s,()=>{})).json()).type,4);
 });
 test('review room denies both drivers and everyone while allowing assigned staff',async()=>{
- const calls=[];const s={guild:'guild',discord:async(path,method,body)=>{calls.push({path,body});return {id:'channel'};},db:async()=>{}};
+ const calls=[];const s={guild:'guild',discord:async(path,method,body)=>{if(path==='/applications/@me')return {flags:1<<19};if(path==='/applications/@me')return {flags:1<<19};calls.push({path,body});return {id:'channel'};},db:async()=>{}};
  await reviewChannel(s,c,{config:{...config,name:'Tier 1'}});
  const permissions=calls[0].body.permission_overwrites;
  for(const id of ['guild',driver,accused])assert.ok(permissions.some(p=>p.id===id&&p.deny==='1024'));
@@ -58,7 +58,7 @@ test('no new interaction can bypass the attendance signature verification',async
  assert.ok(code.indexOf('crypto.subtle.verify')<code.indexOf('return await stewardInteraction'));
 });
 test('private clip tickets allow only the submitting driver and deny the other driver',async()=>{
- const calls=[],s={guild:'guild',incident:async()=>c,db:async()=>{},discord:async(path,method,body)=>{calls.push({path,body});return {id:'ticket'};}};
+ const calls=[],s={guild:'guild',incident:async()=>c,db:async()=>{},discord:async(path,method,body)=>{if(path==='/applications/@me')return {flags:1<<19};calls.push({path,body});return {id:'ticket'};}};
  await evidenceTicket(s,c,{config},'report');
  const p=calls[0].body.permission_overwrites;
  assert.ok(p.some(x=>x.id===driver&&x.allow!=='0'&&x.deny==='0'));
@@ -72,7 +72,7 @@ test('clips remain on Discord; only links and source metadata are captured',asyn
  const result=await collectEvidence(s,incident,'report',driver);
  assert.equal(result.clips.length,1);assert.equal(result.clips[0].message_id,'message');assert.equal(result.no_video,false);assert.ok(!JSON.stringify(result).includes('base64'));
  s.discord=async()=>[];const empty=await collectEvidence(s,{...incident,data:{report:{links:[]},report_ticket:'ticket'}},'report',driver);assert.equal(empty.no_video,true);
- s.discord=async()=>[{author:{id:driver},content:'',attachments:[]}];await assert.rejects(()=>collectEvidence(s,incident,'report',driver),/Mention/);
+ s.discord=async()=>[{author:{id:driver},content:'',attachments:[]}];await assert.rejects(()=>collectEvidence(s,incident,'report',driver),/Automatic reading is unavailable/);
 });
 test('Discord attachment links are refreshed from their original messages',async()=>{
  const incident=structuredClone(c);incident.data.report={external_links:[],clips:[{channel_id:'channel',message_id:'message',attachment_id:'clip',url:'https://cdn.discordapp.com/old'}]};
@@ -136,7 +136,7 @@ test('eligible drivers can report members without the group role and open separa
    if(method==='PATCH'){const row=rows.find(r=>path.endsWith(r.id));Object.assign(row,body);return [row];}
    if(path.includes('interaction_id=eq.'))return rows.filter(r=>r.interaction_id===path.split('interaction_id=eq.')[1]);
    return rows;
- },discord:async(path,method,body)=>{if(path.endsWith('/channels')){const channel={id:'ticket-'+(channels.length+1)};channels.push({channel,body});return channel;}return {id:'message'};},
+ },discord:async(path,method,body)=>{if(path==='/applications/@me')return {flags:1<<19};if(path.endsWith('/channels')){const channel={id:'ticket-'+(channels.length+1)};channels.push({channel,body});return channel;}return {id:'message'};},
  dm:async(id,body)=>{dms.push({id,body});return 'sent';}};
  const submit=(id,other)=>({id,type:5,user:{id:driver},token:'test',data:{custom_id:'f7r-stew-submit:f1',components:Object.entries({driver:other,race:'Monza',lap:'Lap 1',statement:'test',links:''}).map(([custom_id,value])=>({component:{custom_id,value}}))}});
  const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{replies.push(JSON.parse(options.body));return Response.json({});};
@@ -152,7 +152,7 @@ test('eligible drivers can report members without the group role and open separa
 
 test('report, defence and steward review stay in one category ticket with sequential driver access',async()=>{
  const raw=structuredClone(c);raw.status='awaiting_report_evidence';const calls=[];let channels=0;
- const s={guild:'guild',incident:async()=>raw,db:async(path,method,body)=>{Object.assign(raw,body);return[raw];},dm:async()=> 'sent',discord:async(path,method,body)=>{calls.push({path,method,body});if(path==='/guilds/guild/channels'){channels++;return{id:'same-ticket'};}return{id:'message'};}};
+ const s={guild:'guild',incident:async()=>raw,db:async(path,method,body)=>{Object.assign(raw,body);return[raw];},dm:async()=> 'sent',discord:async(path,method,body)=>{if(path==='/applications/@me')return {flags:1<<19};calls.push({path,method,body});if(path==='/guilds/guild/channels'){channels++;return{id:'same-ticket'};}return{id:'message'};}};
  const route={config:{...config,name:'Tier 4',category_id:'tier4-incidents'}};
  await evidenceTicket(s,raw,route,'report');
  assert.equal(calls[0].body.parent_id,'tier4-incidents');assert.equal(calls[0].body.name,'case-1001');
@@ -195,5 +195,32 @@ test('empty descriptions get a clear error before creating a case or channel',as
  await stewardInteraction({type:5,id:'short',user:{id:driver},token:'test',data:{custom_id:'f7r-stew-submit:f1',components:Object.entries({driver:accused,race:'Monza',lap:'Lap 1',statement:' ',links:''}).map(([custom_id,value])=>({component:{custom_id,value}}))}},s,p=>pending.push(p));await Promise.all(pending);
  assert.match(replies[0].content,/Enter an incident description/);
  }finally{globalThis.fetch=original;console.error=log;}
+});
+
+test('automatic reading enables only the limited message-content flag and verifies the result',async()=>{
+ const calls=[];let flags=1<<13;
+ await ensureMessageReading({discord:async(path,method,body)=>{calls.push({path,method,body});if(method==='PATCH')flags=body.flags;return {flags};}});
+ assert.equal(calls[1].body.flags,(1<<13)|(1<<19));
+ const before=calls.length;await ensureMessageReading({discord:async()=>{calls.push({});return {flags:1<<19};}});assert.equal(calls.length,before+1);
+ await assert.rejects(()=>ensureMessageReading({discord:async()=>({flags:0})}),/has not enabled/);
+});
+test('only assigned non-involved stewards or server admin staff can delete a ticket',async()=>{
+ const s={guild:'guild',route:async()=>({config}),member:async()=>({roles:['steward']})};
+ assert.equal((await ticketDeleteAccess(s,c,steward)).steward,true);
+ await assert.rejects(()=>ticketDeleteAccess(s,c,driver),/Involved drivers/);
+ s.member=async()=>({roles:['unrelated']});s.discord=async()=>[{id:'unrelated',permissions:'0'}];await assert.rejects(()=>ticketDeleteAccess(s,c,steward),/Only assigned/);
+ s.discord=async()=>[{id:'unrelated',permissions:'8'}];assert.equal((await ticketDeleteAccess(s,c,steward)).steward,true);
+});
+test('deletion removes only verified case channels and records completion without outcome DMs',async()=>{
+ const calls=[],raw={...c,revision:4},claimed={...raw,data:{...raw.data,deletion:{channels:['one','two']}}};
+ const s={guild:'guild',route:async()=>({config:{report_channel:'desk',category_id:'category'}}),action:async(c,a,l,name,value)=>{calls.push({name,value});return claimed;},discord:async(path,method)=>{calls.push({path,method});return {guild_id:'guild',type:0,name:'case-1001'};}};
+ await deleteTicket(s,raw,steward,false,'Duplicate report',4);assert.equal(calls.filter(x=>x.method==='DELETE').length,2);assert.equal(calls.at(-1).name,'delete_ticket_complete');
+ s.discord=async()=>({guild_id:'other-guild',type:0,name:'case-1001'});await assert.rejects(()=>deleteTicket(s,raw,steward,false,'Duplicate',4),/not this case/);
+ claimed.data.deletion.channels=['category'];await assert.rejects(()=>deleteTicket(s,raw,steward,false,'Duplicate',4),/Refusing/);
+});
+test('driver cannot obtain a delete confirmation and a steward must explicitly confirm',async()=>{
+ const s={incident:async()=>({...c,revision:2}),route:async()=>({config}),member:async()=>({roles:['steward']})};
+ let r=await(await stewardInteraction({type:3,user:{id:driver},data:{custom_id:'f7r-stew-delete:'+c.id}},s,()=>{})).json();assert.match(r.data.content,/cannot delete/);
+ r=await(await stewardInteraction({type:3,user:{id:steward},data:{custom_id:'f7r-stew-delete:'+c.id}},s,()=>{})).json();assert.equal(r.type,9);assert.ok(r.data.components.some(x=>x.component.custom_id==='confirm_value'));
 });
 

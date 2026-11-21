@@ -109,3 +109,27 @@ test('approved admins can inspect cases without a Discord steward session',async
  });
 });
 
+test('approved admin setup enables automatic reading and reports the verified setting',async()=>{
+ let enabled=false;
+ await withFetch(async(url,options={})=>{
+   if(url.endsWith('/applications/@me')){if(options.method==='PATCH'){const b=JSON.parse(options.body);assert.equal(b.flags,1<<19);enabled=true;}return Response.json({flags:enabled?1<<19:0});}
+   if(url.endsWith('/roles')||url.endsWith('/channels'))return Response.json([]);
+   if(url.includes('f7r_steward_cases?'))return Response.json([]);
+   return backend()(url);
+ },async()=>{
+   const r=await(await handleStewards(request({action:'setup_options'},'admin-jwt'),env)).json();assert.equal(r.reading.enabled,true);assert.equal(enabled,true);
+ });
+});
+test('admin ticket deletion requires explicit confirmation and deletes only its case channel',async()=>{
+ const raw={...c,number:1001,revision:3,guild_id:env('F7R_DISCORD_SERVER_ID'),data:{...c.data,report_ticket:'ticket'}},removed=[];
+ await withFetch(async(url,options={})=>{
+   if(url.includes('/rpc/f7r_steward_action'))return Response.json({...raw,data:{...raw.data,deletion:{channels:['ticket']}}});
+   if(url.endsWith('/channels/ticket')){if(options.method==='DELETE'){removed.push('ticket');return new Response(null,{status:204});}return Response.json({type:0,name:'case-1001',guild_id:raw.guild_id});}
+   return backend(['steward'],raw)(url);
+ },async()=>{
+   assert.equal((await handleStewards(request({action:'delete_ticket',id:caseId,revision:3,reason:'Duplicate'},'admin-jwt'),env)).status,400);
+   assert.equal((await handleStewards(request({action:'delete_ticket',id:caseId,revision:3,reason:'Duplicate',confirm:'DELETE'},'admin-jwt'),env)).status,200);
+   assert.deepEqual(removed,['ticket']);
+ });
+});
+

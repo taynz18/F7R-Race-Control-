@@ -1,4 +1,4 @@
-import {APP_ID,verdictView,tally,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
+import {APP_ID,deleteTicket,ticketDeleteAccess,verdictView,tally,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
 const reply=content=>Response.json({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
 const label=(name,component)=>({type:18,label:name,component});
 const text=(id,style,max,required=true)=>({type:4,custom_id:id,style,required,max_length:max,...(required?{min_length:id==='explanation'?20:id==='reason'?10:1}:{}),...(id==='statement'?{placeholder:'Describe what happened.'}:{})});
@@ -21,6 +21,17 @@ export async function stewardInteraction(i,s,waitUntil) {
    return Response.json({type:5,data:{flags:64}});
  };
  try {
+   if(kind==='f7r-stew-delete'||kind==='f7r-stew-deleteconfirm'){
+     const c=await s.incident(reference),access=await ticketDeleteAccess(s,c,user.id);
+     if(c.outcome||c.data.reporter_verdict?.outcome)return reply('This case already has a verdict. Delete ticket is only for cases needing no investigation.');
+     if(kind==='f7r-stew-deleteconfirm'&&i.type===5)return defer(async()=>{
+       const v=values(i);if(v.confirm_value?.trim()!=='DELETE')throw Error('Type DELETE to confirm permanent ticket deletion.');
+       const revision=Number(selectedTarget);if(!Number.isInteger(revision))throw Error('Open the deletion form again.');
+       await deleteTicket(s,c,user.id,access.leader,required(v.delete_reason,'deletion reason',1,500),revision);
+       return 'Ticket deleted. No verdict or NFA outcome was recorded and no penalty decision was sent. A small staff audit record remains.';
+     });
+     return modal('f7r-stew-deleteconfirm:'+c.id+':'+c.revision,'Delete ticket · no verdict',[label('Reason this ticket needs no investigation',text('delete_reason',2,500)),label('Type DELETE to confirm permanent deletion',text('confirm_value',1,6))]);
+   }
    if(kind==='f7r-stew-report'||kind==='f7r-stew-appeal') {
      const route=await s.route(reference),m=await s.member(user.id);
      if(!route?.config.enabled||!route.config.driver_roles.some(id=>m.roles.includes(id)))return reply('This reporting desk is not open to your driver role.');
@@ -86,11 +97,11 @@ export async function stewardInteraction(i,s,waitUntil) {
      return 'Website access requires an approved Race Control admin sign-in as well as this private steward link (valid for four hours; do not share). Stewards can complete reviews and votes in this Discord ticket:\n\n'+await makeSession(s,user.id);
    });
    let c;
-   if(command){c=(await s.db('f7r_steward_cases?guild_id=eq.'+s.guild+'&review_channel_id=eq.'+i.channel_id))[0];if(!c)return reply('Use /verdict inside an F7R case review channel.');}
+   if(command){c=(await s.db('f7r_steward_cases?guild_id=eq.'+s.guild+'&or=(review_channel_id.eq.'+i.channel_id+',data->>report_ticket.eq.'+i.channel_id+',data->>defence_ticket.eq.'+i.channel_id+')'))[0];if(!c)return reply('Use /verdict inside an F7R case review channel.');}
    else if(['f7r-stew-verdict','f7r-stew-start','f7r-stew-vote','f7r-stew-appealdecision','f7r-stew-pick','f7r-stew-close'].includes(kind))c=await s.incident(reference);
    if(c) {
      const access=await caseAccess(s,c,user.id);
-     if(c.data.kind!=='penalty_appeal'&&(command||(kind==='f7r-stew-verdict'&&!selectedTarget)))return Response.json({type:4,data:{flags:64,content:'Choose whose outcome to review. Each driver has a separate vote and decision.',components:[{type:1,components:[{type:3,custom_id:'f7r-stew-pick:'+c.id,options:[{label:'Reported driver',value:'accused'},{label:'Reporting driver (separate vote)',value:'reporter'}],min_values:1,max_values:1}]}]}});
+     if(c.data.kind!=='penalty_appeal'&&(command||(kind==='f7r-stew-verdict'&&!selectedTarget)))return Response.json({type:4,data:{flags:64,content:'Choose whose outcome to review. Each driver has a separate vote and decision.',components:[{type:1,components:[{type:3,custom_id:'f7r-stew-pick:'+c.id,options:[{label:'Reported driver',value:'accused'},{label:'Reporting driver (separate vote)',value:'reporter'}],min_values:1,max_values:1}]},...rowButtons([button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4)])]}});
      const raw=c,target=kind==='f7r-stew-pick'?i.data.values?.[0]:selectedTarget||'accused';
      c=verdictView(c,target);const suffix=':'+c.id+':'+target;
      if(target==='reporter'&&!raw.data.reporter_verdict){

@@ -50,6 +50,7 @@ async function loadCase(id) {
  $('verdict-target-help').textContent=secondary?'Separate outcome for the driver who submitted the report. The reported driver’s votes and decision remain unchanged.':'Outcome for the driver named in the report.';
  $('reporter-reason').hidden=$('reporter-reason-label').hidden=!secondary||Boolean(v);
  $('reporter-reason').value='';
+ const deleted=raw.data.deletion; $('delete-ticket-section').hidden=Boolean(raw.outcome||raw.data.reporter_verdict?.outcome)||deleted?.status==='deleted';$('delete-ticket-note').textContent=deleted?.status==='deleting'?'Deletion started. Retry to finish removing the remaining case channels.':'';
  $('case-detail').hidden=false;$('case-group').textContent=a.route.config.name;
  $('case-title').textContent=`${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${c.data.race}`;$('case-meta').textContent=c.data.lap+' · '+(v?'Reported driver: '+stateNames[raw.status]+' · Reporting driver: '+stateNames[v.status]:stateNames[c.status]);
  $('case-access').textContent=a.steward?(a.leader?'Head Steward / CEO access · you can close voting and decide ties.':'Steward access · discussion and one vote per case.'):'Admin oversight · use your Discord steward access link to take part in the verdict.';
@@ -82,6 +83,7 @@ async function loadCase(id) {
  $('decision').hidden=c.status!=='closed';$('decision-outcome').textContent=c.outcome||'';$('decision-text').textContent=c.explanation||'';
  $('delivery').textContent=c.status==='closed'?`Outcome DMs · ${appeal?'appealing':'reporting'} driver: ${c.notifications.reporter||'not attempted'}`+(appeal?'':` · reported driver: ${c.notifications.accused||'not attempted'}`):'';
  $('send-pending').hidden=!a.leader||c.status!=='closed'||Boolean(c.notifications.reporter&&(appeal||c.notifications.accused));
+ if(deleted){$('case-meta').textContent=deleted.status==='deleted'?'Ticket deleted without a verdict':'Ticket deletion in progress';$('case-access').textContent='Staff audit · '+deleted.reason;$('open-review').disabled=true;$('comment-form').hidden=true;$('start-form').hidden=true;$('vote-form').hidden=true;$('approval').hidden=true;$('send-pending').hidden=true;$('verdict-target-section').hidden=true;}
  $('case-detail').scrollIntoView({behavior:'smooth',block:'start'});status(`Case #${c.number} loaded.`);
 }
 async function change(action,details={}){const id=current.incident.id;await api(action,{id,target:verdictTarget,...details});await loadDesk();await loadCase(id);}
@@ -93,6 +95,12 @@ $('login').onsubmit=event=>{event.preventDefault();run(async()=>{const {error}=a
 $('comment-form').onsubmit=event=>{event.preventDefault();run(async()=>{await change('comment',{text:$('comment').value,target:'accused'});$('comment').value='';});};
 $('start-form').onsubmit=event=>{event.preventDefault();run(()=>change(verdictTarget==='reporter'&&!current.baseIncident.data.reporter_verdict?'start_reporter_vote':'start_vote',{set:$('penalty-set').value,reason:$('reporter-reason').value,revision:current.incident.revision}));};
 $('vote-form').onsubmit=event=>{event.preventDefault();run(()=>change('vote',{penalty:$('penalty').value,reason:$('vote-reason').value}));};
+$('delete-ticket').onclick=()=>run(async()=>{
+ const reason=window.prompt('Why does this ticket need no further investigation? This is separate from NFA.');if(reason===null)return;
+ if(!reason.trim()||reason.length>500)throw Error('Add a deletion reason of 1–500 characters.');
+ const confirm=window.prompt('Permanently delete the Discord case channel and its clips? Type DELETE to confirm.');if(confirm!=='DELETE')return;
+ await change('delete_ticket',{target:'accused',reason:reason.trim(),confirm,revision:current.baseIncident.revision});status('Ticket deleted without a verdict. Staff audit retained.');
+});
 $('open-review').onclick=()=>run(()=>change('open_review'));
 $('invite').onclick=()=>run(()=>change('invite_defence'));
 $('send-pending').onclick=()=>run(()=>change('send_pending'));
@@ -105,7 +113,7 @@ $('close-vote').onclick=()=>run(async()=>{
  status(current.incident.status==='tied'?'Voting is tied. Select a tied outcome and cast the deciding vote.':'Decision recorded. Check the outcome DM delivery status below.');
 });
 async function loadSetup() {
- setup=await api('setup_options');
+ setup=await api('setup_options');$('reading-status').textContent=setup.reading?.enabled?'Automatic Discord message reading is enabled. Drivers and stewards do not need to tag the bot.':setup.reading?.error||'Checking automatic Discord reading…';
  options('route-picker',setup.routes.map(r=>({id:r.id,name:r.config.name})),'New group');
  filterChannelChoices();
  for(const [field,id]of[['driver_roles','driver-roles'],['steward_roles','steward-roles'],['leader_roles','leader-roles']]){

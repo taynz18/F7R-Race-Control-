@@ -50,6 +50,54 @@ export function createService(env,send=fetch) {
 }
 export const rowButtons=buttons=>[{type:1,components:buttons}];
 export const button=(label,custom_id,style=2)=>({type:2,style,label,custom_id});
+export async function ensureMessageReading(s) {
+ const app=await s.discord('/applications/@me');
+ let flags=Number(app.flags||0);
+ if(!(flags&((1<<18)|(1<<19)))){
+   const updated=await s.discord('/applications/@me','PATCH',{flags:(flags&((1<<13)|(1<<15)))|(1<<19)});
+   flags=Number(updated.flags||0);
+ }
+ if(!(flags&((1<<18)|(1<<19))))throw Error('Discord has not enabled Message Content for this bot. Enable it on the bot application before automatic evidence reading can work.');
+ return {enabled:true};
+}
+export async function syncTicketMessages(s) {
+ const rows=await s.db('f7r_steward_cases?guild_id=eq.'+s.guild+'&status=neq.closed&limit=200');let updated=0;
+ for(const c of rows){
+   for(const id of new Set([c.data.report_ticket,c.data.defence_ticket,c.review_channel_id].filter(Boolean))){
+     try{
+       const messages=await s.discord('/channels/'+id+'/messages?limit=50');
+       for(const m of messages){
+         if(m.author?.id!==APP_ID||!m.components?.some(row=>row.components?.some(b=>b.custom_id?.startsWith('f7r-stew-'))))continue;
+         const content=m.content.replace('**Mention <@'+APP_ID+'> in each clip message** so the bot can read your evidence.','The bot reads evidence automatically; you do not need to tag it.');
+         const components=structuredClone(m.components);
+         if(!components.some(row=>row.components?.some(b=>b.custom_id==='f7r-stew-delete:'+c.id))&&components[0]?.components.length<5)components[0].components.push(button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4));
+         if(content!==m.content||JSON.stringify(components)!==JSON.stringify(m.components)){await s.discord('/channels/'+id+'/messages/'+m.id,'PATCH',{content,components,allowed_mentions:{parse:[]}});updated++;}
+       }
+     }catch{ /* A missing or inaccessible old ticket must not block admin setup. */ }
+   }
+ }
+ return updated;
+}
+export async function deleteTicket(s,c,actor,leader,reason,revision) {
+ const updated=await s.action(c,actor,leader,'delete_ticket_claim',{reason},revision);
+ const route=await s.route(c.route_id),deleted=[];
+ for(const id of updated.data.deletion.channels){
+   if([route.config.report_channel,route.config.category_id,s.guild].includes(id))throw Error('Refusing to delete a reporting desk or category.');
+   let channel;try{channel=await s.discord('/channels/'+id);}catch(error){if(error.status===404){deleted.push(id);continue;}throw error;}
+   if(channel.guild_id!==s.guild||channel.type!==0||!new RegExp('^case-'+c.number+'(?:-(report|defence))?$').test(channel.name))throw Error('The channel is not this case’s private ticket. No deletion was performed on it.');
+   await s.discord('/channels/'+id,'DELETE');deleted.push(id);
+ }
+ return s.action(updated,actor,leader,'delete_ticket_complete',{channels:deleted});
+}
+export async function ticketDeleteAccess(s,c,actor) {
+ const route=await s.route(c.route_id),member=await s.member(actor);
+ if([c.reporter_id,c.accused_id].includes(actor))throw Error('Involved drivers cannot delete their own ticket.');
+ const access=accessFor(member.roles||[],route.config,actor,c);
+ if(access.steward)return access;
+ const roles=await s.discord('/guilds/'+s.guild+'/roles');
+ if(!roles.some(r=>(r.id===s.guild||member.roles.includes(r.id))&&(BigInt(r.permissions||'0')&40n)))throw Error('Only assigned stewards or server admin staff can delete this ticket.');
+ return {steward:true,leader:false};
+}
 export async function makeSession(s,driverId) {
  const token=crypto.randomUUID().replaceAll('-','')+crypto.randomUUID().replaceAll('-','');
  await s.db('f7r_steward_sessions','POST',{token_hash:await digest(token),guild_id:s.guild,driver_id:driverId});
@@ -89,7 +137,7 @@ export async function reviewChannel(s,c,r) {
  await s.discord('/channels/'+channel.id+'/messages','POST',{
    content:roles.map(id=>'<@&'+id+'>').join(' ')+`\n**${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${safeText(r.config.name)}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\n`+(appeal?`Original penalty: ${safeText(c.data.original_penalty)}\nHead Steward / CEO: use /verdict to keep or remove the penalty.`:'Discuss privately here or in Race Control. Use /verdict to start voting.')+'\nEvidence tickets: '+[c.data.report_ticket,c.data.defence_ticket].filter(Boolean).map(id=>'<#'+id+'>').join(' '),
    allowed_mentions:{parse:[],roles},embeds:appeal?[statement('Appeal',c.reporter_id,c.data.report)]:[statement('Report',c.reporter_id,c.data.report),statement('Defence',c.accused_id,c.data.defence)],
-   components:rowButtons([button('Admin Stewards Room','f7r-stew-access:'+c.id),button('Start / view verdict','f7r-stew-verdict:'+c.id),...(!appeal?[button('Reporting driver verdict','f7r-stew-verdict:'+c.id+':reporter')]:[])])
+   components:rowButtons([button('Admin Stewards Room','f7r-stew-access:'+c.id),button('Start / view verdict','f7r-stew-verdict:'+c.id),...(!appeal?[button('Reporting driver verdict','f7r-stew-verdict:'+c.id+':reporter')]:[]),button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4)])
  });
  return channel.id;
 }
@@ -108,12 +156,13 @@ export async function sendOutcomes(s,c,actor,leader,target='accused') {
  return statuses;
 }
 export async function evidenceTicket(s,c,r,phase) {
+ await ensureMessageReading(s);
  const key=phase+'_ticket',existing=c.data[key]||(phase==='defence'?c.data.report_ticket:null);
  const driver=phase==='report'?c.reporter_id:c.accused_id,appeal=c.data.kind==='penalty_appeal';
  const roles=[...new Set([...(appeal?[]:r.config.steward_roles),...r.config.leader_roles])],allow=String(1024+2048+32768+65536+16384);
  const channel=existing?{id:existing}:await s.discord('/guilds/'+s.guild+'/channels','POST',{name:`case-${c.number}`,type:0,...(r.config.category_id?{parent_id:r.config.category_id}:{}),permission_overwrites:[{id:s.guild,type:0,deny:'1024',allow:'0'},...roles.map(id=>({id,type:0,allow,deny:'0'})),{id:APP_ID,type:1,allow,deny:'0'},...[...new Set([c.reporter_id,c.accused_id])].filter(id=>id!==APP_ID).map(id=>({id,type:1,allow:id===driver?allow:'0',deny:id===driver?'0':'1024'}))]});
  if(c.data[key]!==channel.id){const latest=await s.incident(c.id);await s.db('f7r_steward_cases?id=eq.'+c.id,'PATCH',{data:{...latest.data,[key]:channel.id}});}
- await s.discord('/channels/'+channel.id+'/messages','POST',{content:`<@${driver}> **${appeal?'In-game penalty appeal':phase==='report'?'Report':'Defence'} · Case #${c.number}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\n\nAttach up to five video clips directly here, or paste up to five HTTPS evidence links. **Mention <@${APP_ID}> in each clip message** so the bot can read your evidence. **Video evidence is mandatory.** Press Submit below when ready. This locks your statement and removes your access. Stewards retain access throughout. After you submit, the next stage continues in this same ticket.`,embeds:[{description:safeText(c.data[phase].statement)}],allowed_mentions:{parse:[],users:[driver]},components:rowButtons([button(phase==='report'?'Submit report / appeal':'Submit defence','f7r-stew-finish-'+phase+':'+c.id,1),...(phase==='report'?[button('Report another incident','f7r-stew-report:'+c.route_id)]:[])])});
+ await s.discord('/channels/'+channel.id+'/messages','POST',{content:`<@${driver}> **${appeal?'In-game penalty appeal':phase==='report'?'Report':'Defence'} · Case #${c.number}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\n\nAttach up to five video clips directly here, or paste up to five HTTPS evidence links. The bot reads evidence automatically; you do not need to tag it. **Video evidence is mandatory.** Press Submit below when ready. This locks your statement and removes your access. Stewards retain access throughout. After you submit, the next stage continues in this same ticket.`,embeds:[{description:safeText(c.data[phase].statement)}],allowed_mentions:{parse:[],users:[driver]},components:rowButtons([button(phase==='report'?'Submit report / appeal':'Submit defence','f7r-stew-finish-'+phase+':'+c.id,1),...(phase==='report'?[button('Report another incident','f7r-stew-report:'+c.route_id)]:[]),button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4)])});
  return channel.id;
 }
 export async function collectEvidence(s,c,phase,driver) {
@@ -121,7 +170,7 @@ export async function collectEvidence(s,c,phase,driver) {
  const messages=await s.discord('/channels/'+channel+'/messages?limit=100');
  if(messages.length===100)throw Error('This ticket has too many messages to capture safely. Ask a steward to reduce it to the relevant evidence before submitting.');
  const own=messages.filter(m=>m.author?.id===driver),clips=[];
- if(own.some(m=>!m.content&&!(m.attachments||[]).length))throw Error('Discord did not expose a message to the bot. Mention the F7R bot in each clip / evidence message, then submit again.');
+ if(own.some(m=>!m.content&&!(m.attachments||[]).length))throw Error('Discord did not expose a message to the bot. Automatic reading is unavailable. Ask an admin to enable the bot’s Message Content setting; do not submit until your evidence can be read.');
  for(const m of own)for(const a of m.attachments||[]){
    if(!/^video\//.test(a.content_type||'')&&!/\.(mp4|mov|webm|mkv|m4v)$/i.test(a.filename||''))throw Error('Only attach video clips. Remove other files before submitting.');
    clips.push({channel_id:channel,message_id:m.id,attachment_id:a.id,filename:a.filename,url:a.url});
