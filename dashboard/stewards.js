@@ -130,13 +130,13 @@ function routeFormConfig(enabled=$('route-enabled').checked){
  return {id:$('route-id').value,config};
 }
 $('route-form').onsubmit=event=>{event.preventDefault();run(async()=>{
- const values=routeFormConfig(),id=values.id;await api('save_route',values);
+ const values=routeFormConfig(),saved=await api('save_route',values),id=saved.id||values.id;
  await loadSetup();$('route-picker').value=id;selectRoute();await loadDesk();$('setup-result').textContent='Reporting group saved. Nothing has been posted. Publish the desk when ready.';status('Group saved.');
 });};
 $('publish').onclick=()=>run(async()=>{
- const values=routeFormConfig(true),id=values.id;
+ const values=routeFormConfig(true);
  if(!window.confirm('Save, enable and publish '+values.config.name+' in the selected Discord reporting channel? Existing desks for this group will be updated.'))return;
- await api('save_route',values);$('route-enabled').checked=true;
+ const saved=await api('save_route',values),id=saved.id||values.id;$('route-id').value=id;$('route-enabled').checked=true;
  const result=await api('publish_panel',{id});await loadSetup();$('route-picker').value=id;selectRoute();
  const a=node('a','Open the Discord reporting desk ↗');a.href=result.url;a.target='_blank';a.rel='noopener noreferrer';$('setup-result').replaceChildren(a);if(result.warning)$('setup-result').append(document.createTextNode(' '+result.warning));status(result.warning||'Reporting desk published.');
 });

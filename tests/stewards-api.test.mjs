@@ -54,3 +54,21 @@ test('publishing updates the same desk and slash-command failure does not block 
  });
  assert.equal(posts,1);assert.equal(edits,1);
 });
+test('a mixed-case reference saves and publishes using the same canonical group',async()=>{
+ const driverRole='523456789012345678',stewardRole='623456789012345678',headRole='723456789012345678',channel='823456789012345678';let stored;
+ await withFetch(async(url,options={})=>{
+   if(url.endsWith('/auth/v1/user'))return Response.json({id:'admin'});
+   if(url.includes('flag_admins'))return Response.json([{user_id:'admin'}]);
+   if(url.includes('f7r_steward_routes')){if(options.method==='POST')stored=JSON.parse(options.body);if(options.method==='PATCH')stored.config=JSON.parse(options.body).config;return Response.json(stored?[stored]:[]);}
+   if(url.endsWith('/roles'))return Response.json([{id:driverRole},{id:stewardRole},{id:headRole},{id:'bot',permissions:'8'}]);
+   if(url.endsWith('/channels'))return Response.json([{id:channel,type:0}]);
+   if(url.includes('/members/'))return Response.json({roles:['bot']});
+   if(url.includes('/commands'))return Response.json({id:'command'});
+   if(url.includes('/messages'))return Response.json({id:'message'});
+   throw Error('Unexpected request '+url);
+ },async()=>{
+   const result=await(await handleStewards(request({action:'save_route',id:'Test',config:{name:'Test',default_set:'F1',enabled:true,driver_roles:[driverRole],steward_roles:[stewardRole],leader_roles:[headRole],report_channel:channel}},'admin-jwt'),env)).json();
+   assert.equal(result.saved,true);assert.equal(result.id,'test');assert.equal(stored.id,'test');
+   const published=await(await handleStewards(request({action:'publish_panel',id:'Test'},'admin-jwt'),env)).json();assert.ok(published.url?.endsWith('/message'));
+ });
+});

@@ -1,4 +1,4 @@
-import {createService,idOK,accessFor,digest,caseAccess,penalties,tally,button,rowButtons,notifyDefence,reviewChannel,sendOutcomes,refreshEvidence} from '../_shared/stewards.js';
+import {createService,idOK,accessFor,digest,caseAccess,penalties,tally,button,rowButtons,notifyDefence,reviewChannel,sendOutcomes,refreshEvidence,groupReference} from '../_shared/stewards.js';
 const origins=new Set(['https://racecontrol.f7r.co.uk','https://taynz18.github.io']);
 export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
  const origin=request.headers.get('origin'),headers={'Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,OPTIONS'};
@@ -36,7 +36,7 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
      const [roles,channels]=await Promise.all([s.discord('/guilds/'+s.guild+'/roles'),s.discord('/guilds/'+s.guild+'/channels')]);
      if(action==='setup_options')return reply({routes,roles:roles.filter(r=>r.id!==s.guild).map(({id,name})=>({id,name})),channels:channels.filter(c=>[0,4].includes(c.type)).map(({id,name,type})=>({id,name,type}))});
      if(action==='save_route') {
-       const c=input.config,id=input.id;
+       const c=input.config,id=groupReference(input.id);
        if(typeof id!=='string'||!/^[a-z0-9-]{1,40}$/.test(id)||!c||typeof c.name!=='string'||!c.name.trim()||c.name.length>80||!['F1','Endurance'].includes(c.default_set)||typeof c.enabled!=='boolean')throw Error('Check the group name and default penalty rules.');
        for(const key of ['driver_roles','steward_roles','leader_roles'])if(!Array.isArray(c[key])||!c[key].length||c[key].length>20||c[key].some(id=>!idOK(id)||!roles.some(r=>r.id===id&&id!==s.guild)))throw Error('Choose valid driver, steward and Head Steward / CEO roles.');
        if(!channels.some(ch=>ch.id===c.report_channel&&ch.type===0)||c.category_id&&!channels.some(ch=>ch.id===c.category_id&&ch.type===4))throw Error('Choose a reporting channel and an optional review category.');
@@ -44,9 +44,9 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
        const previous=routes.find(r=>r.id===id)?.config;if(previous?.report_channel===c.report_channel&&previous.panel_message_id)clean.panel_message_id=previous.panel_message_id;
        if(routes.some(r=>r.id===id))await s.db('f7r_steward_routes?guild_id=eq.'+s.guild+'&id=eq.'+id,'PATCH',{config:clean});
        else await s.db('f7r_steward_routes','POST',{guild_id:s.guild,id,config:clean});
-       return reply({saved:true});
+       return reply({saved:true,id});
      }
-     const r=routes.find(r=>r.id===input.id);if(!r?.config.enabled)throw Error('Save and enable this reporting group first.');
+     const r=routes.find(r=>r.id===groupReference(input.id));if(!r?.config.enabled)throw Error('Save and enable this reporting group first.');
      const bot=await s.member('1004676760815796334');let botPermissions=0n;for(const role of roles)if(role.id===s.guild||bot.roles.includes(role.id))botPermissions|=BigInt(role.permissions||'0');
      if(!(botPermissions&8n)&&((botPermissions&16n)===0n||(botPermissions&268435456n)===0n))throw Error('The F7R bot needs Manage Channels and Manage Permissions (Manage Roles) to create and close private clip tickets. Grant those permissions in Discord, then publish again.');
      let warning;try{await s.discord('/applications/1004676760815796334/guilds/'+s.guild+'/commands','POST',{name:'verdict',description:'Start a steward verdict or decide an in-game penalty appeal',type:1});}catch{warning='Desk published, but /verdict registration failed. The case buttons and Race Control still work.';}

@@ -1,6 +1,7 @@
 export const APP_ID='1004676760815796334';
 export const SITE='https://racecontrol.f7r.co.uk';
 export const idOK=value=>typeof value==='string'&&/^\d{17,20}$/.test(value);
+export const groupReference=value=>String(value||'').normalize('NFKD').toLowerCase().replace(/\p{M}/gu,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40).replace(/-+$/,'');
 export const uuidOK=value=>typeof value==='string'&&/^[a-f0-9-]{36}$/.test(value);
 export const safeText=value=>String(value||'').replace(/<[@#][^>]*>/g,'').slice(0,2000);
 export function evidenceLinks(value) {
