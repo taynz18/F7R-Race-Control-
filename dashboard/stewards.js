@@ -1,7 +1,7 @@
 import {filterChannels} from './channel-search.js';
 const $=id=>document.getElementById(id);
 const stateNames={awaiting_report_evidence:'Report / appeal · adding clips',awaiting_defence:'Awaiting defence',awaiting_defence_evidence:'Defence · adding clips',discussion:'Ready for review',voting:'Voting open',tied:'Tied · decision needed',closed:'Closed'};
-let config,client,token=sessionStorage.getItem('f7r-steward-access'),desk,setup,current,busy=false;
+let config,client,token=sessionStorage.getItem('f7r-steward-access'),desk,setup,current,busy=false,verdictTarget='accused';
 const fragment=new URLSearchParams(location.hash.slice(1));
 if(fragment.has('access')){token=fragment.get('access');sessionStorage.setItem('f7r-steward-access',token);history.replaceState(null,'',location.pathname);}
 const status=text=>{$('status').textContent=text||'';};
@@ -26,7 +26,7 @@ function renderList() {
  for(const c of desk.cases.filter(c=>(!$('group-filter').value||c.route_id===$('group-filter').value)&&(!$('state-filter').value||c.status===$('state-filter').value))) {
    const button=node('button',undefined,'steward-case');button.type='button';
    const title=node('span');title.append(node('strong',`${c.kind==='penalty_appeal'?'Appeal ':''}#${c.number} · ${c.race}`),node('small',(desk.routes.find(r=>r.id===c.route_id)?.config.name||c.route_id)+' · '+c.lap));
-   button.append(title,node('span',stateNames[c.status]||c.status,'steward-status'));button.onclick=()=>run(()=>loadCase(c.id));list.append(button);
+   button.append(title,node('span',stateNames[c.status]||c.status,'steward-status'));button.onclick=()=>run(async()=>{verdictTarget='accused';await loadCase(c.id);});list.append(button);
  }
 }
 async function loadDesk() {
@@ -40,9 +40,17 @@ function links(id,urls) {
  const list=$(id);list.replaceChildren();for(const url of urls||[]){let parsed;try{parsed=new URL(url);}catch{continue;}if(parsed.protocol!=='https:')continue;const li=node('li'),a=node('a',url);a.href=parsed.href;a.target='_blank';a.rel='noopener noreferrer';li.append(a);list.append(li);}
 }
 async function loadCase(id) {
- current=await api('case',{id});const c=current.incident,a=current.access,appeal=c.data.kind==='penalty_appeal';
+ current=await api('case',{id,target:verdictTarget});const raw=current.incident,a=current.access,appeal=raw.data.kind==='penalty_appeal';
+ if(appeal)verdictTarget='accused';
+ const secondary=verdictTarget==='reporter',v=raw.data.reporter_verdict;
+ const c=secondary?{...raw,status:v?.status||'discussion',penalty_set:v?.penalty_set||null,votes:v?.votes||{},notifications:v?.notifications||{},outcome:v?.outcome||null,explanation:v?.explanation||null}:raw;
+ current.baseIncident=raw;current.incident=c;
+ $('verdict-target-section').hidden=appeal;$('verdict-target').value=verdictTarget;
+ $('verdict-target-help').textContent=secondary?'Separate outcome for the driver who submitted the report. The reported driver’s votes and decision remain unchanged.':'Outcome for the driver named in the report.';
+ $('reporter-reason').hidden=$('reporter-reason-label').hidden=!secondary||Boolean(v);
+ $('reporter-reason').value='';
  $('case-detail').hidden=false;$('case-group').textContent=a.route.config.name;
- $('case-title').textContent=`${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${c.data.race}`;$('case-meta').textContent=c.data.lap+' · '+stateNames[c.status];
+ $('case-title').textContent=`${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${c.data.race}`;$('case-meta').textContent=c.data.lap+' · '+(v?'Reported driver: '+stateNames[raw.status]+' · Reporting driver: '+stateNames[v.status]:stateNames[c.status]);
  $('case-access').textContent=a.steward?(a.leader?'Head Steward / CEO access · you can close voting and decide ties.':'Steward access · discussion and one vote per case.'):'Admin oversight · use your Discord steward access link to take part in the verdict.';
  $('report-driver').textContent=c.data.reporter_name||who(c.reporter_id);$('report-text').textContent=c.data.report.statement;links('report-links',c.data.report.links);
  $('report-heading').textContent=(appeal?'Appeal':'Report')+(c.status==='awaiting_report_evidence'?' · draft, collecting clips':' · locked');
@@ -57,11 +65,11 @@ async function loadCase(id) {
  $('open-review').disabled=appeal?c.status==='awaiting_report_evidence':!['discussion','voting','tied','closed'].includes(c.status);
  $('review-link').hidden=!c.review_channel_id;if(c.review_channel_id)$('review-link').href=`https://discord.com/channels/${c.guild_id}/${c.review_channel_id}`;
  $('comments').replaceChildren(...c.comments.map(x=>node('p',`${who(x.author)} · ${new Date(x.at).toLocaleString()}\n${x.text}`,'steward-entry')));
- $('comment-form').hidden=!a.steward||c.status==='closed';
- $('verdict-heading').textContent=appeal?'In-game penalty review':'Verdict vote';
+ $('comment-form').hidden=!a.steward||(raw.status==='closed'&&(!v||v.status==='closed'));
+ $('verdict-heading').textContent=appeal?'In-game penalty review':secondary?'Verdict vote · reporting driver':'Verdict vote · reported driver';
  $('vote-state').textContent=appeal?'Only a Head Steward or CEO decides whether the in-game penalty stays or is removed. This appeal does not use a steward penalty vote.':`${c.penalty_set?c.penalty_set+' rules · ':''}${current.tally.count} steward vote(s). Any number of stewards may vote. Only a Head Steward or CEO closes voting.`;
  $('tally').replaceChildren(...Object.entries(current.tally.totals).map(([penalty,count])=>node('span',`${penalty}: ${count}`,'steward-status')));
- $('start-form').hidden=appeal||!a.steward||c.status!=='discussion';$('penalty-set').value=a.route.config.default_set;
+ $('start-form').hidden=appeal||!a.steward||(c.status!=='discussion'||!['discussion','voting','tied','closed'].includes(raw.status));$('penalty-set').value=a.route.config.default_set;
  $('vote-form').hidden=appeal||!a.steward||c.status!=='voting';options('penalty',current.penalties);
  const own=c.votes[desk.driverId];if(own){$('penalty').value=own.penalty;$('vote-reason').value=own.reason;}else $('vote-reason').value='';
  $('votes').replaceChildren(...Object.entries(c.votes).map(([id,v])=>node('p',`${who(id)} · ${v.penalty}\n${v.reason}`,'steward-entry')));
@@ -75,22 +83,23 @@ async function loadCase(id) {
  $('send-pending').hidden=!a.leader||c.status!=='closed'||Boolean(c.notifications.reporter&&(appeal||c.notifications.accused));
  $('case-detail').scrollIntoView({behavior:'smooth',block:'start'});status(`Case #${c.number} loaded.`);
 }
-async function change(action,details={}){const id=current.incident.id;await api(action,{id,...details});await loadDesk();await loadCase(id);}
+async function change(action,details={}){const id=current.incident.id;await api(action,{id,target:verdictTarget,...details});await loadDesk();await loadCase(id);}
+$('verdict-target').onchange=()=>run(async()=>{verdictTarget=$('verdict-target').value;await loadCase(current.incident.id);});
 $('group-filter').onchange=$('state-filter').onchange=renderList;
 $('refresh').onclick=()=>run(loadDesk);
 $('logout').onclick=()=>run(async()=>{await api('logout');token=null;sessionStorage.removeItem('f7r-steward-access');await client.auth.signOut({scope:'local'});location.reload();});
 $('login').onsubmit=event=>{event.preventDefault();run(async()=>{const {error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;$('password').value='';token=null;sessionStorage.removeItem('f7r-steward-access');await loadDesk();});};
-$('comment-form').onsubmit=event=>{event.preventDefault();run(async()=>{await change('comment',{text:$('comment').value});$('comment').value='';});};
-$('start-form').onsubmit=event=>{event.preventDefault();run(()=>change('start_vote',{set:$('penalty-set').value,revision:current.incident.revision}));};
+$('comment-form').onsubmit=event=>{event.preventDefault();run(async()=>{await change('comment',{text:$('comment').value,target:'accused'});$('comment').value='';});};
+$('start-form').onsubmit=event=>{event.preventDefault();run(()=>change(verdictTarget==='reporter'&&!current.baseIncident.data.reporter_verdict?'start_reporter_vote':'start_vote',{set:$('penalty-set').value,reason:$('reporter-reason').value,revision:current.incident.revision}));};
 $('vote-form').onsubmit=event=>{event.preventDefault();run(()=>change('vote',{penalty:$('penalty').value,reason:$('vote-reason').value}));};
 $('open-review').onclick=()=>run(()=>change('open_review'));
 $('invite').onclick=()=>run(()=>change('invite_defence'));
 $('send-pending').onclick=()=>run(()=>change('send_pending'));
-$('brief').onclick=()=>run(async()=>{const result=await api('brief',{id:current.incident.id});$('explanation').value=result.draft;$('brief-note').textContent=(result.ai?'AI draft. ':'Template. ')+result.note;status('Draft ready. Review and edit it before approving.');});
+$('brief').onclick=()=>run(async()=>{const result=await api('brief',{id:current.incident.id,target:verdictTarget});$('explanation').value=result.draft;$('brief-note').textContent=(result.ai?'AI draft. ':'Template. ')+result.note;status('Draft ready. Review and edit it before approving.');});
 $('close-vote').onclick=()=>run(async()=>{
  const c=current.incident;if($('explanation').value.trim().length<20)throw Error('Write or approve an explanation of at least 20 characters.');
  const appeal=c.data.kind==='penalty_appeal';
- if(!window.confirm(appeal?'Finalise this in-game penalty appeal and DM the driver your decision?':'Close voting on case #'+c.number+'? If there is a winner, the approved outcome and explanation will be sent to both drivers.'))return;
+ if(!window.confirm(appeal?'Finalise this in-game penalty appeal and DM the driver your decision?':'Finalise the '+(verdictTarget==='reporter'?'reporting':'reported')+' driver verdict on case #'+c.number+'? If there is a winner, both drivers will receive this outcome and explanation.'))return;
  await change(appeal?'appeal_decision':c.status==='tied'?'tie_break':'close_vote',{penalty:$('tie-choice').value,explanation:$('explanation').value,revision:c.revision});
  status(current.incident.status==='tied'?'Voting is tied. Select a tied outcome and cast the deciding vote.':'Decision recorded. Check the outcome DM delivery status below.');
 });

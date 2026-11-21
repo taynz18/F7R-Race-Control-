@@ -1,4 +1,4 @@
-import {APP_ID,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
+import {APP_ID,verdictView,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
 const reply=content=>Response.json({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
 const label=(name,component)=>({type:18,label:name,component});
 const text=(id,style,max,required=true)=>({type:4,custom_id:id,style,required,max_length:max});
@@ -13,7 +13,7 @@ export async function stewardInteraction(i,s,waitUntil) {
  const user=i.member?.user||i.user;
  if(!idOK(user?.id)||user.bot)return reply('Sign in with your driver Discord account.');
  if(i.guild_id&&i.guild_id!==s.guild)return reply('This is only available in the F7R server.');
- const [kind,reference]=custom.split(':');
+ const [kind,reference,selectedTarget]=custom.split(':');
  const defer=work=>{
    waitUntil((async()=>{let result;try{result=await work();}catch(error){result=error.message||'The case could not be updated.';}await fetch('https://discord.com/api/v10/webhooks/'+APP_ID+'/'+i.token+'/messages/@original',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...typeof result==='string'?{content:result}:result,allowed_mentions:{parse:[]}})});})().catch(()=>console.error('Steward interaction response failed')));
    return Response.json({type:5,data:{flags:64}});
@@ -84,28 +84,35 @@ export async function stewardInteraction(i,s,waitUntil) {
    });
    let c;
    if(command){c=(await s.db('f7r_steward_cases?guild_id=eq.'+s.guild+'&review_channel_id=eq.'+i.channel_id))[0];if(!c)return reply('Use /verdict inside an F7R case review channel.');}
-   else if(['f7r-stew-verdict','f7r-stew-start','f7r-stew-vote','f7r-stew-appealdecision'].includes(kind))c=await s.incident(reference);
+   else if(['f7r-stew-verdict','f7r-stew-start','f7r-stew-vote','f7r-stew-appealdecision','f7r-stew-pick'].includes(kind))c=await s.incident(reference);
    if(c) {
      const access=await caseAccess(s,c,user.id);
+     if(c.data.kind!=='penalty_appeal'&&(command||(kind==='f7r-stew-verdict'&&!selectedTarget)))return Response.json({type:4,data:{flags:64,content:'Choose whose outcome to review. Each driver has a separate vote and decision.',components:[{type:1,components:[{type:3,custom_id:'f7r-stew-pick:'+c.id,options:[{label:'Reported driver',value:'accused'},{label:'Reporting driver (separate vote)',value:'reporter'}],min_values:1,max_values:1}]}]}});
+     const raw=c,target=kind==='f7r-stew-pick'?i.data.values?.[0]:selectedTarget||'accused';
+     c=verdictView(c,target);const suffix=':'+c.id+':'+target;
+     if(target==='reporter'&&!raw.data.reporter_verdict){
+       if(kind==='f7r-stew-start'&&i.type===5)return defer(async()=>{const v=values(i);await s.action(raw,user.id,access.leader,'start_reporter_vote',{target,set:v.set,reason:required(v.reason,'reason for the separate vote',10)},raw.revision);return 'Separate voting for the reporting driver opened. Use /verdict and select Reporting driver to vote.';});
+       return modal('f7r-stew-start'+suffix,'Reporting driver · separate vote',[label('Penalty set',{type:3,custom_id:'set',options:['F1','Endurance'].map(value=>({label:value,value})),min_values:1,max_values:1}),label('Why does the reporting driver need a vote?',text('reason',2,1500))]);
+     }
      if(c.data.kind==='penalty_appeal'){
        if(!access.leader||c.status!=='discussion')return reply('This appeal is awaiting evidence or is already decided.');
        if(kind==='f7r-stew-appealdecision'&&i.type===5)return defer(async()=>{const v=values(i),updated=await s.action(c,user.id,true,'appeal_decision',{penalty:v.penalty,explanation:required(v.explanation,'decision explanation',20,1800)},c.revision);await sendOutcomes(s,updated,user.id,true);return 'Appeal decision recorded. The driver’s DM delivery status is available in Race Control.';});
        return modal('f7r-stew-appealdecision:'+c.id,'Decide in-game penalty appeal',[label('Head Steward / CEO decision',{type:3,custom_id:'penalty',options:['In-game penalty kept','In-game penalty removed'].map(value=>({label:value,value})),min_values:1,max_values:1}),label('Approved explanation to send the driver',text('explanation',2,1800))]);
      }
-     if(c.status==='discussion'&&(command||kind==='f7r-stew-verdict'))return modal('f7r-stew-start:'+c.id,'Choose penalty rules',[
+     if(c.status==='discussion'&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'))return modal('f7r-stew-start'+suffix,'Choose penalty rules',[
        label('Penalty set',{type:3,custom_id:'set',options:['F1','Endurance'].map(value=>({label:value,value})),min_values:1,max_values:1})
      ]);
      if(kind==='f7r-stew-start'&&i.type===5)return defer(async()=>{
-       await s.action(c,user.id,access.leader,'start_vote',{set:values(i).set},c.revision);
+       await s.action(c,user.id,access.leader,'start_vote',{set:values(i).set,target},c.revision);
        return 'Verdict voting opened. Use /verdict again to vote, or open Race Control.';
      });
-     if(c.status==='voting'&&(command||kind==='f7r-stew-verdict'))return modal('f7r-stew-vote:'+c.id,'Vote on the outcome',[
+     if(c.status==='voting'&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'))return modal('f7r-stew-vote'+suffix,target==='reporter'?'Vote · reporting driver':'Vote · reported driver',[
        label('Your penalty vote',{type:3,custom_id:'penalty',options:penalties(c.penalty_set).map(value=>({label:value,value})),min_values:1,max_values:1}),
        label('Reason for your vote',text('reason',2,1500))
      ]);
      if(kind==='f7r-stew-vote'&&i.type===5)return defer(async()=>{
        const v=values(i);if(!penalties(c.penalty_set).includes(v.penalty))throw Error('Invalid penalty.');
-       await s.action(c,user.id,access.leader,'vote',{penalty:v.penalty,reason:required(v.reason,'vote reason',10)});
+       await s.action(c,user.id,access.leader,'vote',{penalty:v.penalty,reason:required(v.reason,'vote reason',10),target});
        return 'Your vote is saved. Each steward has one vote; voting again replaces your own vote. A Head Steward or CEO closes voting.';
      });
      return reply(c.status==='tied'?'This vote is tied. A Head Steward or CEO must decide in Race Control.':'This case is not ready for voting or is already closed.');

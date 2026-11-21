@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
+import {verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
 import {stewardInteraction} from '../supabase/functions/_shared/steward-interactions.js';
 const driver='123456789012345678',accused='223456789012345678',steward='323456789012345678',leader='423456789012345678';
 const config={enabled:true,driver_roles:['driver'],steward_roles:['steward'],leader_roles:['leader']};
@@ -85,4 +85,26 @@ test('in-game appeals are visible only to leaders and notify only the appealing 
  assert.equal(accessFor(['leader'],config,leader,appeal).leader,true);
  const recipients=[];await sendOutcomes({action:async()=>{},dm:async(id)=>{recipients.push(id);return 'sent';}},appeal,leader,true);
  assert.deepEqual(recipients,[driver]);
+});
+
+test('reporting-driver verdict is isolated and notifications identify the correct driver',async()=>{
+ const raw={...c,status:'closed',outcome:'No further action',votes:{original:{penalty:'No further action'}},data:{...c.data,reporter_verdict:{status:'closed',outcome:'10 seconds',explanation:'The reporting driver caused avoidable contact.',votes:{second:{penalty:'10 seconds'}},notifications:{}}}};
+ const v=verdictView(raw,'reporter');assert.equal(v.outcome,'10 seconds');assert.equal(raw.outcome,'No further action');assert.deepEqual(Object.keys(v.votes),['second']);
+ const claims=new Set(),sent=[],actions=[];
+ const s={action:async(c,a,l,action,value)=>{actions.push(value);if(action==='claim_notification'){const key=value.target+value.recipient;if(claims.has(key))throw Error('duplicate');claims.add(key);}},dm:async(id,body)=>{sent.push({id,body});return 'sent';}};
+ await sendOutcomes(s,raw,leader,true,'reporter');await sendOutcomes(s,raw,leader,true,'reporter');await sendOutcomes(s,raw,leader,true);
+ assert.equal(sent.length,4);assert.ok(sent.slice(0,2).every(x=>x.body.content.includes('Outcome for the reporting driver:')&&x.body.content.includes('10 seconds')));
+ assert.ok(sent.slice(2).every(x=>x.body.content.includes('Outcome for the reported driver:')&&x.body.content.includes('No further action')));
+ assert.ok(actions.some(x=>x.target==='reporter'));assert.throws(()=>verdictView({...raw,data:{kind:'penalty_appeal'}},'reporter'));
+});
+test('Discord verdict selection uses a private menu then opens the correct independent vote',async()=>{
+ const raw={...c,status:'voting',penalty_set:'F1',votes:{},data:{...c.data,reporter_verdict:{status:'voting',penalty_set:'Endurance',votes:{}}}};
+ const s={incident:async()=>raw,route:async()=>({config}),member:async()=>({roles:['steward']}),db:async()=>[raw]};
+ let r=await(await stewardInteraction({type:2,data:{name:'verdict'},channel_id:'review',user:{id:steward}},s,()=>{})).json();
+ assert.equal(r.type,4);assert.equal(r.data.flags,64);assert.equal(r.data.components[0].components[0].type,3);
+ r=await(await stewardInteraction({type:3,data:{custom_id:'f7r-stew-pick:'+c.id,values:['reporter']},user:{id:steward}},s,()=>{})).json();
+ assert.equal(r.type,9);assert.match(r.data.custom_id,/:reporter$/);assert.match(r.data.title,/reporting driver/);assert.ok(r.data.components[0].component.options.some(x=>x.value==='50 seconds'));
+ delete raw.data.reporter_verdict;
+ r=await(await stewardInteraction({type:3,data:{custom_id:'f7r-stew-verdict:'+c.id+':reporter'},user:{id:steward}},s,()=>{})).json();
+ assert.equal(r.type,9);assert.ok(r.data.components.some(x=>x.component.custom_id==='reason'));
 });

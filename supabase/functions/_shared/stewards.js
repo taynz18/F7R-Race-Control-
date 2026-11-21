@@ -12,6 +12,13 @@ export function evidenceLinks(value) {
 export function penalties(set) {
  return ['No further action','Warning',...Array.from({length:set==='F1'?4:10},(_,i)=>`${(i+1)*5} seconds`),'Qualifying ban','Race ban','Season ban'];
 }
+export function verdictView(c,target='accused') {
+ if(!['accused','reporter'].includes(target))throw Error('Invalid verdict target.');
+ if(target==='accused')return c;
+ if(c.data.kind==='penalty_appeal')throw Error('In-game appeals do not have a second verdict.');
+ const v=c.data.reporter_verdict;
+ return {...c,status:v?.status||'discussion',penalty_set:v?.penalty_set||null,votes:v?.votes||{},notifications:v?.notifications||{},outcome:v?.outcome||null,explanation:v?.explanation||null,decided_by:v?.decided_by||null};
+}
 export function tally(votes) {
  const totals={};for(const vote of Object.values(votes||{}))totals[vote.penalty]=(totals[vote.penalty]||0)+1;
  const max=Math.max(0,...Object.values(totals));return {totals,winners:Object.keys(totals).filter(k=>totals[k]===max),count:Object.keys(votes||{}).length};
@@ -72,20 +79,21 @@ export async function reviewChannel(s,c,r) {
  await s.discord('/channels/'+channel.id+'/messages','POST',{
    content:roles.map(id=>'<@&'+id+'>').join(' ')+`\n**${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${safeText(r.config.name)}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\n`+(appeal?`Original penalty: ${safeText(c.data.original_penalty)}\nHead Steward / CEO: use /verdict to keep or remove the penalty.`:'Discuss privately here or in Race Control. Use /verdict to start voting.')+'\nEvidence tickets: '+[c.data.report_ticket,c.data.defence_ticket].filter(Boolean).map(id=>'<#'+id+'>').join(' '),
    allowed_mentions:{parse:[],roles},embeds:appeal?[statement('Appeal',c.reporter_id,c.data.report)]:[statement('Report',c.reporter_id,c.data.report),statement('Defence',c.accused_id,c.data.defence)],
-   components:rowButtons([button('Open Stewards Room','f7r-stew-access:'+c.id),button('Start / view verdict','f7r-stew-verdict:'+c.id)])
+   components:rowButtons([button('Open Stewards Room','f7r-stew-access:'+c.id),button('Start / view verdict','f7r-stew-verdict:'+c.id),...(!appeal?[button('Reporting driver verdict','f7r-stew-verdict:'+c.id+':reporter')]:[])])
  });
  return channel.id;
 }
-export async function sendOutcomes(s,c,actor,leader) {
+export async function sendOutcomes(s,c,actor,leader,target='accused') {
+ c=verdictView(c,target);
  const statuses={};
  const appeal=c.data.kind==='penalty_appeal';
  for(const recipient of appeal?['reporter']:['reporter','accused']) {
-   try{await s.action(c,actor,leader,'claim_notification',{recipient});}
+   try{await s.action(c,actor,leader,'claim_notification',{recipient,target});}
    catch{statuses[recipient]='already_attempted';continue;}
    const result=await s.dm(recipient==='reporter'?c.reporter_id:c.accused_id,{
-     content:`**F7R ${appeal?'in-game penalty appeal':'steward decision'} · Case #${c.number}**\n**Race:** ${safeText(c.data.race)}\n**Incident:** ${safeText(c.data.lap)}\n`+(appeal?`**Original penalty:** ${safeText(c.data.original_penalty)}\n**Decision:** ${c.outcome}`:`**Outcome for the reported driver:** ${c.outcome}`)+`\n\n${safeText(c.explanation)}\n\n`+(appeal?'This appeal was decided by a Head Steward or CEO. Any required result correction must be applied by league administration.':'This decision was approved by the stewards.')
+     content:`**F7R ${appeal?'in-game penalty appeal':'steward decision'} · Case #${c.number}**\n**Race:** ${safeText(c.data.race)}\n**Incident:** ${safeText(c.data.lap)}\n`+(appeal?`**Original penalty:** ${safeText(c.data.original_penalty)}\n**Decision:** ${c.outcome}`:`**Outcome for the ${target==='reporter'?'reporting':'reported'} driver:** ${c.outcome}`)+`\n\n${safeText(c.explanation)}\n\n`+(appeal?'This appeal was decided by a Head Steward or CEO. Any required result correction must be applied by league administration.':'This decision was approved by the stewards.')
    });
-   await s.action(c,actor,leader,'notification_result',{recipient,result});statuses[recipient]=result;
+   await s.action(c,actor,leader,'notification_result',{recipient,result,target});statuses[recipient]=result;
  }
  return statuses;
 }

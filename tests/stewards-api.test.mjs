@@ -72,3 +72,15 @@ test('a mixed-case reference saves and publishes using the same canonical group'
    const published=await(await handleStewards(request({action:'publish_panel',id:'Test'},'admin-jwt'),env)).json();assert.ok(published.url?.endsWith('/message'));
  });
 });
+
+test('reporter target returns its own tally and routes votes without changing the primary decision',async()=>{
+ const raw={...c,status:'closed',outcome:'No further action',votes:{primary:{penalty:'No further action'}},data:{...c.data,reporter_verdict:{status:'voting',penalty_set:'Endurance',votes:{second:{penalty:'50 seconds'}}}}};
+ await withFetch(async(url,options)=>{
+   if(url.includes('/rpc/f7r_steward_action')){const input=JSON.parse(options.body);assert.equal(input.p_value.target,'reporter');assert.equal(input.p_action,'vote');return Response.json(raw);}
+   return backend(['steward'],raw)(url);
+ },async()=>{
+   const result=await(await handleStewards(request({action:'case',id:caseId,target:'reporter'},token),env)).json();
+   assert.deepEqual(result.tally.totals,{'50 seconds':1});assert.equal(result.incident.outcome,'No further action');
+   const voted=await handleStewards(request({action:'vote',id:caseId,target:'reporter',penalty:'50 seconds',reason:'Reporting driver was responsible.'},token),env);assert.equal(voted.status,200);
+ });
+});

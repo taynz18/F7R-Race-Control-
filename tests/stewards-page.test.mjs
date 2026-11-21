@@ -28,5 +28,8 @@ test('steward page shows private evidence, voting and leader-only tie controls',
  await context.testCase(id);assert.equal(el('report-text').textContent,'Report text');assert.equal(el('defence-text').textContent,'Defence text');assert.equal(el('vote-form').hidden,false);assert.equal(el('approval').hidden,true);
  leader=true;c.status='tied';await context.testCase(id);assert.equal(el('approval').hidden,false);assert.equal(el('tie-choice').hidden,false);assert.equal(el('vote-form').hidden,true);
  c.status='closed';c.outcome='5 seconds';c.explanation='Approved explanation';c.notifications={reporter:'sent',accused:'failed_or_unverified'};await context.testCase(id);assert.equal(el('decision').hidden,false);assert.match(el('delivery').textContent,/failed_or_unverified/);assert.equal(el('comment-form').hidden,true);
+ c.data.reporter_verdict={status:'voting',penalty_set:'F1',votes:{[actor]:{penalty:'Warning',reason:'Reporting driver vote only'}},notifications:{}};
+ el('verdict-target').value='reporter';await el('verdict-target').onchange();assert.match(el('verdict-heading').textContent,/reporting driver/);assert.equal(el('vote-form').hidden,false);assert.equal(el('decision').hidden,true);
+ el('verdict-target').value='accused';await el('verdict-target').onchange();assert.equal(el('decision-outcome').textContent,'5 seconds');assert.equal(el('vote-form').hidden,true);
  c.status='discussion';c.data.kind='penalty_appeal';c.data.original_penalty='10 seconds';await context.testCase(id);assert.equal(el('defence-section').hidden,true);assert.equal(el('start-form').hidden,true);assert.equal(el('approval').hidden,false);assert.match(el('close-vote').textContent,/Decide appeal/);assert.equal(el('tie-choice').children.length,2);
 });
