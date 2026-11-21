@@ -45,7 +45,7 @@ test('publishing updates the same desk and slash-command failure does not block 
    if(url.endsWith('/members/1004676760815796334'))return Response.json({roles:['bot']});
    if(url.endsWith('/channels'))return Response.json([{id:'channel',type:0}]);
    if(url.includes('/commands'))return Response.json({message:'Forbidden'},{status:403});
-   if(url.includes('/channels/channel/messages')){const body=JSON.parse(options.body);assert.ok(body.components[0].components.some(b=>b.label==='Appeal in-game penalty'));if(options.method==='PATCH')edits++;else posts++;return Response.json({id:'message'});}
+   if(url.includes('/channels/channel/messages')){const body=JSON.parse(options.body);assert.ok(body.components[0].components.some(b=>b.label==='Appeal in-game penalty'));assert.equal(body.components[0].components.length,2);assert.ok(body.components[0].components.every(b=>!b.custom_id.includes('access')));assert.match(body.content,/Video evidence is mandatory/);if(options.method==='PATCH')edits++;else posts++;return Response.json({id:'message'});}
    throw Error('Unexpected request '+url);
  },async()=>{
    const first=await(await handleStewards(request({action:'publish_panel',id:route.id},'admin-jwt'),env)).json();

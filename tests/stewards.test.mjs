@@ -63,7 +63,7 @@ test('private clip tickets allow only the submitting driver and deny the other d
  const p=calls[0].body.permission_overwrites;
  assert.ok(p.some(x=>x.id===driver&&x.allow!=='0'&&x.deny==='0'));
  assert.ok(p.some(x=>x.id===accused&&x.deny==='1024'));
- assert.match(calls[1].body.content,/No video/);
+ assert.match(calls[1].body.content,/Video evidence is mandatory/);assert.doesNotMatch(calls[1].body.content,/No video|still submit/);
  assert.ok(calls[1].body.content.length<=2000);
 });
 test('clips remain on Discord; only links and source metadata are captured',async()=>{

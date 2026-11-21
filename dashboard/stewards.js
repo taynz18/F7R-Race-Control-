@@ -49,9 +49,9 @@ async function loadCase(id) {
  $('original-penalty').hidden=!appeal;$('original-penalty').textContent=appeal?'Original in-game penalty: '+c.data.original_penalty:'';
  $('defence-section').hidden=appeal;
  $('defence-heading').textContent=c.status==='awaiting_defence_evidence'?'Defence · draft, collecting clips':'Defence'+(c.data.defence?' · locked':' · awaiting submission');
- for(const phase of ['report','defence']){const ticket=$(phase+'-ticket');ticket.hidden=!c.data[phase+'_ticket'];if(c.data[phase+'_ticket'])ticket.href=`https://discord.com/channels/${c.guild_id}/${c.data[phase+'_ticket']}`;if(c.data[phase]?.no_video)$(phase+'-text').textContent+='\n\nNo video evidence provided.';}
+ for(const phase of ['report','defence']){const ticket=$(phase+'-ticket');ticket.hidden=!c.data[phase+'_ticket'];if(c.data[phase+'_ticket'])ticket.href=`https://discord.com/channels/${c.guild_id}/${c.data[phase+'_ticket']}`;if(c.data[phase]?.no_video)$(phase+'-text').textContent+='\n\nNo video evidence provided. Take this into account when assessing the case.';}
  $('defence-driver').textContent=c.data.accused_name||who(c.accused_id);$('defence-text').textContent=c.data.defence?.statement||'Awaiting the reported driver’s statement.';links('defence-links',c.data.defence?.links);
- if(c.data.defence?.no_video)$('defence-text').textContent+='\n\nNo video evidence provided.';
+ if(c.data.defence?.no_video)$('defence-text').textContent+='\n\nNo video evidence provided. Take this into account when assessing the case.';
  $('defence-invite').textContent=c.data.defence_invitation?'Defence invitation: '+c.data.defence_invitation:'';
  $('invite').hidden=c.status!=='awaiting_defence'||c.data.defence_invitation==='sent'||(!desk.admin&&!a.leader);
  $('open-review').disabled=appeal?c.status==='awaiting_report_evidence':!['discussion','voting','tied','closed'].includes(c.status);
