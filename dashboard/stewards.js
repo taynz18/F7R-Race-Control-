@@ -57,7 +57,7 @@ async function loadCase(id) {
  $('vote-form').hidden=!a.steward||c.status!=='voting';options('penalty',current.penalties);
  const own=c.votes[desk.driverId];if(own){$('penalty').value=own.penalty;$('vote-reason').value=own.reason;}else $('vote-reason').value='';
  $('votes').replaceChildren(...Object.entries(c.votes).map(([id,v])=>node('p',`${who(id)} · ${v.penalty}\n${v.reason}`,'steward-entry')));
- $('approval').hidden=!a.leader||!['voting','tied'].includes(c.status);$('explanation').value='';$('brief-note').textContent='AI drafts are optional and always require steward approval. If AI is not configured, an editable template is available.';
+ $('approval').hidden=!a.leader||!['voting','tied'].includes(c.status);$('explanation').value='';$('brief-note').textContent=desk.aiAvailable?'AI drafting is connected. Every draft needs a steward’s review and approval.':'AI summarisation is not connected yet. The draft button provides an editable template; you can write and approve the explanation now.';
  const tied=c.status==='tied';$('tie-label').hidden=$('tie-choice').hidden=!tied;options('tie-choice',current.tally.winners);
  $('close-vote').textContent=tied?'Cast deciding vote and send outcome DMs':'Close voting and send outcome DMs';
  $('decision').hidden=c.status!=='closed';$('decision-outcome').textContent=c.outcome||'';$('decision-text').textContent=c.explanation||'';
