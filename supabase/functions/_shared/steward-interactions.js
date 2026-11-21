@@ -36,7 +36,8 @@ export async function stewardInteraction(i,s,waitUntil) {
      if(!route?.config.enabled||!route.config.driver_roles.some(id=>m.roles.includes(id)))throw Error('That reporting desk is unavailable.');
      const appeal=kind==='f7r-stew-appealsubmit';
      if(!appeal&&(!idOK(v.driver)||v.driver===user.id))throw Error('Choose the other driver involved.');
-     const accused=appeal?null:await s.member(v.driver);if(!appeal&&(accused.user?.bot||!route.config.driver_roles.some(id=>accused.roles.includes(id))))throw Error('Choose a driver from this reporting group.');
+     // Driver roles control who may file a report; reserves and other server members can still be reported.
+     const accused=appeal?null:await s.member(v.driver);if(!appeal&&(!accused.user||accused.user.bot))throw Error('Choose the other server member involved, not a bot.');
      const prior=await s.db('f7r_steward_cases?interaction_id=eq.'+i.id);
      if(prior.length)return `Report already saved as case #${prior[0].number}.`;
      const open=await s.db('f7r_steward_cases?select=id&guild_id=eq.'+s.guild+'&reporter_id=eq.'+user.id+'&status=neq.closed');

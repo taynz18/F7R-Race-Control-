@@ -128,9 +128,9 @@ test('Discord finalisation checks the reviewed revision and sends the approved o
  }finally{globalThis.fetch=original;}
 });
 
-test('one driver can open separate report tickets and return to start another without closing earlier drafts',async()=>{
+test('eligible drivers can report members without the group role and open separate tickets',async()=>{
  const rows=[],channels=[],dms=[],replies=[],tasks=[];let seq=0;
- const service={guild:'guild',route:async()=>({id:'f1',config}),member:async id=>({roles:['driver'],user:{id,username:'Driver'}}),incident:async id=>rows.find(r=>r.id===id),
+ const service={guild:'guild',route:async()=>({id:'f1',config}),member:async id=>({roles:id===driver?['driver']:[],user:{id,username:'Driver'}}),incident:async id=>rows.find(r=>r.id===id),
  db:async(path,method='GET',body)=>{
    if(method==='POST'){const row={...body,id:'11111111-1111-4111-8111-'+String(++seq).padStart(12,'0'),number:1000+seq};rows.push(row);return [row];}
    if(method==='PATCH'){const row=rows.find(r=>path.endsWith(r.id));Object.assign(row,body);return [row];}
@@ -172,5 +172,19 @@ test('failed reporter removal never admits the reported driver',async()=>{
  const raw={...c,status:'awaiting_defence',data:{...c.data,report:{locked:true},report_ticket:'ticket'}},calls=[];
  await assert.rejects(()=>notifyDefence({discord:async path=>{calls.push(path);throw Error('Permission denied');}},raw),/Permission denied/);
  assert.deepEqual(calls,['/channels/ticket/permissions/'+driver]);
+});
+
+test('report target flexibility never permits unapproved reporters, bots or self reports',async()=>{
+ const replies=[],pending=[],original=globalThis.fetch;globalThis.fetch=async(url,options)=>{replies.push(JSON.parse(options.body));return Response.json({});};
+ const base={id:'report',type:5,user:{id:driver},token:'test',data:{custom_id:'f7r-stew-submit:f1',components:[{component:{custom_id:'driver',values:[accused]}}]}};
+ const service={route:async()=>({id:'f1',config}),member:async id=>({roles:id===driver?['driver']:[],user:{id,bot:id===accused}}),db:async()=>{throw Error('Rejected submissions must not save a case');}};
+ const submit=async i=>{await stewardInteraction(i,service,p=>pending.push(p));await pending.pop();return replies.at(-1).content;};
+ const error=console.error;console.error=()=>{};
+ try{
+   assert.match(await submit(base),/not a bot/);
+   assert.match(await submit({...base,data:{...base.data,components:[{component:{custom_id:'driver',values:[driver]}}]}}),/other driver/);
+   service.member=async id=>({roles:[],user:{id}});
+   assert.match(await submit(base),/desk is unavailable/);
+ }finally{console.error=error;globalThis.fetch=original;}
 });
 
