@@ -1,4 +1,4 @@
-import {ensureMessageReading,syncTicketMessages,deleteTicket,createService,idOK,accessFor,digest,caseAccess,penalties,tally,button,rowButtons,notifyDefence,reviewChannel,sendOutcomes,refreshEvidence,groupReference,verdictView} from '../_shared/stewards.js';
+import {ensureMessageReading,syncTicketMessages,deleteTicket,ticketDeleteAccess,createService,idOK,accessFor,digest,caseAccess,penalties,tally,button,rowButtons,notifyDefence,reviewChannel,sendOutcomes,refreshEvidence,groupReference,verdictView} from '../_shared/stewards.js';
 const origins=new Set(['https://racecontrol.f7r.co.uk','https://taynz18.github.io']);
 export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
  const origin=request.headers.get('origin'),headers={'Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info,x-f7r-admin-token','Access-Control-Allow-Methods':'POST,OPTIONS'};
@@ -60,7 +60,7 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
    if(raw.data.deletion&&!['case','delete_ticket'].includes(action))throw Error('This ticket is being deleted or has been deleted.');
    if(action==='delete_ticket'){
      if(input.confirm!=='DELETE'||!Number.isInteger(input.revision))throw Error('Confirm permanent ticket deletion and refresh the case first.');
-     const access=driverId?await caseAccess(s,raw,driverId):{leader:false};
+     const access=driverId?await ticketDeleteAccess(s,raw,driverId):{leader:false};
      const deleted=await deleteTicket(s,raw,driverId||'admin:'+user.id,access.leader,input.reason,input.revision);return reply({incident:deleted});
    }
    const a=driverId?await caseAccess(s,raw,driverId):{leader:false,steward:false,route:routes.find(r=>r.id===c.route_id)};

@@ -204,10 +204,10 @@ test('automatic reading enables only the limited message-content flag and verifi
  const before=calls.length;await ensureMessageReading({discord:async()=>{calls.push({});return {flags:1<<19};}});assert.equal(calls.length,before+1);
  await assert.rejects(()=>ensureMessageReading({discord:async()=>({flags:0})}),/has not enabled/);
 });
-test('only assigned non-involved stewards or server admin staff can delete a ticket',async()=>{
+test('only assigned stewards or server admin staff can delete a ticket',async()=>{
  const s={guild:'guild',route:async()=>({config}),member:async()=>({roles:['steward']})};
  assert.equal((await ticketDeleteAccess(s,c,steward)).steward,true);
- await assert.rejects(()=>ticketDeleteAccess(s,c,driver),/Involved drivers/);
+ assert.equal((await ticketDeleteAccess(s,c,driver)).steward,false);
  s.member=async()=>({roles:['unrelated']});s.discord=async()=>[{id:'unrelated',permissions:'0'}];await assert.rejects(()=>ticketDeleteAccess(s,c,steward),/Only assigned/);
  s.discord=async()=>[{id:'unrelated',permissions:'8'}];assert.equal((await ticketDeleteAccess(s,c,steward)).steward,true);
 });
@@ -219,8 +219,8 @@ test('deletion removes only verified case channels and records completion withou
  claimed.data.deletion.channels=['category'];await assert.rejects(()=>deleteTicket(s,raw,steward,false,'Duplicate',4),/Refusing/);
 });
 test('driver cannot obtain a delete confirmation and a steward must explicitly confirm',async()=>{
- const s={incident:async()=>({...c,revision:2}),route:async()=>({config}),member:async()=>({roles:['steward']})};
- let r=await(await stewardInteraction({type:3,user:{id:driver},data:{custom_id:'f7r-stew-delete:'+c.id}},s,()=>{})).json();assert.match(r.data.content,/cannot delete/);
+ const s={guild:'guild',incident:async()=>({...c,revision:2}),route:async()=>({config}),member:async id=>({roles:id===driver?['driver']:['steward']}),discord:async()=>[]};
+ let r=await(await stewardInteraction({type:3,user:{id:driver},data:{custom_id:'f7r-stew-delete:'+c.id}},s,()=>{})).json();assert.match(r.data.content,/Only assigned/);
  r=await(await stewardInteraction({type:3,user:{id:steward},data:{custom_id:'f7r-stew-delete:'+c.id}},s,()=>{})).json();assert.equal(r.type,9);assert.ok(r.data.components.some(x=>x.component.custom_id==='confirm_value'));
 });
 

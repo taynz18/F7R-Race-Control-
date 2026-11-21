@@ -4,7 +4,7 @@ declare original public.f7r_steward_cases; secondary boolean; c public.f7r_stewa
 begin
  select * into c from f7r_steward_cases where id=p_id for update;
  if not found then raise exception 'Case not found'; end if;
- if p_actor in (c.reporter_id,c.accused_id) and p_action not in ('defence','defence_draft','finish_report') then raise exception 'Involved drivers cannot review their own case'; end if;
+ if p_actor in (c.reporter_id,c.accused_id) and p_action not in ('defence','defence_draft','finish_report','delete_ticket_claim','delete_ticket_complete') then raise exception 'Involved drivers cannot review their own case'; end if;
  if p_revision is not null and c.revision<>p_revision then raise exception 'Case changed. Refresh and review the latest votes before continuing'; end if;
  original=c;
  if coalesce(p_value->>'target','accused') not in ('accused','reporter') then raise exception 'Invalid verdict target'; end if;

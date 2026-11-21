@@ -91,9 +91,8 @@ export async function deleteTicket(s,c,actor,leader,reason,revision) {
 }
 export async function ticketDeleteAccess(s,c,actor) {
  const route=await s.route(c.route_id),member=await s.member(actor);
- if([c.reporter_id,c.accused_id].includes(actor))throw Error('Involved drivers cannot delete their own ticket.');
  const access=accessFor(member.roles||[],route.config,actor,c);
- if(access.steward)return access;
+ if(access.steward||(route.config.steward_roles||[]).some(id=>member.roles.includes(id))||(route.config.leader_roles||[]).some(id=>member.roles.includes(id)))return access;
  const roles=await s.discord('/guilds/'+s.guild+'/roles');
  if(!roles.some(r=>(r.id===s.guild||member.roles.includes(r.id))&&(BigInt(r.permissions||'0')&40n)))throw Error('Only assigned stewards or server admin staff can delete this ticket.');
  return {steward:true,leader:false};
