@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ensureMessageReading,deleteTicket,ticketDeleteAccess,notifyDefence,verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
+import {completeVerdict,syncTicketLock,ensureMessageReading,deleteTicket,ticketDeleteAccess,notifyDefence,verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
 import {stewardInteraction} from '../supabase/functions/_shared/steward-interactions.js';
 const driver='123456789012345678',accused='223456789012345678',steward='323456789012345678',leader='423456789012345678';
 const config={enabled:true,driver_roles:['driver'],steward_roles:['steward'],leader_roles:['leader']};
@@ -222,5 +222,37 @@ test('driver cannot obtain a delete confirmation and a steward must explicitly c
  const s={guild:'guild',incident:async()=>({...c,revision:2}),route:async()=>({config}),member:async id=>({roles:id===driver?['driver']:['steward']}),discord:async()=>[]};
  let r=await(await stewardInteraction({type:3,user:{id:driver},data:{custom_id:'f7r-stew-delete:'+c.id}},s,()=>{})).json();assert.match(r.data.content,/Only assigned/);
  r=await(await stewardInteraction({type:3,user:{id:steward},data:{custom_id:'f7r-stew-delete:'+c.id}},s,()=>{})).json();assert.equal(r.type,9);assert.ok(r.data.components.some(x=>x.component.custom_id==='confirm_value'));
+});
+
+test('finalisation posts both drivers and approved summary, locks the ticket, and never auto-deletes it',async()=>{
+ const raw={...c,status:'closed',outcome:'5 seconds',explanation:'The stewards agreed avoidable contact caused this incident.',votes:{},review_channel_id:'ticket',data:{...c.data,report_ticket:'ticket'}},calls=[],dms=[],claimed=new Set();
+ const s={guild:'guild',route:async()=>({config}),dm:async(id,body)=>{dms.push({id,body});return 'sent';},discord:async(path,method,body)=>{calls.push({path,method,body});return{id:'123456789012345678'};},action:async(c,a,l,name,v)=>{
+   if(name==='claim_notification'){if(claimed.has(v.recipient))throw Error('already sent');claimed.add(v.recipient);}
+   if(name==='record_ticket_outcome')raw.data.outcome_messages={...raw.data.outcome_messages,[v.verdict_target]:v.message_id};
+   return raw;
+ }};
+ let delivery=await completeVerdict(s,raw,leader,true);assert.equal(delivery.ticket,'posted_and_locked');
+ await completeVerdict(s,raw,leader,true);assert.equal(dms.length,2);assert.ok(dms.every(x=>x.body.embeds[0].description===raw.explanation));
+ assert.equal(calls.filter(x=>x.method==='POST').length,1);assert.equal(calls.filter(x=>x.method==='PATCH').length,1);assert.equal(calls.filter(x=>x.method==='DELETE').length,0);
+ const post=calls.find(x=>x.method==='POST').body;assert.ok(post.content.includes(driver)&&post.content.includes(accused));assert.equal(post.embeds[0].description,raw.explanation);
+ assert.ok(calls.some(x=>x.path.endsWith('/steward')&&x.body.deny===String(2048+32768)));
+ raw.data.reporter_verdict={status:'voting'};assert.equal(await syncTicketLock(s,raw),false);
+ raw.data.reporter_verdict.status='closed';assert.equal(await syncTicketLock(s,raw),true);
+});
+test('completed tickets can only be deleted by configured Head Steward or CEO roles',async()=>{
+ const raw={...c,outcome:'5 seconds',status:'closed'},s={guild:'guild',route:async()=>({config}),member:async()=>({roles:['steward']}),discord:async()=>[{id:'steward',permissions:'8'}]};
+ await assert.rejects(()=>ticketDeleteAccess(s,raw,steward),/Only a Head Steward or CEO/);
+ s.member=async()=>({roles:['leader']});assert.equal((await ticketDeleteAccess(s,raw,leader)).leader,true);
+});
+test('reported driver may submit without a defence, locks out and notifies stewards in the same ticket',async()=>{
+ const raw={...c,status:'awaiting_defence',revision:1,data:{...c.data,report:{...c.data.report,locked:true},report_ticket:'ticket',defence_ticket:'ticket'}},calls=[],actions=[],pending=[];
+ const s={guild:'guild',incident:async()=>raw,route:async()=>({config}),action:async(c,a,l,name,evidence)=>{actions.push(name);return {...raw,status:'discussion',data:{...raw.data,defence:{...evidence,statement:'No defence submitted.',no_defence:true,locked:true}}};},db:async()=>[],dm:async()=> 'sent',discord:async(path,method,body)=>{calls.push({path,method,body});return method==='GET'||!method?[]:{id:'message'};}};
+ const first=await(await stewardInteraction({type:3,user:{id:driver},data:{custom_id:'f7r-stew-nodefence:'+c.id}},s,()=>{})).json();assert.match(first.data.content,/Only the reported driver/);
+ const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({});
+ try{
+ await stewardInteraction({type:3,user:{id:accused},token:'test',data:{custom_id:'f7r-stew-nodefenceconfirm:'+c.id}},s,p=>pending.push(p));await Promise.all(pending);
+ assert.deepEqual(actions,['no_defence']);assert.ok(calls.some(x=>x.path.endsWith('/permissions/'+accused)&&x.body.deny==='1024'));
+ assert.ok(calls.some(x=>x.method==='POST'&&x.body.allowed_mentions.roles.includes('steward')));
+ }finally{globalThis.fetch=original;}
 });
 

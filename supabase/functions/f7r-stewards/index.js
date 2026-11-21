@@ -1,4 +1,4 @@
-import {ensureMessageReading,syncTicketMessages,deleteTicket,ticketDeleteAccess,createService,idOK,accessFor,digest,caseAccess,penalties,tally,button,rowButtons,notifyDefence,reviewChannel,sendOutcomes,refreshEvidence,groupReference,verdictView} from '../_shared/stewards.js';
+import {completeVerdict,syncTicketLock,ensureMessageReading,syncTicketMessages,deleteTicket,ticketDeleteAccess,createService,idOK,accessFor,digest,caseAccess,penalties,tally,button,rowButtons,notifyDefence,reviewChannel,sendOutcomes,refreshEvidence,groupReference,verdictView} from '../_shared/stewards.js';
 const origins=new Set(['https://racecontrol.f7r.co.uk','https://taynz18.github.io']);
 export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
  const origin=request.headers.get('origin'),headers={'Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info,x-f7r-admin-token','Access-Control-Allow-Methods':'POST,OPTIONS'};
@@ -61,6 +61,7 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
    if(action==='delete_ticket'){
      if(input.confirm!=='DELETE'||!Number.isInteger(input.revision))throw Error('Confirm permanent ticket deletion and refresh the case first.');
      const access=driverId?await ticketDeleteAccess(s,raw,driverId):{leader:false};
+     if((raw.outcome||raw.data.reporter_verdict?.outcome)&&!access.leader)throw Error('Use your Head Steward / CEO Discord identity to delete a completed verdict ticket.');
      const deleted=await deleteTicket(s,raw,driverId||'admin:'+user.id,access.leader,input.reason,input.revision);return reply({incident:deleted});
    }
    const a=driverId?await caseAccess(s,raw,driverId):{leader:false,steward:false,route:routes.find(r=>r.id===c.route_id)};
@@ -77,8 +78,8 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
      if(typeof input.text!=='string'||input.text.trim().length<1||input.text.length>2000)throw Error('Keep the discussion entry between 1 and 2,000 characters.');
      return reply({incident:await s.action(c,driverId,a.leader,'comment',{text:input.text.trim()})});
    }
-   if(action==='start_reporter_vote')return reply({incident:await s.action(raw,driverId,a.leader,'start_reporter_vote',{target:'reporter',set:input.set,reason:input.reason},input.revision)});
-   if(action==='start_vote')return reply({incident:await s.action(c,driverId,a.leader,'start_vote',{set:input.set,target},input.revision)});
+   if(action==='start_reporter_vote'){const opened=await s.action(raw,driverId,a.leader,'start_reporter_vote',{target:'reporter',set:input.set,reason:input.reason},input.revision);await syncTicketLock(s,opened);return reply({incident:opened});}
+   if(action==='start_vote'){const opened=await s.action(c,driverId,a.leader,'start_vote',{set:input.set,target},input.revision);await syncTicketLock(s,opened);return reply({incident:opened});}
    if(action==='vote') {
      if(!penalties(c.penalty_set).includes(input.penalty)||typeof input.reason!=='string'||input.reason.trim().length<10||input.reason.length>1500)throw Error('Select a penalty and explain your vote in 10–1,500 characters.');
      return reply({incident:await s.action(c,driverId,a.leader,'vote',{penalty:input.penalty,reason:input.reason.trim(),target})});
@@ -86,7 +87,7 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
    if(['close_vote','tie_break','appeal_decision'].includes(action)) {
      if(!Number.isInteger(input.revision)||typeof input.explanation!=='string'||input.explanation.length>1800)throw Error('Refresh the case and add an approved explanation (up to 1,800 characters).');
      const updated=await s.action(c,driverId,a.leader,action,{penalty:input.penalty,explanation:input.explanation,target},input.revision);
-     const delivery=verdictView(updated,target).status==='closed'?await sendOutcomes(s,updated,driverId,a.leader,target):null;
+     const delivery=verdictView(updated,target).status==='closed'?await completeVerdict(s,updated,driverId,a.leader,target):null;
      return reply({incident:updated,delivery});
    }
    if(action==='brief') {
@@ -102,7 +103,7 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
    }
    if(action==='send_pending') {
      if(!a.leader||c.status!=='closed')throw Error('Only a Head Steward or CEO can deliver a final decision.');
-     return reply({delivery:await sendOutcomes(s,raw,driverId,a.leader,target)});
+     return reply({delivery:await completeVerdict(s,raw,driverId,a.leader,target)});
    }
    return reply({error:'Invalid action.'},400);
  }catch(error){return reply({error:error.message||'Stewards Room is unavailable.'},400);}

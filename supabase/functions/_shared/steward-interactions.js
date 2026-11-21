@@ -1,4 +1,4 @@
-import {APP_ID,deleteTicket,ticketDeleteAccess,verdictView,tally,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
+import {APP_ID,completeVerdict,syncTicketLock,deleteTicket,ticketDeleteAccess,verdictView,tally,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
 const reply=content=>Response.json({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
 const label=(name,component)=>({type:18,label:name,component});
 const text=(id,style,max,required=true)=>({type:4,custom_id:id,style,required,max_length:max,...(required?{min_length:id==='explanation'?20:id==='reason'?10:1}:{}),...(id==='statement'?{placeholder:'Describe what happened.'}:{})});
@@ -23,14 +23,14 @@ export async function stewardInteraction(i,s,waitUntil) {
  try {
    if(kind==='f7r-stew-delete'||kind==='f7r-stew-deleteconfirm'){
      const c=await s.incident(reference),access=await ticketDeleteAccess(s,c,user.id);
-     if(c.outcome||c.data.reporter_verdict?.outcome)return reply('This case already has a verdict. Delete ticket is only for cases needing no investigation.');
+     const completed=Boolean(c.outcome||c.data.reporter_verdict?.outcome);
      if(kind==='f7r-stew-deleteconfirm'&&i.type===5)return defer(async()=>{
        const v=values(i);if(v.confirm_value?.trim()!=='DELETE')throw Error('Type DELETE to confirm permanent ticket deletion.');
        const revision=Number(selectedTarget);if(!Number.isInteger(revision))throw Error('Open the deletion form again.');
        await deleteTicket(s,c,user.id,access.leader,required(v.delete_reason,'deletion reason',1,500),revision);
-       return 'Ticket deleted. No verdict or NFA outcome was recorded and no penalty decision was sent. A small staff audit record remains.';
+       return completed?'Completed Discord ticket deleted after staff review. The approved decision remains in the staff audit.':'Ticket deleted. No verdict or NFA outcome was recorded and no penalty decision was sent. A small staff audit record remains.';
      });
-     return modal('f7r-stew-deleteconfirm:'+c.id+':'+c.revision,'Delete ticket · no verdict',[label('Reason this ticket needs no investigation',text('delete_reason',2,500)),label('Type DELETE to confirm permanent deletion',text('confirm_value',1,6))]);
+     return modal('f7r-stew-deleteconfirm:'+c.id+':'+c.revision,completed?'Delete completed ticket':'Delete ticket · no verdict',[label(completed?'Reason for removing the completed ticket':'Reason this ticket needs no investigation',text('delete_reason',2,500)),label('Type DELETE to confirm permanent deletion',text('confirm_value',1,6))]);
    }
    if(kind==='f7r-stew-report'||kind==='f7r-stew-appeal') {
      const route=await s.route(reference),m=await s.member(user.id);
@@ -75,6 +75,19 @@ export async function stewardInteraction(i,s,waitUntil) {
      await s.dm(driver,{content:`**F7R submission received · Case #${c.number}**\nYour ${c.data.kind==='penalty_appeal'?'in-game penalty appeal':phase} is submitted and locked. ${evidence.links.length?evidence.links.length+' evidence link(s) saved; clips remain on Discord.':''}\nYou will receive the final decision by DM.`,...(phase==='report'?{components:rowButtons([anotherReport(c.route_id)])}:{})});
      return {content:`Submission #${c.number} locked.`+(locked?' Your ticket access has closed.':' Your statement is locked, but Discord ticket permissions could not update. Please notify a steward.'),components:phase==='report'?rowButtons([anotherReport(c.route_id)]):[]};
    });
+   if(kind==='f7r-stew-nodefence'||kind==='f7r-stew-nodefenceconfirm'){
+     const c=await s.incident(reference);
+     if(c.accused_id!==user.id||!['awaiting_defence','awaiting_defence_evidence'].includes(c.status))return reply('Only the reported driver can submit this response while a defence is pending.');
+     if(kind==='f7r-stew-nodefence')return Response.json({type:4,data:{flags:64,content:'Submit without a defence? Your existing uploaded clips and links will still be included. Your access then closes and stewards review the case.',components:rowButtons([button('Confirm submit without defence','f7r-stew-nodefenceconfirm:'+c.id,1)])}});
+     return defer(async()=>{
+       const evidence=await collectEvidence(s,{...c,data:{...c.data,defence:c.data.defence||{links:[]}}},'defence',user.id);
+       const updated=await s.action(c,user.id,false,'no_defence',evidence,c.revision);
+       await s.discord('/channels/'+c.data.defence_ticket+'/permissions/'+user.id,'PUT',{type:1,allow:'0',deny:'1024'});
+       await reviewChannel(s,updated,await s.route(c.route_id));
+       await s.dm(user.id,{content:'Your response for case #'+c.number+' is submitted without a defence. Stewards have been notified. The final decision will be sent by DM.'});
+       return 'Submitted without a defence. Your ticket access has closed and stewards have been notified.';
+     });
+   }
    if(kind==='f7r-stew-defend') {
      const c=await s.incident(reference);if(c.accused_id!==user.id||!['awaiting_defence','awaiting_defence_evidence'].includes(c.status))return reply('This defence invitation is unavailable or already submitted.');
      if(c.status==='awaiting_defence_evidence')return defer(async()=>{const channel=await evidenceTicket(s,c,await s.route(c.route_id),'defence');return 'Finish your defence in your private ticket:\nhttps://discord.com/channels/'+s.guild+'/'+channel;});
@@ -98,19 +111,20 @@ export async function stewardInteraction(i,s,waitUntil) {
    });
    let c;
    if(command){c=(await s.db('f7r_steward_cases?guild_id=eq.'+s.guild+'&or=(review_channel_id.eq.'+i.channel_id+',data->>report_ticket.eq.'+i.channel_id+',data->>defence_ticket.eq.'+i.channel_id+')'))[0];if(!c)return reply('Use /verdict inside an F7R case review channel.');}
-   else if(['f7r-stew-verdict','f7r-stew-start','f7r-stew-vote','f7r-stew-appealdecision','f7r-stew-pick','f7r-stew-close'].includes(kind))c=await s.incident(reference);
+   else if(['f7r-stew-verdict','f7r-stew-start','f7r-stew-vote','f7r-stew-appealdecision','f7r-stew-pick','f7r-stew-close','f7r-stew-sync'].includes(kind))c=await s.incident(reference);
    if(c) {
      const access=await caseAccess(s,c,user.id);
      if(c.data.kind!=='penalty_appeal'&&(command||(kind==='f7r-stew-verdict'&&!selectedTarget)))return Response.json({type:4,data:{flags:64,content:'Choose whose outcome to review. Each driver has a separate vote and decision.',components:[{type:1,components:[{type:3,custom_id:'f7r-stew-pick:'+c.id,options:[{label:'Reported driver',value:'accused'},{label:'Reporting driver (separate vote)',value:'reporter'}],min_values:1,max_values:1}]},...rowButtons([button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4)])]}});
      const raw=c,target=kind==='f7r-stew-pick'?i.data.values?.[0]:selectedTarget||'accused';
      c=verdictView(c,target);const suffix=':'+c.id+':'+target;
      if(target==='reporter'&&!raw.data.reporter_verdict){
-       if(kind==='f7r-stew-start'&&i.type===5)return defer(async()=>{const v=values(i);await s.action(raw,user.id,access.leader,'start_reporter_vote',{target,set:v.set,reason:required(v.reason,'reason for the separate vote',10)},raw.revision);return 'Separate voting for the reporting driver opened. Use /verdict and select Reporting driver to vote.';});
+       if(raw.status==='closed')return reply('The final ticket is locked. Both driver votes must be opened before finalising.');
+       if(kind==='f7r-stew-start'&&i.type===5)return defer(async()=>{const v=values(i);const opened=await s.action(raw,user.id,access.leader,'start_reporter_vote',{target,set:v.set,reason:required(v.reason,'reason for the separate vote',10)},raw.revision);await syncTicketLock(s,opened);return 'Separate voting for the reporting driver opened. Use /verdict and select Reporting driver to vote.';});
        return modal('f7r-stew-start'+suffix,'Reporting driver · separate vote',[label('Penalty set',{type:3,custom_id:'set',options:['F1','Endurance'].map(value=>({label:value,value})),min_values:1,max_values:1}),label('Why does the reporting driver need a vote?',text('reason',2,1500))]);
      }
      if(c.data.kind==='penalty_appeal'){
        if(!access.leader||c.status!=='discussion')return reply('This appeal is awaiting evidence or is already decided.');
-       if(kind==='f7r-stew-appealdecision'&&i.type===5)return defer(async()=>{const v=values(i),updated=await s.action(c,user.id,true,'appeal_decision',{penalty:v.penalty,explanation:required(v.explanation,'decision explanation',20,1800)},c.revision);await sendOutcomes(s,updated,user.id,true);return 'Appeal decision recorded. The driver’s DM delivery status is available in Race Control.';});
+       if(kind==='f7r-stew-appealdecision'&&i.type===5)return defer(async()=>{const v=values(i),updated=await s.action(c,user.id,true,'appeal_decision',{penalty:v.penalty,explanation:required(v.explanation,'decision explanation',20,1800)},c.revision);await completeVerdict(s,updated,user.id,true);return 'Appeal decision recorded. The driver’s DM delivery status is available in Race Control.';});
        return modal('f7r-stew-appealdecision:'+c.id,'Decide in-game penalty appeal',[label('Head Steward / CEO decision',{type:3,custom_id:'penalty',options:['In-game penalty kept','In-game penalty removed'].map(value=>({label:value,value})),min_values:1,max_values:1}),label('Approved explanation to send the driver',text('explanation',2,1800))]);
      }
      if(kind==='f7r-stew-close'){
@@ -119,8 +133,8 @@ export async function stewardInteraction(i,s,waitUntil) {
          const v=values(i),revision=Number(expectedRevision);if(!Number.isInteger(revision))throw Error('Open the finalisation form again.');
          const updated=await s.action(raw,user.id,true,c.status==='tied'?'tie_break':'close_vote',{target,penalty:v.penalty,explanation:required(v.explanation,'approved explanation',20,1800)},revision);
          if(verdictView(updated,target).status==='tied')return 'Voting is tied. Use /verdict again, select this driver and finalise with a deciding vote.';
-         const delivery=await sendOutcomes(s,updated,user.id,true,target);
-         return 'Verdict finalised for the '+(target==='reporter'?'reporting':'reported')+' driver. Outcome DMs: reporting driver '+delivery.reporter+'; reported driver '+delivery.accused+'.';
+         const delivery=await completeVerdict(s,updated,user.id,true,target);
+         return 'Verdict finalised for the '+(target==='reporter'?'reporting':'reported')+' driver. The ticket is retained for review. Outcome DMs: reporting driver '+delivery.reporter+'; reported driver '+delivery.accused+'.';
        });
        return modal('f7r-stew-close'+suffix+':'+c.revision,'Finalise '+(target==='reporter'?'reporting':'reported')+' driver verdict',[
          ...(c.status==='tied'?[label('Deciding vote · tied outcomes only',{type:3,custom_id:'penalty',options:tally(c.votes).winners.map(value=>({label:value,value})),min_values:1,max_values:1})]:[]),
@@ -132,7 +146,7 @@ export async function stewardInteraction(i,s,waitUntil) {
        label('Penalty set',{type:3,custom_id:'set',options:['F1','Endurance'].map(value=>({label:value,value})),min_values:1,max_values:1})
      ]);
      if(kind==='f7r-stew-start'&&i.type===5)return defer(async()=>{
-       await s.action(c,user.id,access.leader,'start_vote',{set:values(i).set,target},c.revision);
+       const opened=await s.action(c,user.id,access.leader,'start_vote',{set:values(i).set,target},c.revision);await syncTicketLock(s,opened);
        return 'Verdict voting opened. Use /verdict again to vote, or open Race Control.';
      });
      if(c.status==='voting'&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'||(kind==='f7r-stew-vote'&&i.type===3)))return modal('f7r-stew-vote'+suffix,target==='reporter'?'Vote · reporting driver':'Vote · reported driver',[
@@ -144,6 +158,8 @@ export async function stewardInteraction(i,s,waitUntil) {
        await s.action(c,user.id,access.leader,'vote',{penalty:v.penalty,reason:required(v.reason,'vote reason',10),target});
        return 'Your vote is saved. Each steward has one vote; voting again replaces your own vote. A Head Steward or CEO closes voting.';
      });
+     if(kind==='f7r-stew-sync'&&access.leader&&c.status==='closed')return defer(async()=>{const delivery=await completeVerdict(s,raw,user.id,true,target);return 'Final outcome synced. Ticket: '+(delivery.ticket||'no channel recorded')+'. Existing outcome DMs are not sent twice.';});
+     if(c.status==='closed'&&access.leader)return Response.json({type:4,data:{flags:64,content:'Final outcome: '+c.outcome+'. The ticket is retained for leadership review. You can sync its outcome and lock, or permanently delete it after review.',components:rowButtons([button('Sync outcome and ticket lock','f7r-stew-sync'+suffix),button('Delete completed ticket','f7r-stew-delete:'+c.id,4)])}});
      return reply(c.status==='tied'?'This vote is tied. A Head Steward or CEO must use /verdict to finalise it.':'This case is not ready for voting or is already closed.');
    }
    return reply('Open the reporting desk and try again.');

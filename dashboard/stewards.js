@@ -1,6 +1,6 @@
 import {filterChannels} from './channel-search.js';
 const $=id=>document.getElementById(id);
-const stateNames={awaiting_report_evidence:'Report / appeal · adding clips',awaiting_defence:'Awaiting defence',awaiting_defence_evidence:'Defence · adding clips',discussion:'Ready for review',voting:'Voting open',tied:'Tied · decision needed',closed:'Closed'};
+const stateNames={awaiting_report_evidence:'Report / appeal · adding clips',awaiting_defence:'Awaiting defence',awaiting_defence_evidence:'Defence · adding clips',discussion:'Ready for review',voting:'Voting open',tied:'Tied · decision needed',closed:'Finalised · locked'};
 let config,client,token=sessionStorage.getItem('f7r-steward-access'),desk,setup,current,busy=false,verdictTarget='accused';
 const fragment=new URLSearchParams(location.hash.slice(1));
 if(fragment.has('access')){token=fragment.get('access');sessionStorage.setItem('f7r-steward-access',token);history.replaceState(null,'',location.pathname);}
@@ -50,7 +50,7 @@ async function loadCase(id) {
  $('verdict-target-help').textContent=secondary?'Separate outcome for the driver who submitted the report. The reported driver’s votes and decision remain unchanged.':'Outcome for the driver named in the report.';
  $('reporter-reason').hidden=$('reporter-reason-label').hidden=!secondary||Boolean(v);
  $('reporter-reason').value='';
- const deleted=raw.data.deletion; $('delete-ticket-section').hidden=Boolean(raw.outcome||raw.data.reporter_verdict?.outcome)||deleted?.status==='deleted';$('delete-ticket-note').textContent=deleted?.status==='deleting'?'Deletion started. Retry to finish removing the remaining case channels.':'';
+ const deleted=raw.data.deletion,completed=Boolean(raw.outcome||raw.data.reporter_verdict?.outcome); $('delete-ticket-section').hidden=(completed&&!a.leader)||deleted?.status==='deleted';$('delete-ticket-heading').textContent=completed?'Completed ticket review':'Delete ticket without a verdict';$('delete-ticket-help').textContent=completed?'The outcome is retained in the locked Discord ticket. Only a Head Steward or CEO can permanently delete it after review. The approved decision stays in the audit.':'Remove a ticket needing no investigation. This does not record NFA or send a penalty decision.';$('delete-ticket').textContent=completed?'Delete completed ticket · Head / CEO':'Delete ticket · staff only';$('delete-ticket-note').textContent=deleted?.status==='deleting'?'Deletion started. Retry to finish removing the remaining case channels.':'';
  $('case-detail').hidden=false;$('case-group').textContent=a.route.config.name;
  $('case-title').textContent=`${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${c.data.race}`;$('case-meta').textContent=c.data.lap+' · '+(v?'Reported driver: '+stateNames[raw.status]+' · Reporting driver: '+stateNames[v.status]:stateNames[c.status]);
  $('case-access').textContent=a.steward?(a.leader?'Head Steward / CEO access · you can close voting and decide ties.':'Steward access · discussion and one vote per case.'):'Admin oversight · use your Discord steward access link to take part in the verdict.';
@@ -71,7 +71,7 @@ async function loadCase(id) {
  $('verdict-heading').textContent=appeal?'In-game penalty review':secondary?'Verdict vote · reporting driver':'Verdict vote · reported driver';
  $('vote-state').textContent=appeal?'Only a Head Steward or CEO decides whether the in-game penalty stays or is removed. This appeal does not use a steward penalty vote.':`${c.penalty_set?c.penalty_set+' rules · ':''}${current.tally.count} steward vote(s). Any number of stewards may vote. Only a Head Steward or CEO closes voting.`;
  $('tally').replaceChildren(...Object.entries(current.tally.totals).map(([penalty,count])=>node('span',`${penalty}: ${count}`,'steward-status')));
- $('start-form').hidden=appeal||!a.steward||(c.status!=='discussion'||!['discussion','voting','tied','closed'].includes(raw.status));$('penalty-set').value=a.route.config.default_set;
+ $('start-form').hidden=appeal||!a.steward||(c.status!=='discussion'||!['discussion','voting','tied','closed'].includes(raw.status)||(secondary&&!v&&raw.status==='closed'));$('penalty-set').value=a.route.config.default_set;
  $('vote-form').hidden=appeal||!a.steward||c.status!=='voting';options('penalty',current.penalties);
  const own=c.votes[desk.driverId];if(own){$('penalty').value=own.penalty;$('vote-reason').value=own.reason;}else $('vote-reason').value='';
  $('votes').replaceChildren(...Object.entries(c.votes).map(([id,v])=>node('p',`${who(id)} · ${v.penalty}\n${v.reason}`,'steward-entry')));
@@ -82,7 +82,7 @@ async function loadCase(id) {
  $('close-vote').textContent=appeal?'Decide appeal and send driver DM':tied?'Cast deciding vote and send outcome DMs':'Close voting and send outcome DMs';
  $('decision').hidden=c.status!=='closed';$('decision-outcome').textContent=c.outcome||'';$('decision-text').textContent=c.explanation||'';
  $('delivery').textContent=c.status==='closed'?`Outcome DMs · ${appeal?'appealing':'reporting'} driver: ${c.notifications.reporter||'not attempted'}`+(appeal?'':` · reported driver: ${c.notifications.accused||'not attempted'}`):'';
- $('send-pending').hidden=!a.leader||c.status!=='closed'||Boolean(c.notifications.reporter&&(appeal||c.notifications.accused));
+ $('send-pending').hidden=!a.leader||c.status!=='closed'||Boolean(deleted);
  if(deleted){$('case-meta').textContent=deleted.status==='deleted'?'Ticket deleted without a verdict':'Ticket deletion in progress';$('case-access').textContent='Staff audit · '+deleted.reason;$('open-review').disabled=true;$('comment-form').hidden=true;$('start-form').hidden=true;$('vote-form').hidden=true;$('approval').hidden=true;$('send-pending').hidden=true;$('verdict-target-section').hidden=true;}
  $('case-detail').scrollIntoView({behavior:'smooth',block:'start'});status(`Case #${c.number} loaded.`);
 }
@@ -96,10 +96,10 @@ $('comment-form').onsubmit=event=>{event.preventDefault();run(async()=>{await ch
 $('start-form').onsubmit=event=>{event.preventDefault();run(()=>change(verdictTarget==='reporter'&&!current.baseIncident.data.reporter_verdict?'start_reporter_vote':'start_vote',{set:$('penalty-set').value,reason:$('reporter-reason').value,revision:current.incident.revision}));};
 $('vote-form').onsubmit=event=>{event.preventDefault();run(()=>change('vote',{penalty:$('penalty').value,reason:$('vote-reason').value}));};
 $('delete-ticket').onclick=()=>run(async()=>{
- const reason=window.prompt('Why does this ticket need no further investigation? This is separate from NFA.');if(reason===null)return;
+ const reason=window.prompt(current.baseIncident.outcome||current.baseIncident.data.reporter_verdict?.outcome?'Reason for deleting this completed ticket after Head Steward / CEO review?':'Why does this ticket need no further investigation? This is separate from NFA.');if(reason===null)return;
  if(!reason.trim()||reason.length>500)throw Error('Add a deletion reason of 1–500 characters.');
  const confirm=window.prompt('Permanently delete the Discord case channel and its clips? Type DELETE to confirm.');if(confirm!=='DELETE')return;
- await change('delete_ticket',{target:'accused',reason:reason.trim(),confirm,revision:current.baseIncident.revision});status('Ticket deleted without a verdict. Staff audit retained.');
+ await change('delete_ticket',{target:'accused',reason:reason.trim(),confirm,revision:current.baseIncident.revision});status('Discord ticket deleted. Staff audit retained.');
 });
 $('open-review').onclick=()=>run(()=>change('open_review'));
 $('invite').onclick=()=>run(()=>change('invite_defence'));
