@@ -128,3 +128,25 @@ test('Discord finalisation checks the reviewed revision and sends the approved o
  }finally{globalThis.fetch=original;}
 });
 
+test('one driver can open separate report tickets and return to start another without closing earlier drafts',async()=>{
+ const rows=[],channels=[],dms=[],replies=[],tasks=[];let seq=0;
+ const service={guild:'guild',route:async()=>({id:'f1',config}),member:async id=>({roles:['driver'],user:{id,username:'Driver'}}),incident:async id=>rows.find(r=>r.id===id),
+ db:async(path,method='GET',body)=>{
+   if(method==='POST'){const row={...body,id:'11111111-1111-4111-8111-'+String(++seq).padStart(12,'0'),number:1000+seq};rows.push(row);return [row];}
+   if(method==='PATCH'){const row=rows.find(r=>path.endsWith(r.id));Object.assign(row,body);return [row];}
+   if(path.includes('interaction_id=eq.'))return rows.filter(r=>r.interaction_id===path.split('interaction_id=eq.')[1]);
+   return rows;
+ },discord:async(path,method,body)=>{if(path.endsWith('/channels')){const channel={id:'ticket-'+(channels.length+1)};channels.push({channel,body});return channel;}return {id:'message'};},
+ dm:async(id,body)=>{dms.push({id,body});return 'sent';}};
+ const submit=(id,other)=>({id,type:5,user:{id:driver},token:'test',data:{custom_id:'f7r-stew-submit:f1',components:Object.entries({driver:other,race:'Monza',lap:'Lap 1',statement:'A separate incident account.',links:''}).map(([custom_id,value])=>({component:{custom_id,value}}))}});
+ const original=globalThis.fetch;globalThis.fetch=async(url,options)=>{replies.push(JSON.parse(options.body));return Response.json({});};
+ try{
+   for(const [id,other] of [['first',accused],['second',leader]]){assert.equal((await(await stewardInteraction(submit(id,other),service,p=>tasks.push(p))).json()).type,5);await tasks.pop();}
+   assert.equal(rows.length,2);assert.equal(channels.length,2);assert.notEqual(rows[0].data.report_ticket,rows[1].data.report_ticket);assert.ok(rows.every(r=>r.status==='awaiting_report_evidence'));
+   assert.ok(replies.every(r=>r.components[0].components.some(b=>b.label==='Report another incident')));
+   assert.ok(dms.every(r=>r.body.components[0].components.some(b=>b.label==='Open private video ticket')));
+   const again=await(await stewardInteraction({type:3,user:{id:driver},data:{custom_id:'f7r-stew-report:f1'}},service,()=>{})).json();assert.equal(again.type,9);
+   await stewardInteraction(submit('first',accused),service,p=>tasks.push(p));await tasks.pop();assert.equal(rows.length,2);
+ }finally{globalThis.fetch=original;}
+});
+
