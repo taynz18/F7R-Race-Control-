@@ -1,4 +1,6 @@
 import { refreshDiscordRoster, readPostConfig } from "../_shared/discord-roster.js";
+import {createService} from '../_shared/stewards.js';
+import {stewardInteraction} from '../_shared/steward-interactions.js';
 const appId = "1004676760815796334";
 const publicKey = "009733d0f6a808d8c612002338884e15eaf68fd8adaffce335a503681a6e189f";
 const bytes = (hex) => Uint8Array.from(hex.match(/../g), (pair) => parseInt(pair, 16));
@@ -20,6 +22,10 @@ Deno.serve(async (req) => {
   const interaction = JSON.parse(raw);
   if (interaction.type === 1) return Response.json({type: 1});
   if (interaction.application_id !== appId) return new Response(null, {status: 401});
+
+  if (interaction.data?.custom_id?.startsWith('f7r-stew-') || interaction.type===2 && interaction.data?.name==='verdict') {
+    return await stewardInteraction(interaction,createService(Deno.env.get.bind(Deno.env)),task=>EdgeRuntime.waitUntil(task));
+  }
 
   const guild = Deno.env.get("F7R_DISCORD_SERVER_ID");
   if (!guild || interaction.guild_id !== guild) return privateReply("This check-in is only available in the F7R server.");
@@ -111,3 +117,4 @@ Deno.serve(async (req) => {
   })().catch(()=>console.error("Discord check-in response failed.")));
   return Response.json({type:5,data:{flags:64}});
 });
+
