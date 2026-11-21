@@ -215,7 +215,7 @@ export async function collectEvidence(s,c,phase,driver) {
  const own=messages.filter(m=>m.author?.id===driver),clips=[];
  if(own.some(m=>!m.content&&!(m.attachments||[]).length))throw Error('Discord did not expose a message to the bot. Automatic reading is unavailable. Ask an admin to enable the bot’s Message Content setting; do not submit until your evidence can be read.');
  for(const m of own)for(const a of m.attachments||[]){
-   if(!/^video\//.test(a.content_type||'')&&!/\.(mp4|mov|webm|mkv|m4v)$/i.test(a.filename||''))throw Error('Only attach video clips. Remove other files before submitting.');
+   if(!/^video\//.test(a.content_type||'')&&!/\.(mp4|mov|webm|mkv|m4v)$/i.test(a.filename||''))continue;
    clips.push({channel_id:channel,message_id:m.id,attachment_id:a.id,filename:a.filename,url:a.url});
  }
  if(clips.length>5)throw Error('Keep at most five video clips in this ticket before submitting.');

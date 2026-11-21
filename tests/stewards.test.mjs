@@ -282,3 +282,12 @@ test('vote progress posts independent target totals and leadership notification'
 test('existing ticket progress is edited with count only and no pings or penalty choices',async()=>{
  const calls=[];await postVoteProgress({discord:async(path,method,body)=>{if(!method)return [{id:'old',author:{id:APP_ID},content:'**Vote progress · reported driver · Case #1001** old totals'}];calls.push({path,method,body});}}, {...c,review_channel_id:'room',votes:{one:{penalty:'Race ban'},two:{penalty:'Warning'}}});assert.equal(calls.length,1);assert.equal(calls[0].method,'PATCH');assert.match(calls[0].body.content,/2 steward vote/);assert.ok(!calls[0].body.content.includes('Race ban'));assert.deepEqual(calls[0].body.allowed_mentions,{parse:[]});
 });
+
+test('drivers can chat around clips and unrelated attachments do not block report or defence',async()=>{
+ for(const phase of ['report','defence']){
+ const incident={...c,data:{...c.data,[phase]:{links:[]},[phase+'_ticket']:'ticket'}};
+ const messages=[{id:'before',author:{id:driver},content:'Here is what happened',attachments:[]},{id:'image',author:{id:driver},content:'Screenshot',attachments:[{id:'png',filename:'screenshot.png',content_type:'image/png',url:'https://cdn.discordapp.com/image'}]},{id:'clip',author:{id:driver},content:'Video evidence',attachments:[{id:'mp4',filename:'incident.mp4',content_type:'video/mp4',url:'https://cdn.discordapp.com/video'}]},{id:'after',author:{id:driver},content:'Ready to submit now',attachments:[]}];
+ const result=await collectEvidence({discord:async()=>messages},incident,phase,driver);assert.equal(result.clips.length,1);assert.equal(result.clips[0].filename,'incident.mp4');assert.equal(result.no_video,false);assert.deepEqual(result.links,['https://cdn.discordapp.com/video']);
+ const withoutClip=await collectEvidence({discord:async()=>messages.filter(m=>m.id!=='clip')},incident,phase,driver);assert.equal(withoutClip.no_video,true);
+ }
+});
