@@ -14,7 +14,7 @@ test('steward page shows private evidence, voting and leader-only tie controls',
  const route={id:'t1',config:{name:'Tier 1',default_set:'F1'}};
  const c={id,number:1001,route_id:'t1',reporter_id:'223456789012345678',accused_id:'323456789012345678',data:{race:'Monza',lap:'Lap 1',report:{statement:'Report text',links:['https://example.com/report']},defence:{statement:'Defence text',links:[]}},status:'voting',votes:{},comments:[],notifications:{},revision:1};
  let leader=false;
- const context={document:{getElementById:el,createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),querySelectorAll:()=>[]},sessionStorage:{getItem:()=> 'a'.repeat(64),setItem(){},removeItem(){}},location:{hash:'',pathname:'/stewards.html'},history:{replaceState(){}},URL,URLSearchParams,Date,console,window:{confirm:()=>true,F7RAuth:{options:()=>({})},supabase:{createClient:()=>({auth:{getSession:async()=>({data:{}})}})}},Option:function(text,value){return {textContent:text,value};},fetch:async(url,options)=>{
+ const context={document:{getElementById:el,createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),querySelectorAll:()=>[]},sessionStorage:{getItem:()=> 'a'.repeat(64),setItem(){},removeItem(){}},location:{hash:'',pathname:'/stewards.html'},history:{replaceState(){}},URL,URLSearchParams,Date,console,window:{confirm:()=>true,F7RAuth:{options:()=>({})},supabase:{createClient:()=>({auth:{getSession:async()=>({data:{session:{access_token:'admin-jwt'}}})}})}},Option:function(text,value){return {textContent:text,value};},fetch:async(url,options)=>{
    if(url==='config.json')return Response.json({supabase_url:'https://api.test',supabase_publishable_key:'test'});
    const input=JSON.parse(options.body);
    if(input.action==='list')return Response.json({driverId:actor,admin:false,routes:[route],cases:[{...c,race:c.data.race,lap:c.data.lap}]});
@@ -33,3 +33,4 @@ test('steward page shows private evidence, voting and leader-only tie controls',
  el('verdict-target').value='accused';await el('verdict-target').onchange();assert.equal(el('decision-outcome').textContent,'5 seconds');assert.equal(el('vote-form').hidden,true);
  c.status='discussion';c.data.kind='penalty_appeal';c.data.original_penalty='10 seconds';await context.testCase(id);assert.equal(el('defence-section').hidden,true);assert.equal(el('start-form').hidden,true);assert.equal(el('approval').hidden,false);assert.match(el('close-vote').textContent,/Decide appeal/);assert.equal(el('tie-choice').children.length,2);
 });
+

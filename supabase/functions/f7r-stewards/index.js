@@ -1,7 +1,7 @@
 import {createService,idOK,accessFor,digest,caseAccess,penalties,tally,button,rowButtons,notifyDefence,reviewChannel,sendOutcomes,refreshEvidence,groupReference,verdictView} from '../_shared/stewards.js';
 const origins=new Set(['https://racecontrol.f7r.co.uk','https://taynz18.github.io']);
 export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
- const origin=request.headers.get('origin'),headers={'Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,OPTIONS'};
+ const origin=request.headers.get('origin'),headers={'Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info,x-f7r-admin-token','Access-Control-Allow-Methods':'POST,OPTIONS'};
  if(origins.has(origin))headers['Access-Control-Allow-Origin']=origin;
  const reply=(body,status=200)=>Response.json(body,{status,headers});
  if(origin&&!origins.has(origin))return reply({error:'Origin not allowed.'},403);
@@ -10,26 +10,25 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
  try {
    const s=createService(env),bearer=request.headers.get('authorization')?.replace(/^Bearer /,'');
    if(!bearer) return reply({error:'Sign in first.'},401);
-   let admin=false,driverId,member;
-   if(/^[a-f0-9]{64}$/.test(bearer)) {
+   const discordToken=/^[a-f0-9]{64}$/.test(bearer),adminToken=discordToken?request.headers.get('x-f7r-admin-token'):bearer;
+   if(!adminToken)return reply({error:'Approved admin sign-in is required to open the website Stewards Room. Stewards can review and vote in Discord.'},403);
+   const auth=await fetch(env('SUPABASE_URL')+'/auth/v1/user',{headers:{Authorization:'Bearer '+adminToken,apikey:env('SUPABASE_ANON_KEY')}});
+   if(!auth.ok)return reply({error:'Sign in with your approved admin account.'},401);
+   const user=await auth.json();
+   if(user.is_anonymous||!(await s.db('flag_admins?user_id=eq.'+user.id+'&select=user_id')).length)return reply({error:'The website Stewards Room is restricted to approved admins. Use Discord for steward reviews and voting.'},403);
+   const admin=true;let driverId,member;
+   if(discordToken){
      const sessions=await s.db('f7r_steward_sessions?token_hash=eq.'+await digest(bearer)+'&guild_id=eq.'+s.guild+'&expires_at=gt.'+encodeURIComponent(new Date().toISOString()));
      if(!sessions.length)return reply({error:'Your private access link expired. Open a new one from Discord.'},401);
      driverId=sessions[0].driver_id;member=await s.member(driverId);
-   }else {
-     const auth=await fetch(env('SUPABASE_URL')+'/auth/v1/user',{headers:{Authorization:'Bearer '+bearer,apikey:env('SUPABASE_ANON_KEY')}});
-     if(!auth.ok)return reply({error:'Sign in again.'},401);
-     const user=await auth.json();
-     if(user.is_anonymous)return reply({error:'Approved admin access required.'},403);
-     admin=(await s.db('flag_admins?user_id=eq.'+user.id+'&select=user_id')).length>0;
-     if(!admin)return reply({error:'Approved admin access required.'},403);
    }
    const input=await request.json(),action=input.action;
    const routes=await s.db('f7r_steward_routes?guild_id=eq.'+s.guild);
-   const allowed=admin?routes:routes.filter(r=>accessFor(member.roles,r.config,driverId).steward);
+   const allowed=!driverId?routes:routes.filter(r=>accessFor(member.roles,r.config,driverId).steward);
    if(action==='logout') {if(driverId)await s.db('f7r_steward_sessions?token_hash=eq.'+await digest(bearer),'DELETE');return reply({ok:true});}
    if(action==='list') {
      const cases=await s.db('f7r_steward_cases?select=id,number,route_id,status,created_at,outcome,reporter_id,accused_id,kind:data->>kind,race:data->>race,lap:data->>lap,reporter_verdict:data->reporter_verdict&guild_id=eq.'+s.guild+'&order=created_at.desc&limit=200');
-     return reply({admin,driverId,routes:allowed,cases:cases.filter(c=>allowed.some(r=>r.id===c.route_id)&&(!driverId||![c.reporter_id,c.accused_id].includes(driverId))&&(admin||c.kind!=='penalty_appeal'||accessFor(member.roles,allowed.find(r=>r.id===c.route_id).config,driverId).leader)).map(c=>({id:c.id,number:c.number,route_id:c.route_id,status:c.status==='closed'&&c.reporter_verdict&&c.reporter_verdict.status!=='closed'?c.reporter_verdict.status:c.status,kind:c.kind,race:c.race??c.data?.race,lap:c.lap??c.data?.lap,created_at:c.created_at,outcome:c.outcome})),aiAvailable:Boolean(env('OPENAI_API_KEY'))});
+     return reply({admin,driverId,routes:allowed,cases:cases.filter(c=>allowed.some(r=>r.id===c.route_id)&&(!driverId||![c.reporter_id,c.accused_id].includes(driverId))&&(!driverId||c.kind!=='penalty_appeal'||accessFor(member.roles,allowed.find(r=>r.id===c.route_id).config,driverId).leader)).map(c=>({id:c.id,number:c.number,route_id:c.route_id,status:c.status==='closed'&&c.reporter_verdict&&c.reporter_verdict.status!=='closed'?c.reporter_verdict.status:c.status,kind:c.kind,race:c.race??c.data?.race,lap:c.lap??c.data?.lap,created_at:c.created_at,outcome:c.outcome})),aiAvailable:Boolean(env('OPENAI_API_KEY'))});
    }
    if(['setup_options','save_route','publish_panel'].includes(action)) {
      if(!admin)return reply({error:'Approved race admin access required for setup.'},403);
@@ -103,3 +102,4 @@ export async function handleStewards(request,env=Deno.env.get.bind(Deno.env)) {
  }catch(error){return reply({error:error.message||'Stewards Room is unavailable.'},400);}
 }
 Deno.serve(request=>handleStewards(request));
+

@@ -1,4 +1,4 @@
-import {APP_ID,verdictView,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
+import {APP_ID,verdictView,tally,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
 const reply=content=>Response.json({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
 const label=(name,component)=>({type:18,label:name,component});
 const text=(id,style,max,required=true)=>({type:4,custom_id:id,style,required,max_length:max});
@@ -13,7 +13,7 @@ export async function stewardInteraction(i,s,waitUntil) {
  const user=i.member?.user||i.user;
  if(!idOK(user?.id)||user.bot)return reply('Sign in with your driver Discord account.');
  if(i.guild_id&&i.guild_id!==s.guild)return reply('This is only available in the F7R server.');
- const [kind,reference,selectedTarget]=custom.split(':');
+ const [kind,reference,selectedTarget,expectedRevision]=custom.split(':');
  const defer=work=>{
    waitUntil((async()=>{let result;try{result=await work();}catch(error){result=error.message||'The case could not be updated.';}await fetch('https://discord.com/api/v10/webhooks/'+APP_ID+'/'+i.token+'/messages/@original',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...typeof result==='string'?{content:result}:result,allowed_mentions:{parse:[]}})});})().catch(()=>console.error('Steward interaction response failed')));
    return Response.json({type:5,data:{flags:64}});
@@ -80,11 +80,11 @@ export async function stewardInteraction(i,s,waitUntil) {
        const routes=await s.db('f7r_steward_routes?guild_id=eq.'+s.guild),m=await s.member(user.id);
        if(!routes.some(r=>accessFor(m.roles,r.config,user.id).steward))throw Error('Assigned steward access required.');
      }else await caseAccess(s,await s.incident(reference),user.id);
-     return 'Open your private Stewards Room (valid for four hours; do not share):\n'+await makeSession(s,user.id);
+     return 'Website access requires an approved Race Control admin sign-in as well as this private steward link (valid for four hours; do not share). Stewards can complete reviews and votes in this Discord ticket:\n\n'+await makeSession(s,user.id);
    });
    let c;
    if(command){c=(await s.db('f7r_steward_cases?guild_id=eq.'+s.guild+'&review_channel_id=eq.'+i.channel_id))[0];if(!c)return reply('Use /verdict inside an F7R case review channel.');}
-   else if(['f7r-stew-verdict','f7r-stew-start','f7r-stew-vote','f7r-stew-appealdecision','f7r-stew-pick'].includes(kind))c=await s.incident(reference);
+   else if(['f7r-stew-verdict','f7r-stew-start','f7r-stew-vote','f7r-stew-appealdecision','f7r-stew-pick','f7r-stew-close'].includes(kind))c=await s.incident(reference);
    if(c) {
      const access=await caseAccess(s,c,user.id);
      if(c.data.kind!=='penalty_appeal'&&(command||(kind==='f7r-stew-verdict'&&!selectedTarget)))return Response.json({type:4,data:{flags:64,content:'Choose whose outcome to review. Each driver has a separate vote and decision.',components:[{type:1,components:[{type:3,custom_id:'f7r-stew-pick:'+c.id,options:[{label:'Reported driver',value:'accused'},{label:'Reporting driver (separate vote)',value:'reporter'}],min_values:1,max_values:1}]}]}});
@@ -99,6 +99,21 @@ export async function stewardInteraction(i,s,waitUntil) {
        if(kind==='f7r-stew-appealdecision'&&i.type===5)return defer(async()=>{const v=values(i),updated=await s.action(c,user.id,true,'appeal_decision',{penalty:v.penalty,explanation:required(v.explanation,'decision explanation',20,1800)},c.revision);await sendOutcomes(s,updated,user.id,true);return 'Appeal decision recorded. The driver’s DM delivery status is available in Race Control.';});
        return modal('f7r-stew-appealdecision:'+c.id,'Decide in-game penalty appeal',[label('Head Steward / CEO decision',{type:3,custom_id:'penalty',options:['In-game penalty kept','In-game penalty removed'].map(value=>({label:value,value})),min_values:1,max_values:1}),label('Approved explanation to send the driver',text('explanation',2,1800))]);
      }
+     if(kind==='f7r-stew-close'){
+       if(!access.leader||!['voting','tied'].includes(c.status))return reply('Only a Head Steward or CEO can finalise an open vote.');
+       if(i.type===5)return defer(async()=>{
+         const v=values(i),revision=Number(expectedRevision);if(!Number.isInteger(revision))throw Error('Open the finalisation form again.');
+         const updated=await s.action(raw,user.id,true,c.status==='tied'?'tie_break':'close_vote',{target,penalty:v.penalty,explanation:required(v.explanation,'approved explanation',20,1800)},revision);
+         if(verdictView(updated,target).status==='tied')return 'Voting is tied. Use /verdict again, select this driver and finalise with a deciding vote.';
+         const delivery=await sendOutcomes(s,updated,user.id,true,target);
+         return 'Verdict finalised for the '+(target==='reporter'?'reporting':'reported')+' driver. Outcome DMs: reporting driver '+delivery.reporter+'; reported driver '+delivery.accused+'.';
+       });
+       return modal('f7r-stew-close'+suffix+':'+c.revision,'Finalise '+(target==='reporter'?'reporting':'reported')+' driver verdict',[
+         ...(c.status==='tied'?[label('Deciding vote · tied outcomes only',{type:3,custom_id:'penalty',options:tally(c.votes).winners.map(value=>({label:value,value})),min_values:1,max_values:1})]:[]),
+         label('Approved explanation to send both drivers',text('explanation',2,1800))
+       ]);
+     }
+     if(access.leader&&['voting','tied'].includes(c.status)&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'))return Response.json({type:4,data:{flags:64,content:'**'+(target==='reporter'?'Reporting':'Reported')+' driver verdict**\n'+Object.entries(tally(c.votes).totals).map(([penalty,count])=>penalty+': '+count).join('\n')+'\nApprove an explanation to finalise. Ties require your deciding vote.',components:rowButtons([...(c.status==='voting'?[button('Cast / update my vote','f7r-stew-vote'+suffix,1)]:[]),button('Finalise verdict','f7r-stew-close'+suffix)])}});
      if(c.status==='discussion'&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'))return modal('f7r-stew-start'+suffix,'Choose penalty rules',[
        label('Penalty set',{type:3,custom_id:'set',options:['F1','Endurance'].map(value=>({label:value,value})),min_values:1,max_values:1})
      ]);
@@ -106,7 +121,7 @@ export async function stewardInteraction(i,s,waitUntil) {
        await s.action(c,user.id,access.leader,'start_vote',{set:values(i).set,target},c.revision);
        return 'Verdict voting opened. Use /verdict again to vote, or open Race Control.';
      });
-     if(c.status==='voting'&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'))return modal('f7r-stew-vote'+suffix,target==='reporter'?'Vote · reporting driver':'Vote · reported driver',[
+     if(c.status==='voting'&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'||(kind==='f7r-stew-vote'&&i.type===3)))return modal('f7r-stew-vote'+suffix,target==='reporter'?'Vote · reporting driver':'Vote · reported driver',[
        label('Your penalty vote',{type:3,custom_id:'penalty',options:penalties(c.penalty_set).map(value=>({label:value,value})),min_values:1,max_values:1}),
        label('Reason for your vote',text('reason',2,1500))
      ]);
@@ -115,8 +130,9 @@ export async function stewardInteraction(i,s,waitUntil) {
        await s.action(c,user.id,access.leader,'vote',{penalty:v.penalty,reason:required(v.reason,'vote reason',10),target});
        return 'Your vote is saved. Each steward has one vote; voting again replaces your own vote. A Head Steward or CEO closes voting.';
      });
-     return reply(c.status==='tied'?'This vote is tied. A Head Steward or CEO must decide in Race Control.':'This case is not ready for voting or is already closed.');
+     return reply(c.status==='tied'?'This vote is tied. A Head Steward or CEO must use /verdict to finalise it.':'This case is not ready for voting or is already closed.');
    }
    return reply('Open the reporting desk and try again.');
  }catch(error){return reply(error.message||'Stewards Room is unavailable.');}
 }
+

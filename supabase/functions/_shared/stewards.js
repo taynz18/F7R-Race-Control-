@@ -79,7 +79,7 @@ export async function reviewChannel(s,c,r) {
  await s.discord('/channels/'+channel.id+'/messages','POST',{
    content:roles.map(id=>'<@&'+id+'>').join(' ')+`\n**${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${safeText(r.config.name)}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\n`+(appeal?`Original penalty: ${safeText(c.data.original_penalty)}\nHead Steward / CEO: use /verdict to keep or remove the penalty.`:'Discuss privately here or in Race Control. Use /verdict to start voting.')+'\nEvidence tickets: '+[c.data.report_ticket,c.data.defence_ticket].filter(Boolean).map(id=>'<#'+id+'>').join(' '),
    allowed_mentions:{parse:[],roles},embeds:appeal?[statement('Appeal',c.reporter_id,c.data.report)]:[statement('Report',c.reporter_id,c.data.report),statement('Defence',c.accused_id,c.data.defence)],
-   components:rowButtons([button('Open Stewards Room','f7r-stew-access:'+c.id),button('Start / view verdict','f7r-stew-verdict:'+c.id),...(!appeal?[button('Reporting driver verdict','f7r-stew-verdict:'+c.id+':reporter')]:[])])
+   components:rowButtons([button('Admin Stewards Room','f7r-stew-access:'+c.id),button('Start / view verdict','f7r-stew-verdict:'+c.id),...(!appeal?[button('Reporting driver verdict','f7r-stew-verdict:'+c.id+':reporter')]:[])])
  });
  return channel.id;
 }
@@ -130,3 +130,4 @@ export async function refreshEvidence(s,c) {
  }
  return c;
 }
+

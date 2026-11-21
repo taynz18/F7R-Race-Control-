@@ -8,10 +8,11 @@ const status=text=>{$('status').textContent=text||'';};
 const node=(tag,text,className)=>{const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;};
 const who=id=>id===desk?.driverId?'You':'Discord driver …'+id.slice(-6);
 async function api(action,details={}) {
- let access=token;if(!access){const {data}=await client.auth.getSession();access=data.session?.access_token;}
- if(!access)throw Error('Open your private steward link from Discord or sign in for admin setup.');
- const response=await fetch(config.supabase_url+'/functions/v1/f7r-stewards',{method:'POST',headers:{Authorization:'Bearer '+access,apikey:config.supabase_publishable_key,'Content-Type':'application/json'},body:JSON.stringify({action,...details})});
- const result=await response.json();if(!response.ok||result.error)throw Error(result.error||'Stewards Room unavailable.');return result;
+ const {data}=await client.auth.getSession(),adminAccess=data.session?.access_token;
+ if(!adminAccess)throw Error('Sign in with your approved admin account. Steward reviews and voting remain available in Discord.');
+ const access=token||adminAccess;
+ const response=await fetch(config.supabase_url+'/functions/v1/f7r-stewards',{method:'POST',headers:{Authorization:'Bearer '+access,'x-f7r-admin-token':adminAccess,apikey:config.supabase_publishable_key,'Content-Type':'application/json'},body:JSON.stringify({action,...details})});
+ const result=await response.json();if(!response.ok||result.error){if(response.status===401||response.status===403){$('workspace').hidden=true;$('entry').hidden=false;}throw Error(result.error||'Stewards Room unavailable.');}return result;
 }
 async function run(work) {
  if(busy)return;busy=true;status('Working…');
@@ -88,7 +89,7 @@ $('verdict-target').onchange=()=>run(async()=>{verdictTarget=$('verdict-target')
 $('group-filter').onchange=$('state-filter').onchange=renderList;
 $('refresh').onclick=()=>run(loadDesk);
 $('logout').onclick=()=>run(async()=>{await api('logout');token=null;sessionStorage.removeItem('f7r-steward-access');await client.auth.signOut({scope:'local'});location.reload();});
-$('login').onsubmit=event=>{event.preventDefault();run(async()=>{const {error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;$('password').value='';token=null;sessionStorage.removeItem('f7r-steward-access');await loadDesk();});};
+$('login').onsubmit=event=>{event.preventDefault();run(async()=>{const {error}=await client.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;$('password').value='';await loadDesk();});};
 $('comment-form').onsubmit=event=>{event.preventDefault();run(async()=>{await change('comment',{text:$('comment').value,target:'accused'});$('comment').value='';});};
 $('start-form').onsubmit=event=>{event.preventDefault();run(()=>change(verdictTarget==='reporter'&&!current.baseIncident.data.reporter_verdict?'start_reporter_vote':'start_vote',{set:$('penalty-set').value,reason:$('reporter-reason').value,revision:current.incident.revision}));};
 $('vote-form').onsubmit=event=>{event.preventDefault();run(()=>change('vote',{penalty:$('penalty').value,reason:$('vote-reason').value}));};
@@ -153,3 +154,4 @@ try{
  const r=await fetch('config.json',{cache:'no-store'});if(!r.ok)throw Error('Configuration unavailable.');config=await r.json();client=window.supabase.createClient(config.supabase_url,config.supabase_publishable_key,{auth:window.F7RAuth.options()});
  const {data}=await client.auth.getSession();if(token||data.session)await run(loadDesk);
 }catch(error){status(error.message);}
+

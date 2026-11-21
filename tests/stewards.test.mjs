@@ -108,3 +108,23 @@ test('Discord verdict selection uses a private menu then opens the correct indep
  r=await(await stewardInteraction({type:3,data:{custom_id:'f7r-stew-verdict:'+c.id+':reporter'},user:{id:steward}},s,()=>{})).json();
  assert.equal(r.type,9);assert.ok(r.data.components.some(x=>x.component.custom_id==='reason'));
 });
+
+test('Discord head stewards can open finalisation while ordinary stewards cannot',async()=>{
+ const raw={...c,status:'voting',revision:8,penalty_set:'F1',votes:{[steward]:{penalty:'5 seconds'}},data:{...c.data}};
+ const s={incident:async()=>raw,route:async()=>({config}),member:async id=>({roles:[id===leader?'leader':'steward']})};
+ const interaction=id=>({type:3,data:{custom_id:'f7r-stew-close:'+c.id+':accused'},user:{id}});
+ let r=await(await stewardInteraction(interaction(steward),s,()=>{})).json();assert.equal(r.type,4);assert.match(r.data.content,/Only a Head/);
+ r=await(await stewardInteraction(interaction(leader),s,()=>{})).json();assert.equal(r.type,9);assert.ok(r.data.custom_id.endsWith(':accused:8'));
+ raw.status='tied';raw.votes[leader]={penalty:'Warning'};
+ r=await(await stewardInteraction(interaction(leader),s,()=>{})).json();assert.equal(r.data.components[0].component.options.length,2);
+});
+test('Discord finalisation checks the reviewed revision and sends the approved outcome',async()=>{
+ const raw={...c,status:'voting',revision:8,penalty_set:'F1',votes:{[steward]:{penalty:'5 seconds'}}},actions=[],sent=[],pending=[];
+ const s={incident:async()=>raw,route:async()=>({config}),member:async()=>({roles:['leader']}),action:async(c,a,l,name,value,revision)=>{actions.push({name,value,revision});return {...raw,status:'closed',outcome:'5 seconds',explanation:value.explanation};},dm:async id=>{sent.push(id);return 'sent';}};
+ const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({});
+ try{
+ const r=await(await stewardInteraction({type:5,data:{custom_id:'f7r-stew-close:'+c.id+':accused:8',components:[{component:{custom_id:'explanation',value:'The evidence shows avoidable contact.'}}]},user:{id:leader},token:'test'},s,p=>pending.push(p))).json();assert.equal(r.type,5);await Promise.all(pending);
+ assert.equal(actions[0].name,'close_vote');assert.equal(actions[0].revision,8);assert.deepEqual(sent,[driver,accused]);
+ }finally{globalThis.fetch=original;}
+});
+

@@ -133,7 +133,7 @@ async function refreshRaces(){
  finally{refreshing=false}
 }
 async function signOut(){
-  ++generation;isReceiverAdmin=false;member=null;race=null;demo=false;await stopFlags();$('flags').hidden=true;$('sign-out').textContent='Sign out';await detach();resetView();$('dashboard').hidden=true;$('connection').hidden=true;$('login').hidden=false;
+  ++generation;isReceiverAdmin=false;if($('stewards-link'))$('stewards-link').hidden=true;member=null;race=null;demo=false;await stopFlags();$('flags').hidden=true;$('sign-out').textContent='Sign out';await detach();resetView();$('dashboard').hidden=true;$('connection').hidden=true;$('login').hidden=false;
   if(client){const {error}=await client.auth.signOut({scope:'local'});if(error)authMessage('Signed out of this view; session cleanup failed. Reload before signing in again.');else authMessage('Signed out.')}
 }
 async function openAccount(user,g=++generation){
@@ -141,7 +141,7 @@ async function openAccount(user,g=++generation){
     // The existing flag_admins table, never dashboard role or user metadata, controls flag access.
     const adminAccess=await client.from('flag_admins').select('user_id').eq('user_id',user.id).maybeSingle();
     if(g!==generation)return;
-    const isFlagAdmin=!adminAccess.error&&!!adminAccess.data;isReceiverAdmin=isFlagAdmin;
+    const isFlagAdmin=!adminAccess.error&&!!adminAccess.data;isReceiverAdmin=isFlagAdmin;if($('stewards-link'))$('stewards-link').hidden=!isFlagAdmin;
     const access=await client.from('f7r_members').select('display_name,role,approved').eq('user_id',user.id).maybeSingle();
     if(g!==generation)return;
     // Account metadata is used only for display, never to authorize admin/publisher access.
@@ -252,3 +252,4 @@ function demoMapData(){
  const drivers=demoDrivers().map((d,i)=>({...d,world_position:{x:points[i*8].x,z:points[i*8].z},motion_stale:false}));
  return {format:2026,track_id:7,track_map:{bins:192,points},drivers};
 }
+

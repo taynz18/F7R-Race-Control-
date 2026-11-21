@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 globalThis.Deno={serve:()=>{},env:{get:()=>undefined}};
 const {handleStewards}=await import('../supabase/functions/f7r-stewards/index.js');
 const env=key=>({SUPABASE_URL:'https://database.test',SUPABASE_SERVICE_ROLE_KEY:'service-test',SUPABASE_ANON_KEY:'anon-test',F7R_DISCORD_BOT_TOKEN:'bot-test',F7R_DISCORD_SERVER_ID:'123456789012345678'})[key];
-const request=(body,token)=>new Request('https://api.test',{method:'POST',headers:{...(token?{Authorization:'Bearer '+token}:{}),'Content-Type':'application/json'},body:JSON.stringify(body)});
+const request=(body,token)=>new Request('https://api.test',{method:'POST',headers:{...(token?{Authorization:'Bearer '+token,...(/^[a-f0-9]{64}$/.test(token)?{'x-f7r-admin-token':'admin-jwt'}:{})}:{}),'Content-Type':'application/json'},body:JSON.stringify(body)});
 const driver='223456789012345678',caseId='11111111-1111-4111-8111-111111111111',token='a'.repeat(64);
 const route={id:'t1',config:{name:'Tier 1',steward_roles:['steward'],leader_roles:['head'],default_set:'F1'}};
 const c={id:caseId,route_id:'t1',reporter_id:'323456789012345678',accused_id:'423456789012345678',data:{race:'Monza',lap:'Lap 1',report:{statement:'report'},defence:{statement:'defence'}},status:'discussion',votes:{},comments:[]};
 async function withFetch(fn,work){const original=globalThis.fetch;globalThis.fetch=fn;try{return await work();}finally{globalThis.fetch=original;}}
-function backend(roles=['steward'],incident=c){return async url=>{
+function backend(roles=['steward'],incident=c,approved=true){return async url=>{
+ if(url.endsWith('/auth/v1/user'))return Response.json({id:'admin'});
+ if(url.includes('flag_admins'))return Response.json(approved?[{user_id:'admin'}]:[]);
  if(url.includes('f7r_steward_sessions'))return Response.json([{driver_id:driver}]);
  if(url.includes('/members/'))return Response.json({roles,user:{id:driver}});
  if(url.includes('f7r_steward_routes'))return Response.json([route]);
@@ -33,7 +35,7 @@ test('AI missing configuration gives an explicit template without calling AI',as
  });
 });
 test('ordinary stewards cannot change reporting roles',async()=>{
- await withFetch(backend(),async()=>assert.equal((await handleStewards(request({action:'save_route'},token),env)).status,403));
+ await withFetch(backend(['steward'],c,false),async()=>assert.equal((await handleStewards(request({action:'save_route'},token),env)).status,403));
 });
 test('publishing updates the same desk and slash-command failure does not block it',async()=>{
  let stored={...route,config:{...route.config,enabled:true,report_channel:'channel'}},posts=0,edits=0;
@@ -84,3 +86,26 @@ test('reporter target returns its own tally and routes votes without changing th
    const voted=await handleStewards(request({action:'vote',id:caseId,target:'reporter',penalty:'50 seconds',reason:'Reporting driver was responsible.'},token),env);assert.equal(voted.status,200);
  });
 });
+
+test('Discord access tokens alone cannot open any website case endpoint',async()=>{
+ await withFetch(()=>{throw Error('Must reject before querying sessions or cases');},async()=>{
+   for(const action of ['list','case','open_review','comment','vote','brief','close_vote','send_pending']){
+     const r=await handleStewards(new Request('https://api.test',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({action,id:caseId})}),env);
+     assert.equal(r.status,403,action);
+   }
+ });
+});
+test('unapproved website accounts are denied even with a valid steward link',async()=>{
+ const requests=[];
+ await withFetch(async url=>{requests.push(url);if(url.endsWith('/auth/v1/user'))return Response.json({id:'not-admin'});if(url.includes('flag_admins'))return Response.json([]);throw Error('Non-admin accessed private data');},async()=>{
+   for(const bearer of ['driver-jwt',token])assert.equal((await handleStewards(request({action:'list'},bearer),env)).status,403);
+ });
+ assert.ok(requests.every(url=>url.includes('/auth/')||url.includes('flag_admins')));
+});
+test('approved admins can inspect cases without a Discord steward session',async()=>{
+ await withFetch(backend(),async()=>{
+   const r=await(await handleStewards(request({action:'case',id:caseId},'admin-jwt'),env)).json();
+   assert.equal(r.incident.id,caseId);assert.equal(r.access.steward,false);
+ });
+});
+
