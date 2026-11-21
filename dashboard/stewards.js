@@ -1,3 +1,4 @@
+import {filterChannels} from './channel-search.js';
 const $=id=>document.getElementById(id);
 const stateNames={awaiting_defence:'Awaiting defence',discussion:'Discussion',voting:'Voting open',tied:'Tied · decision needed',closed:'Closed'};
 let config,client,token=sessionStorage.getItem('f7r-steward-access'),desk,setup,current,busy=false;
@@ -86,8 +87,7 @@ $('close-vote').onclick=()=>run(async()=>{
 async function loadSetup() {
  setup=await api('setup_options');
  options('route-picker',setup.routes.map(r=>({id:r.id,name:r.config.name})),'New group');
- options('report-channel',setup.channels.filter(c=>c.type===0).map(c=>({id:c.id,name:'#'+c.name})),'Choose reporting channel');
- options('review-category',setup.channels.filter(c=>c.type===4),'No category');
+ filterChannelChoices();
  for(const [field,id]of[['driver_roles','driver-roles'],['steward_roles','steward-roles'],['leader_roles','leader-roles']]){
    $(id).replaceChildren();for(const role of [...setup.roles].sort((a,b)=>a.name.localeCompare(b.name))){const label=node('label',undefined,'steward-check'),input=node('input');input.type='checkbox';input.value=role.id;input.dataset.roleGroup=field;label.append(input,document.createTextNode(role.name));$(id).append(label);}
  }
@@ -95,9 +95,22 @@ async function loadSetup() {
 }
 function selectRoute(){
  const r=setup.routes.find(r=>r.id===$('route-picker').value),c=r?.config;
+ $('report-channel-search').value='';$('review-category-search').value='';filterChannelChoices();
  $('route-id').value=r?.id||'';$('route-id').readOnly=Boolean(r);$('route-name').value=c?.name||'';$('default-set').value=c?.default_set||'F1';$('report-channel').value=c?.report_channel||'';$('review-category').value=c?.category_id||'';$('route-enabled').checked=c?.enabled||false;
  document.querySelectorAll('[data-role-group]').forEach(input=>{input.checked=Boolean(c?.[input.dataset.roleGroup]?.includes(input.value));});
 }
+function filterChannelChoices() {
+ if(!setup)return;
+ for(const [id,type,placeholder]of[['report-channel',0,'Choose reporting channel'],['review-category',4,'No category']]){
+   const previous=$(id).value,matches=filterChannels(setup.channels,$(id+'-search').value,type);
+   const selected=setup.channels.find(c=>c.id===previous&&c.type===type),rows=[...matches];
+   if(selected&&!rows.some(c=>c.id===previous))rows.unshift(selected);
+   options(id,rows.map(c=>({id:c.id,name:(type===0?'#':'')+c.name+(c===selected&&!matches.includes(c)?' · selected':'' )})),matches.length?placeholder:type===0?'No matching channels':'No category');
+   if(selected)$(id).value=previous;
+   $(id+'-count').textContent=`${matches.length} of ${setup.channels.filter(c=>c.type===type).length} ${type===0?'channels':'categories'} match`+(selected&&!matches.includes(selected)?'. Current selection kept.':'.');
+ }
+}
+$('report-channel-search').oninput=$('review-category-search').oninput=filterChannelChoices;
 $('route-picker').onchange=selectRoute;
 $('route-form').onsubmit=event=>{event.preventDefault();run(async()=>{
  const id=$('route-id').value,roles=key=>[...document.querySelectorAll(`[data-role-group="${key}"]:checked`)].map(x=>x.value);

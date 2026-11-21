@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
+import {filterChannels} from '../dashboard/channel-search.js';
 class Element {
  constructor(tag='div'){this.tag=tag;this.children=[];this.textContent='';this.value='';this.hidden=false;this.dataset={};}
  append(...children){this.children.push(...children);}replaceChildren(...children){this.children=children;this.value='';}add(option){if(!this.children.length)this.value=option.value;this.children.push(option);}scrollIntoView(){}
@@ -20,7 +21,8 @@ test('steward page shows private evidence, voting and leader-only tie controls',
    if(input.action==='case')return Response.json({incident:c,access:{leader,steward:true,route},penalties:['No further action','5 seconds'],tally:{count:0,totals:{},winners:['5 seconds','Warning']}});
    throw Error('Unexpected action '+input.action);
  }};
- vm.createContext(context);const code=await readFile(new URL('../dashboard/stewards.js',import.meta.url),'utf8');
+ context.filterChannels=filterChannels;
+ vm.createContext(context);const code=(await readFile(new URL('../dashboard/stewards.js',import.meta.url),'utf8')).replace(/^import[^\n]+\n/gm,'');
  await vm.runInContext('(async()=>{'+code+';globalThis.testCase=loadCase;})()',context);
  assert.equal(el('workspace').hidden,false);assert.equal(el('case-list').children.length,1);
  await context.testCase(id);assert.equal(el('report-text').textContent,'Report text');assert.equal(el('defence-text').textContent,'Defence text');assert.equal(el('vote-form').hidden,false);assert.equal(el('approval').hidden,true);
