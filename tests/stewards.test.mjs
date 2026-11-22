@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {draftExplanation,postVoteProgress,completeVerdict,syncTicketLock,ensureMessageReading,deleteTicket,ticketDeleteAccess,notifyDefence,verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
+import {removeReportShortcuts,syncTicketMessages,draftExplanation,postVoteProgress,completeVerdict,syncTicketLock,ensureMessageReading,deleteTicket,ticketDeleteAccess,notifyDefence,verdictView,accessFor,evidenceLinks,penalties,tally,sendOutcomes,reviewChannel,evidenceTicket,collectEvidence,refreshEvidence,APP_ID} from '../supabase/functions/_shared/stewards.js';
 import {stewardInteraction} from '../supabase/functions/_shared/steward-interactions.js';
 const driver='123456789012345678',accused='223456789012345678',steward='323456789012345678',leader='423456789012345678';
 const config={enabled:true,driver_roles:['driver'],steward_roles:['steward'],leader_roles:['leader']};
@@ -143,7 +143,7 @@ test('eligible drivers can report members without the group role and open separa
  try{
    for(const [id,other] of [['first',accused],['second',leader]]){assert.equal((await(await stewardInteraction(submit(id,other),service,p=>tasks.push(p))).json()).type,5);await tasks.pop();}
    assert.equal(rows.length,2);assert.equal(channels.length,2);assert.notEqual(rows[0].data.report_ticket,rows[1].data.report_ticket);assert.ok(rows.every(r=>r.status==='awaiting_report_evidence'));
-   assert.ok(replies.every(r=>r.components[0].components.some(b=>b.label==='Report another incident')));
+   assert.ok(replies.every(r=>!r.components[0].components.some(b=>b.label==='Report another incident')));assert.ok(channels.every(x=>x.body.name.startsWith('case-')));
    assert.ok(dms.every(r=>r.body.components[0].components.some(b=>b.label==='Open private video ticket')));
    const again=await(await stewardInteraction({type:3,user:{id:driver},data:{custom_id:'f7r-stew-report:f1'}},service,()=>{})).json();assert.equal(again.type,9);
    await stewardInteraction(submit('first',accused),service,p=>tasks.push(p));await tasks.pop();assert.equal(rows.length,2);
@@ -290,4 +290,18 @@ test('drivers can chat around clips and unrelated attachments do not block repor
  const result=await collectEvidence({discord:async()=>messages},incident,phase,driver);assert.equal(result.clips.length,1);assert.equal(result.clips[0].filename,'incident.mp4');assert.equal(result.no_video,false);assert.deepEqual(result.links,['https://cdn.discordapp.com/video']);
  const withoutClip=await collectEvidence({discord:async()=>messages.filter(m=>m.id!=='clip')},incident,phase,driver);assert.equal(withoutClip.no_video,true);
  }
+});
+
+test('original desk always opens a clean report form and old ticket shortcuts redirect there',async()=>{
+ const route={id:'f1',config:{...config,report_channel:'desk',panel_message_id:'panel'}};const service={guild:'guild',route:async()=>route,member:async()=>({roles:['driver']})};
+ const i={type:3,channel_id:'desk',user:{id:driver},data:{custom_id:'f7r-stew-report:f1'}};
+ for(let n=0;n<2;n++){const r=await(await stewardInteraction(i,service,()=>{})).json();assert.equal(r.type,9);assert.equal(r.data.components.length,4);assert.ok(!r.data.components.some(c=>c.component.custom_id==='links'));}
+ i.channel_id='old-ticket';const r=await(await stewardInteraction(i,service,()=>{})).json();assert.equal(r.type,4);assert.match(r.data.content,/original incident reporting desk/);assert.match(r.data.content,/guild\/desk\/panel/);
+});
+test('shortcut removal preserves submit, defence and staff controls without mutating input',()=>{
+ const source=[{type:1,components:[{custom_id:'f7r-stew-finish-report:case'},{custom_id:'f7r-stew-report:f1'},{custom_id:'f7r-stew-delete:case'}]}];const result=removeReportShortcuts(source);assert.equal(source[0].components.length,3);assert.deepEqual(result[0].components.map(b=>b.custom_id),['f7r-stew-finish-report:case','f7r-stew-delete:case']);
+});
+test('existing open ticket cleanup edits only bot messages and never changes or deletes cases',async()=>{
+ const calls=[];const s={guild:'guild',db:async(path,method)=>{assert.ok(!method);return [{...c,data:{...c.data,report_ticket:'ticket'}}];},discord:async(path,method,body)=>{calls.push({path,method,body});if(!method)return [{id:'message',author:{id:APP_ID},content:'Evidence instructions',components:[{type:1,components:[{custom_id:'f7r-stew-finish-report:'+c.id},{custom_id:'f7r-stew-report:f1'},{custom_id:'f7r-stew-delete:'+c.id}]}]}];}};
+ assert.equal(await syncTicketMessages(s),1);assert.equal(calls.filter(x=>x.method).length,1);assert.equal(calls.at(-1).method,'PATCH');assert.equal(calls.at(-1).body.components[0].components.length,2);assert.equal(calls.at(-1).body.content,'Evidence instructions');
 });

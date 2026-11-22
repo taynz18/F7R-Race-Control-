@@ -6,7 +6,6 @@ const modal=(id,title,components)=>Response.json({type:9,data:{custom_id:id,titl
 function values(interaction) {
  const fields={};for(const label of interaction.data.components||[])for(const c of [label.component,...(label.components||[])].filter(Boolean))fields[c.custom_id]=c.values?.[0]??c.value;return fields;
 }
-const anotherReport=route=>button('Report another incident','f7r-stew-report:'+route,1);
 const ticketLink=(guild,channel)=>({type:2,style:5,label:'Open private video ticket',url:'https://discord.com/channels/'+guild+'/'+channel});
 const required=(value,name,min=1,max=1500)=>{if(typeof value!=='string'||value.trim().length<min||value.length>max)throw Error(['statement','defence'].includes(name)?'Enter an incident description, up to '+max+' characters. Short descriptions are accepted.':'Check '+name+'.');return value.trim();};
 export async function stewardInteraction(i,s,waitUntil) {
@@ -35,11 +34,12 @@ export async function stewardInteraction(i,s,waitUntil) {
    if(kind==='f7r-stew-report'||kind==='f7r-stew-appeal') {
      const route=await s.route(reference),m=await s.member(user.id);
      if(!route?.config.enabled||!route.config.driver_roles.some(id=>m.roles.includes(id)))return reply('This reporting desk is not open to your driver role.');
+     if(i.channel_id&&route.config.report_channel&&i.channel_id!==route.config.report_channel)return reply('To make a new report, return to the original incident reporting desk and press Report Incident. Each submission opens a fresh private ticket.\nhttps://discord.com/channels/'+s.guild+'/'+route.config.report_channel+(route.config.panel_message_id?'/'+route.config.panel_message_id:''));
      const appeal=kind==='f7r-stew-appeal';
      return modal((appeal?'f7r-stew-appealsubmit:':'f7r-stew-submit:')+route.id,appeal?'Appeal an in-game penalty':'Report an incident',[
        appeal?label('In-game penalty you want reviewed',text('original_penalty',1,150)):label('Driver you are reporting',{type:5,custom_id:'driver',min_values:1,max_values:1,required:true}),
        label('Race / round / date',text('race',1,150)),label('Lap and corner / timestamp',text('lap',1,150)),
-       label(appeal?'Why should this penalty be removed?':'Your account of the incident',text('statement',2,1500)),label('Video links (or upload clips in the ticket)',text('links',2,1500,false))
+       label(appeal?'Why should this penalty be removed?':'Your account of the incident',text('statement',2,1500))
      ]);
    }
    if(['f7r-stew-submit','f7r-stew-appealsubmit'].includes(kind)&&i.type===5) return defer(async()=>{
@@ -55,10 +55,10 @@ export async function stewardInteraction(i,s,waitUntil) {
      if(open.length>=10)throw Error('You have ten open cases. Ask a steward before submitting another.');
      const data={kind:appeal?'penalty_appeal':'incident',...(appeal?{original_penalty:required(v.original_penalty,'original penalty',1,150)}:{}),race:required(v.race,'race',1,150),lap:required(v.lap,'lap / corner',1,150),report:{statement:required(v.statement,'statement',1),links:evidenceLinks(v.links)},reporter_name:user.global_name||user.username,accused_name:accused?.user.global_name||accused?.user.username};
      const c=(await s.db('f7r_steward_cases','POST',{guild_id:s.guild,route_id:route.id,interaction_id:i.id,reporter_id:user.id,accused_id:appeal?APP_ID:v.driver,data,status:'awaiting_report_evidence'}))[0];
-     let channel;try{channel=await evidenceTicket(s,c,route,'report');}catch{return {content:`Draft #${c.number} saved. The private clip ticket could not open. Check the bot’s Manage Channels permission, then retry.`,components:rowButtons([button('Retry private ticket','f7r-stew-ticket-report:'+c.id),anotherReport(route.id)])};}
+     let channel;try{channel=await evidenceTicket(s,c,route,'report');}catch{return {content:`Draft #${c.number} saved. The private clip ticket could not open. Check the bot’s Manage Channels permission, then retry.`,components:rowButtons([button('Retry private ticket','f7r-stew-ticket-report:'+c.id)])};}
      const link=`https://discord.com/channels/${s.guild}/${channel}`;
-     await s.dm(user.id,{content:`**F7R ${appeal?'appeal':'report'} #${c.number} · finish your submission**\nVideo evidence is mandatory. Open your private ticket in the reporting group’s incident section, attach your clips, then press Submit.\n${link}`,components:rowButtons([ticketLink(s.guild,channel),anotherReport(route.id)])});
-     return {content:`Draft #${c.number} saved. Video evidence is mandatory. Attach your clips in the private ticket, then press Submit there. This ticket is in the reporting group’s incident section. You can open another report while this ticket stays open.\n${link}`,components:rowButtons([ticketLink(s.guild,channel),anotherReport(route.id)])};
+     await s.dm(user.id,{content:`**F7R ${appeal?'appeal':'report'} #${c.number} · finish your submission**\nVideo evidence is mandatory. Open your private ticket in the reporting group’s incident section, attach your clips, then press Submit.\n${link}`,components:rowButtons([ticketLink(s.guild,channel)])});
+     return {content:`Draft #${c.number} saved. Video evidence is mandatory. Attach your clips in the private ticket, then press Submit there. This ticket is in the reporting group’s incident section. For another incident, return to the original incident reporting desk and press Report Incident again.\n${link}`,components:rowButtons([ticketLink(s.guild,channel)])};
    });
    if(['f7r-stew-ticket-report','f7r-stew-ticket-defence'].includes(kind))return defer(async()=>{
      const c=await s.incident(reference),phase=kind.endsWith('report')?'report':'defence',driver=phase==='report'?c.reporter_id:c.accused_id;
@@ -72,8 +72,8 @@ export async function stewardInteraction(i,s,waitUntil) {
      let locked=true;try{await s.discord('/channels/'+i.channel_id+'/permissions/'+driver,'PUT',{type:1,allow:'0',deny:'1024'});}catch{locked=false;}
      if(phase==='report'&&c.data.kind!=='penalty_appeal')await notifyDefence(s,updated);
      else {try{await reviewChannel(s,updated,await s.route(c.route_id));}catch{ /* Stored case remains in oversight for recovery. */ }}
-     await s.dm(driver,{content:`**F7R submission received · Case #${c.number}**\nYour ${c.data.kind==='penalty_appeal'?'in-game penalty appeal':phase} is submitted and locked. ${evidence.links.length?evidence.links.length+' evidence link(s) saved; clips remain on Discord.':''}\nYou will receive the final decision by DM.`,...(phase==='report'?{components:rowButtons([anotherReport(c.route_id)])}:{})});
-     return {content:`Submission #${c.number} locked.`+(locked?' Your ticket access has closed.':' Your statement is locked, but Discord ticket permissions could not update. Please notify a steward.'),components:phase==='report'?rowButtons([anotherReport(c.route_id)]):[]};
+     await s.dm(driver,{content:`**F7R submission received · Case #${c.number}**\nYour ${c.data.kind==='penalty_appeal'?'in-game penalty appeal':phase} is submitted and locked. ${evidence.links.length?evidence.links.length+' evidence link(s) saved; clips remain on Discord.':''}\nYou will receive the final decision by DM.`});
+     return {content:`Submission #${c.number} locked.`+(locked?' Your ticket access has closed.':' Your statement is locked, but Discord ticket permissions could not update. Please notify a steward.'),components:[]};
    });
    if(kind==='f7r-stew-nodefence'||kind==='f7r-stew-nodefenceconfirm'){
      const c=await s.incident(reference);
