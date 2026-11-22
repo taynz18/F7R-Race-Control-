@@ -20,6 +20,7 @@ on:
       - 'admin.html'
       - 'discord.html'
       - 'stewards.html'
+      - 'pace.html'
       - 'admin.css'
       - 'admin.js'
       - 'config.json'
@@ -62,7 +63,7 @@ jobs:
           cp -R assets/tyres public/assets/tyres
           cp -R assets/circuits public/assets/circuits
           cp -R assets/commentary public/assets/commentary
-          cp commentary.html index.html dotd.html history.html race-data.html league.html grid.html tournament.html admin.html discord.html stewards.html admin.css admin.js config.json manifest.webmanifest public/
+          cp commentary.html index.html dotd.html history.html race-data.html league.html grid.html tournament.html admin.html discord.html stewards.html pace.html admin.css admin.js config.json manifest.webmanifest public/
           cp assets/f7r-logo.png assets/f7r-favicon.png assets/f7r-app.ico assets/f7r-home-*.png public/assets/
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -70,4 +71,3 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
-

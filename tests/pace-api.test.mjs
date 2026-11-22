@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+globalThis.Deno={serve:()=>{},env:{get:()=>undefined}};
+const {handlePace}=await import('../supabase/functions/f7r-pace/index.js');
+const env=key=>({SUPABASE_URL:'https://db.test',SUPABASE_ANON_KEY:'public',SUPABASE_SERVICE_ROLE_KEY:'private',F7R_DISCORD_SERVER_ID:'123456789012345678'})[key];
+const request=(action,bearer)=>new Request('https://api.test',{method:'POST',headers:{'Content-Type':'application/json',...(bearer?{Authorization:'Bearer '+bearer}:{})},body:JSON.stringify({action})});
+test('pace website requires authentication before reading any data',async()=>{const r=await handlePace(request('load'),env);assert.equal(r.status,401);});
+test('pace website rejects unapproved accounts regardless of editable metadata',async()=>{const original=fetch;globalThis.fetch=async url=>url.includes('/auth/')?Response.json({id:'user',user_metadata:{admin:true}}):Response.json([]);try{assert.equal((await handlePace(request('load','test'),env)).status,403);}finally{globalThis.fetch=original;}});
+test('approved admin can read setup and queue without posting Discord messages',async()=>{const original=fetch,calls=[];globalThis.fetch=async(url,options)=>{calls.push(options.method);return url.includes('/auth/')?Response.json({id:'user'}):url.includes('flag_admins')?Response.json([{user_id:'user'}]):Response.json([]);};try{const r=await handlePace(request('load','test'),env),body=await r.json();assert.equal(r.status,200);assert.deepEqual(body.panels,[]);assert.deepEqual(body.tickets,[]);assert.equal(body.guild_id,'123456789012345678');assert.ok(calls.every(m=>!m||m==='GET'));}finally{globalThis.fetch=original;}});
+test('pace server rejects untrusted origins and never sends service credentials to a client',async()=>{const req=new Request('https://api.test',{method:'POST',headers:{Origin:'https://evil.test'}});const r=await handlePace(req,env);assert.equal(r.status,403);assert.ok(!(await r.text()).includes('private'));});
