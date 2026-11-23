@@ -18,7 +18,7 @@ export function validatePace(config){
  const reviewer_roles=roleList('reviewer_roles',true),driver_roles=roleList('driver_roles',false),remove_roles=roleList('remove_roles',false);
  if(tiers.some(t=>reviewer_roles.includes(t.role_id))||remove_roles.some(id=>reviewer_roles.includes(id)||tiers.some(t=>t.role_id===id)))throw Error('Tier and trial roles must be separate from reviewer roles.');
  if(!idOK(config.channel_id)||!idOK(config.category_id))throw Error('Choose the submission desk channel and private ticket category.');
- return {name:config.name.trim(),tracks,tiers,reviewer_roles,driver_roles,remove_roles,channel_id:config.channel_id,category_id:config.category_id,instructions:String(config.instructions||'Use Time Trial, equal car performance and valid laps. Screenshots must show your driver name, track and lap time.').slice(0,1500),enabled:config.enabled===true};
+ return {name:config.name.trim(),tracks,tiers,reviewer_roles,driver_roles,remove_roles,channel_id:config.channel_id,category_id:config.category_id,instructions:String(config.instructions||'Use qualifying sessions with equal car performance and valid laps. Time Trial laps are not accepted. Screenshots must show the qualifying results, your driver name, track and lap time.').slice(0,1500),enabled:config.enabled===true};
 }
 export function paceAssessment(snapshot,entries){
  const results=snapshot.tracks.map(track=>{const entry=entries[track.id];if(!Number.isSafeInteger(entry?.ms)||entry.ms<10000||!entry.proof?.message_id)throw Error('Submit a time and screenshot for every required track.');return {...track,ms:entry.ms,gap:(entry.ms/track.benchmark_ms-1)*100};});
@@ -33,7 +33,7 @@ export async function paceReviewer(s,t,user){
  const panel=await pacePanel(s,t.panel_id),member=await s.member(user);
  if(!panel.config.reviewer_roles.some(id=>member.roles.includes(id)))throw Error('Only the configured pace admins can review this ticket.');return panel;
 }
-export function paceControls(t){return rowButtons(t.status==='draft'?[button('Add / update track time','f7r-pace-track:'+t.id,1),button('Submit all times for review','f7r-pace-submit:'+t.id,3),button('Cancel submission','f7r-pace-cancel:'+t.id,4)]:t.status==='review'?[button('Review and assign tier','f7r-pace-review:'+t.id,3),button('Request corrections','f7r-pace-return:'+t.id)]:t.status==='assigning'?[button('Retry approved role assignment','f7r-pace-retry:'+t.id,3)]:[]);}
+export function paceControls(t){return rowButtons(t.status==='draft'?[button('Add / update qualifying time','f7r-pace-track:'+t.id,1),button('Submit all times for review','f7r-pace-submit:'+t.id,3),button('Cancel submission','f7r-pace-cancel:'+t.id,4)]:t.status==='review'?[button('Review and assign tier','f7r-pace-review:'+t.id,3),button('Request corrections','f7r-pace-return:'+t.id)]:t.status==='assigning'?[button('Retry approved role assignment','f7r-pace-retry:'+t.id,3)]:[]);}
 export const ticketURL=(s,t)=>'https://discord.com/channels/'+s.guild+'/'+t.channel_id;
 export async function paceSummary(s,t,notify=false){
  const a=paceAssessment(t.snapshot,t.entries),lines=a.tracks.map(track=>`${track.name}: **${formatLap(track.ms)}** · ${track.gap.toFixed(3)}% from benchmark\n[View screenshot](https://discord.com/channels/${s.guild}/${t.channel_id}/${t.entries[track.id].proof.message_id})`);
@@ -66,5 +66,5 @@ export async function findPaceProof(s,t,driver,trackId){
  while(seen<1000){const batch=await s.discord('/channels/'+t.channel_id+'/messages?limit=100'+(before?'&before='+before:''));
  for(const message of batch)if(message.author?.id===driver)for(const a of message.attachments||[])if((/^image\//.test(a.content_type||'')||/\.(png|jpe?g|webp)$/i.test(a.filename||''))&&!used.has(a.id))return {channel_id:t.channel_id,message_id:message.id,attachment_id:a.id,filename:a.filename};
  if(batch.length<100)break;before=batch.at(-1).id;seen+=batch.length;
- }throw Error('Upload a screenshot for this track in the private ticket, then press Add / update track time again. One different screenshot is required per track.');
+ }throw Error('Upload a screenshot for this track in the private ticket, then press Add / update qualifying time again. One different screenshot is required per track.');
 }

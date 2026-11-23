@@ -20,9 +20,9 @@ export async function paceInteraction(i,s,waitUntil){
      const claimed=await paceUpdate(s,t,{channel_id:'creating'});
      let channel;try{channel=await s.discord('/guilds/'+s.guild+'/channels','POST',{name:'pace-'+t.number,type:0,parent_id:t.snapshot.category_id,topic:'F7R pace submission '+t.id,permission_overwrites:[{id:s.guild,type:0,allow:'0',deny:'1024'},{id:user.id,type:1,allow:'117760',deny:'0'},{id:APP_ID,type:1,allow:'117776',deny:'0'},...t.snapshot.reviewer_roles.map(id=>({id,type:0,allow:'117760',deny:'0'}))]});}catch(e){await paceUpdate(s,claimed,{channel_id:null});throw e;}
      t=await paceUpdate(s,claimed,{channel_id:channel.id});
-     await s.discord('/channels/'+channel.id+'/messages','POST',{content:'<@'+user.id+'> **Pace submission #'+t.number+'**',embeds:[{description:t.snapshot.instructions+'\n\nRequired tracks:\n'+t.snapshot.tracks.map((x,n)=>(n+1)+'. '+x.name).join('\n')+'\n\nUpload a screenshot, then press **Add / update track time** to choose its track and enter the time. Repeat for every track, then submit for admin review. You can chat here without interrupting submission. Saved progress stays in this ticket.'}],components:paceControls(t),allowed_mentions:{parse:[],users:[user.id]}});
+     await s.discord('/channels/'+channel.id+'/messages','POST',{content:'<@'+user.id+'> **Pace submission #'+t.number+'**',embeds:[{description:'**Qualifying laps only. Time Trial laps are not accepted.**\n\n'+t.snapshot.instructions+'\n\nRequired tracks:\n'+t.snapshot.tracks.map((x,n)=>(n+1)+'. '+x.name).join('\n')+'\n\nUpload a screenshot, then press **Add / update qualifying time** to choose its track and enter the time. Repeat for every track, then submit for admin review. You can chat here without interrupting submission. Saved progress stays in this ticket.'}],components:paceControls(t),allowed_mentions:{parse:[],users:[user.id]}});
    }
-   if(t.channel_id==='creating')return 'Your private ticket is being created. Wait a moment and press Submit TT times again.';
+   if(t.channel_id==='creating')return 'Your private ticket is being created. Wait a moment and press Submit qualifying times again.';
    return {content:'Your private pace ticket is ready. Upload your screenshots there.',components:rowButtons([{type:2,style:5,label:'Open private pace ticket',url:ticketURL(s,t)}])};
  });
  const t=await paceTicket(s,id);if(t.channel_id!==i.channel_id)return reply('Use the buttons inside this private pace ticket.');
@@ -30,8 +30,8 @@ export async function paceInteraction(i,s,waitUntil){
    if(t.driver_id!==user.id||t.status!=='draft')return reply('Only this driver can update an open draft. Submitted times need an admin to request corrections.');
    if(kind==='f7r-pace-track'){
      if(i.type!==5)return modal(kind+':'+t.id+':'+t.revision,'Add a track time',[
-       label('Track for your latest unused screenshot',{type:3,custom_id:'track',options:t.snapshot.tracks.map(x=>({label:x.name,value:x.id})),min_values:1,max_values:1}),label('Lap time (m:ss.mmm)',input('time',1,12))]);
-     return defer(async()=>{if(Number(expected)!==t.revision)throw Error('This ticket changed. Reopen Add / update track time.');const v=fields(i),track=t.snapshot.tracks.find(x=>x.id===v.track);if(!track)throw Error('Choose a required track.');const ms=lapMillis(v.time),proof=await findPaceProof(s,t,user.id,track.id);
+       label('Track for your latest unused screenshot',{type:3,custom_id:'track',options:t.snapshot.tracks.map(x=>({label:x.name,value:x.id})),min_values:1,max_values:1}),label('Qualifying lap time (m:ss.mmm)',input('time',1,12))]);
+     return defer(async()=>{if(Number(expected)!==t.revision)throw Error('This ticket changed. Reopen Add / update qualifying time.');const v=fields(i),track=t.snapshot.tracks.find(x=>x.id===v.track);if(!track)throw Error('Choose a required track.');const ms=lapMillis(v.time),proof=await findPaceProof(s,t,user.id,track.id);
        const saved=await paceUpdate(s,t,{entries:{...t.entries,[track.id]:{ms,proof}}});
        await s.discord('/channels/'+t.channel_id+'/messages','POST',{content:'**'+track.name+' saved: '+formatLap(ms)+'** · '+Object.keys(saved.entries).length+'/'+t.snapshot.tracks.length+' tracks complete.\nScreenshot: https://discord.com/channels/'+s.guild+'/'+t.channel_id+'/'+proof.message_id,components:paceControls(saved),allowed_mentions:{parse:[]}});
        return 'Track time and screenshot saved. Continue in your private ticket.';
