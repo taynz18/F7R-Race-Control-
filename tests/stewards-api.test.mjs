@@ -134,6 +134,7 @@ test('admin ticket deletion requires explicit confirmation and deletes only its 
 });
 
 test('ordinary website stewards see vote count and own vote only, including separate verdict',async()=>{
- const incident={...c,votes:{[driver]:{penalty:'Warning',reason:'Own reason'},other:{penalty:'Race ban',reason:'Private reason'}},data:{...c.data,reporter_verdict:{status:'voting',votes:{other:{penalty:'Season ban',reason:'Secret second vote'}}}}};
- await withFetch(backend(['steward'],incident),async()=>{const r=await(await handleStewards(request({action:'case',id:caseId},token),env)).json();assert.equal(r.tally.count,2);assert.deepEqual(r.tally.totals,{});assert.deepEqual(Object.keys(r.incident.votes),[driver]);assert.deepEqual(r.incident.data.reporter_verdict.votes,{});assert.ok(!JSON.stringify(r).includes('Private reason'));});
+ const incident={...c,votes:{[driver]:{penalty:'Warning',reason:'Own reason'},other:{penalty:'Race ban',reason:'Private reason'}},data:{...c.data,third:{role:'involved',driver_id:'523456789012345678'},third_verdict:{status:'voting',votes:{other:{penalty:'Race ban',reason:'Secret third vote'}}},reporter_verdict:{status:'voting',votes:{other:{penalty:'Season ban',reason:'Secret second vote'}}}}};
+ await withFetch(backend(['steward'],incident),async()=>{const r=await(await handleStewards(request({action:'case',id:caseId},token),env)).json();assert.equal(r.tally.count,2);assert.deepEqual(r.tally.totals,{});assert.deepEqual(Object.keys(r.incident.votes),[driver]);assert.deepEqual(r.incident.data.reporter_verdict.votes,{});assert.deepEqual(r.incident.data.third_verdict.votes,{});assert.ok(!JSON.stringify(r).includes('Private reason'));});
 });
+

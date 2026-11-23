@@ -1,3 +1,4 @@
+import {thirdInteraction} from './third-driver.js';
 import {draftExplanation,postVoteProgress,APP_ID,completeVerdict,syncTicketLock,deleteTicket,ticketDeleteAccess,verdictView,tally,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
 const reply=content=>Response.json({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
 const label=(name,component)=>({type:18,label:name,component});
@@ -9,7 +10,7 @@ function values(interaction) {
 const ticketLink=(guild,channel)=>({type:2,style:5,label:'Open private video ticket',url:'https://discord.com/channels/'+guild+'/'+channel});
 const required=(value,name,min=1,max=1500)=>{if(typeof value!=='string'||value.trim().length<min||value.length>max)throw Error(['statement','defence'].includes(name)?'Enter an incident description, up to '+max+' characters. Short descriptions are accepted.':'Check '+name+'.');return value.trim();};
 export async function stewardInteraction(i,s,waitUntil) {
- const custom=i.data?.custom_id||'',command=i.type===2&&i.data?.name==='verdict';
+ const custom=i.data?.custom_id||'',command=i.type===2&&['verdict','add-driver'].includes(i.data?.name);
  if(!custom.startsWith('f7r-stew-')&&!command)return null;
  const user=i.member?.user||i.user;
  if(!idOK(user?.id)||user.bot)return reply('Sign in with your driver Discord account.');
@@ -20,9 +21,10 @@ export async function stewardInteraction(i,s,waitUntil) {
    return Response.json({type:5,data:{flags:64}});
  };
  try {
+   const thirdResponse=await thirdInteraction(i,s,defer);if(thirdResponse)return thirdResponse;
    if(kind==='f7r-stew-delete'||kind==='f7r-stew-deleteconfirm'){
      const c=await s.incident(reference),access=await ticketDeleteAccess(s,c,user.id);
-     const completed=Boolean(c.outcome||c.data.reporter_verdict?.outcome);
+     const completed=Boolean(c.outcome||c.data.reporter_verdict?.outcome||c.data.third_verdict?.outcome);
      if(kind==='f7r-stew-deleteconfirm'&&i.type===5)return defer(async()=>{
        const v=values(i);if(v.confirm_value?.trim()!=='DELETE')throw Error('Type DELETE to confirm permanent ticket deletion.');
        const revision=Number(selectedTarget);if(!Number.isInteger(revision))throw Error('Open the deletion form again.');
@@ -114,8 +116,9 @@ export async function stewardInteraction(i,s,waitUntil) {
    else if(['f7r-stew-verdict','f7r-stew-start','f7r-stew-vote','f7r-stew-appealdecision','f7r-stew-pick','f7r-stew-close','f7r-stew-sync','f7r-stew-ai'].includes(kind))c=await s.incident(reference);
    if(c) {
      const access=await caseAccess(s,c,user.id);
-     if(c.data.kind!=='penalty_appeal'&&(command||(kind==='f7r-stew-verdict'&&!selectedTarget)))return Response.json({type:4,data:{flags:64,content:'Choose whose outcome to review. Each driver has a separate vote and decision.',components:[{type:1,components:[{type:3,custom_id:'f7r-stew-pick:'+c.id,options:[{label:'Reported driver',value:'accused'},{label:'Reporting driver (separate vote)',value:'reporter'}],min_values:1,max_values:1}]},...rowButtons([button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4)])]}});
+     if(c.data.kind!=='penalty_appeal'&&(command||(kind==='f7r-stew-verdict'&&!selectedTarget)))return Response.json({type:4,data:{flags:64,content:'Choose whose outcome to review. Each driver has a separate vote and decision.',components:[{type:1,components:[{type:3,custom_id:'f7r-stew-pick:'+c.id,options:[{label:'Reported driver',value:'accused'},{label:'Reporting driver (separate vote)',value:'reporter'},...(c.data.third?.role==='involved'?[{label:'Third driver (separate vote)',value:'third'}]:[])],min_values:1,max_values:1}]},...rowButtons([button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4)])]}});
      const raw=c,target=kind==='f7r-stew-pick'?i.data.values?.[0]:selectedTarget||'accused';
+     if(target==='third'&&!raw.data.third?.locked)return reply('The third driver must submit their statement and evidence before voting.');
      c=verdictView(c,target);const suffix=':'+c.id+':'+target;
      if(target==='reporter'&&!raw.data.reporter_verdict){
        if(raw.status==='closed')return reply('The final ticket is locked. Both driver votes must be opened before finalising.');
@@ -142,16 +145,16 @@ export async function stewardInteraction(i,s,waitUntil) {
          const updated=await s.action(raw,user.id,true,c.status==='tied'?'tie_break':'close_vote',{target,penalty:v.penalty,explanation:required(v.explanation,'approved explanation',20,1800)},revision);
          if(verdictView(updated,target).status==='tied')return 'Voting is tied. Use /verdict again, select this driver and finalise with a deciding vote.';
          const delivery=await completeVerdict(s,updated,user.id,true,target);
-         return 'Verdict finalised for the '+(target==='reporter'?'reporting':'reported')+' driver. The ticket is retained for review. Outcome DMs: reporting driver '+delivery.reporter+'; reported driver '+delivery.accused+'.';
+         return 'Verdict finalised for the '+(target==='third'?'third':target==='reporter'?'reporting':'reported')+' driver. The ticket is retained for review. Outcome DMs: reporting driver '+delivery.reporter+'; reported driver '+delivery.accused+(delivery.third?'; third driver '+delivery.third:'')+'.';
        });
        if(expectedRevision!==undefined&&Number(expectedRevision)!==raw.revision)return reply('Votes changed since this draft. Open /verdict and generate a fresh summary.');
        const draft=i.message?.author?.id===APP_ID&&i.message?.embeds?.[0]?.title==='AI explanation draft'?i.message.embeds[0].description:null;
-       return modal('f7r-stew-close'+suffix+':'+c.revision,'Finalise '+(target==='reporter'?'reporting':'reported')+' driver verdict',[
+       return modal('f7r-stew-close'+suffix+':'+c.revision,'Finalise '+(target==='third'?'third':target==='reporter'?'reporting':'reported')+' driver verdict',[
          ...(c.status==='tied'?[label('Deciding vote · tied outcomes only',{type:3,custom_id:'penalty',options:tally(c.votes).winners.map(value=>({label:value,value})),min_values:1,max_values:1})]:[]),
-         label('Approved explanation to send both drivers',{...text('explanation',2,1800),...(draft?{value:draft}:{})})
+         label('Approved explanation to send involved drivers',{...text('explanation',2,1800),...(draft?{value:draft}:{})})
        ]);
      }
-     if(access.leader&&['voting','tied'].includes(c.status)&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'))return Response.json({type:4,data:{flags:64,content:'**'+(target==='reporter'?'Reporting':'Reported')+' driver verdict**\n'+Object.entries(tally(c.votes).totals).map(([penalty,count])=>penalty+': '+count).join('\n')+'\nApprove an explanation to finalise. Ties require your deciding vote.',components:rowButtons([...(c.status==='voting'?[button('Cast / update my vote','f7r-stew-vote'+suffix,1)]:[]),button('Generate AI summary','f7r-stew-ai'+suffix,3),button('Finalise manually','f7r-stew-close'+suffix)])}});
+     if(access.leader&&['voting','tied'].includes(c.status)&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'))return Response.json({type:4,data:{flags:64,content:'**'+(target==='third'?'Third':target==='reporter'?'Reporting':'Reported')+' driver verdict**\n'+Object.entries(tally(c.votes).totals).map(([penalty,count])=>penalty+': '+count).join('\n')+'\nApprove an explanation to finalise. Ties require your deciding vote.',components:rowButtons([...(c.status==='voting'?[button('Cast / update my vote','f7r-stew-vote'+suffix,1)]:[]),button('Generate AI summary','f7r-stew-ai'+suffix,3),button('Finalise manually','f7r-stew-close'+suffix)])}});
      if(c.status==='discussion'&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'))return modal('f7r-stew-start'+suffix,'Choose penalty rules',[
        label('Penalty set',{type:3,custom_id:'set',options:['F1','Endurance'].map(value=>({label:value,value})),min_values:1,max_values:1})
      ]);
@@ -159,7 +162,7 @@ export async function stewardInteraction(i,s,waitUntil) {
        const opened=await s.action(c,user.id,access.leader,'start_vote',{set:values(i).set,target},c.revision);await syncTicketLock(s,opened);
        return 'Verdict voting opened. Use /verdict again to vote, or open Race Control.';
      });
-     if(c.status==='voting'&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'||(kind==='f7r-stew-vote'&&i.type===3)))return modal('f7r-stew-vote'+suffix,target==='reporter'?'Vote · reporting driver':'Vote · reported driver',[
+     if(c.status==='voting'&&(command||kind==='f7r-stew-verdict'||kind==='f7r-stew-pick'||(kind==='f7r-stew-vote'&&i.type===3)))return modal('f7r-stew-vote'+suffix,target==='third'?'Vote · third driver':target==='reporter'?'Vote · reporting driver':'Vote · reported driver',[
        label('Your penalty vote',{type:3,custom_id:'penalty',options:penalties(c.penalty_set).map(value=>({label:value,value})),min_values:1,max_values:1}),
        label('Reason for your vote',text('reason',2,1500))
      ]);

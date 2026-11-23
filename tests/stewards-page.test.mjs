@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {filterChannels} from '../dashboard/channel-search.js';
 class Element {
  constructor(tag='div'){this.tag=tag;this.children=[];this.textContent='';this.value='';this.hidden=false;this.dataset={};}
+ get options(){return this.children;}remove(index){this.children.splice(index,1);}
  append(...children){this.children.push(...children);}replaceChildren(...children){this.children=children;this.value='';}add(option){if(!this.children.length)this.value=option.value;this.children.push(option);}scrollIntoView(){}
 }
 test('steward page shows private evidence, voting and leader-only tie controls',async()=>{
@@ -31,6 +32,8 @@ test('steward page shows private evidence, voting and leader-only tie controls',
  c.data.reporter_verdict={status:'voting',penalty_set:'F1',votes:{[actor]:{penalty:'Warning',reason:'Reporting driver vote only'}},notifications:{}};
  el('verdict-target').value='reporter';await el('verdict-target').onchange();assert.match(el('verdict-heading').textContent,/reporting driver/);assert.equal(el('vote-form').hidden,false);assert.equal(el('decision').hidden,true);
  el('verdict-target').value='accused';await el('verdict-target').onchange();assert.equal(el('decision-outcome').textContent,'5 seconds');assert.equal(el('vote-form').hidden,true);
+ c.data.third={driver_id:'423456789012345678',name:'Third driver',role:'involved',locked:true,statement:'Third account',links:['https://example.com/third']};c.data.third_verdict={status:'voting',penalty_set:'F1',votes:{},notifications:{}};
+ el('verdict-target').value='third';await el('verdict-target').onchange();assert.equal(el('third-section').hidden,false);assert.equal(el('third-text').textContent,'Third account · Submitted and locked');assert.match(el('verdict-heading').textContent,/third driver/);assert.equal(el('vote-form').hidden,false);assert.equal(el('reporter-reason').hidden,true);
+ el('verdict-target').value='accused';await el('verdict-target').onchange();
  c.status='discussion';c.data.kind='penalty_appeal';c.data.original_penalty='10 seconds';await context.testCase(id);assert.equal(el('defence-section').hidden,true);assert.equal(el('start-form').hidden,true);assert.equal(el('approval').hidden,false);assert.match(el('close-vote').textContent,/Decide appeal/);assert.equal(el('tie-choice').children.length,2);
 });
-

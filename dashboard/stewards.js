@@ -43,16 +43,19 @@ function links(id,urls) {
 async function loadCase(id) {
  current=await api('case',{id,target:verdictTarget});const raw=current.incident,a=current.access,appeal=raw.data.kind==='penalty_appeal';
  if(appeal)verdictTarget='accused';
- const secondary=verdictTarget==='reporter',v=raw.data.reporter_verdict;
+ const third=raw.data.third;
+ const targetSelect=$('verdict-target');for(let n=targetSelect.options.length-1;n>=0;n--)if(targetSelect.options[n].value==='third')targetSelect.remove(n);if(third?.role==='involved')targetSelect.add(new Option('Third driver · separate vote','third'));
+ $('third-section').hidden=!third;if(third){$('third-heading').textContent=third.role==='witness'?'Witness statement':'Third driver defence';$('third-driver').textContent=third.name||who(third.driver_id);$('third-text').textContent=(third.statement||'Awaiting statement.')+(third.locked?' · Submitted and locked':' · Not yet submitted')+(third.no_video?' · No video evidence provided':'');links('third-links',third.links);$('third-ticket').hidden=!raw.data.third_ticket;if(raw.data.third_ticket)$('third-ticket').href='https://discord.com/channels/'+raw.guild_id+'/'+raw.data.third_ticket;}
+ const secondary=verdictTarget!=='accused',v=verdictTarget==='third'?raw.data.third_verdict:raw.data.reporter_verdict;
  const c=secondary?{...raw,status:v?.status||'discussion',penalty_set:v?.penalty_set||null,votes:v?.votes||{},notifications:v?.notifications||{},outcome:v?.outcome||null,explanation:v?.explanation||null}:raw;
  current.baseIncident=raw;current.incident=c;
  $('verdict-target-section').hidden=appeal;$('verdict-target').value=verdictTarget;
- $('verdict-target-help').textContent=secondary?'Separate outcome for the driver who submitted the report. The reported driver’s votes and decision remain unchanged.':'Outcome for the driver named in the report.';
- $('reporter-reason').hidden=$('reporter-reason-label').hidden=!secondary||Boolean(v);
+ $('verdict-target-help').textContent=verdictTarget==='third'?'Separate verdict for the third driver. Their statement must be submitted before voting.':secondary?'Separate outcome for the driver who submitted the report. The reported driver’s votes and decision remain unchanged.':'Outcome for the driver named in the report.';
+ $('reporter-reason').hidden=$('reporter-reason-label').hidden=verdictTarget!=='reporter'||Boolean(v);
  $('reporter-reason').value='';
- const deleted=raw.data.deletion,completed=Boolean(raw.outcome||raw.data.reporter_verdict?.outcome); $('delete-ticket-section').hidden=(completed&&!a.leader)||deleted?.status==='deleted';$('delete-ticket-heading').textContent=completed?'Completed ticket review':'Delete ticket without a verdict';$('delete-ticket-help').textContent=completed?'The outcome is retained in the locked Discord ticket. Only a Head Steward or CEO can permanently delete it after review. The approved decision stays in the audit.':'Remove a ticket needing no investigation. This does not record NFA or send a penalty decision.';$('delete-ticket').textContent=completed?'Delete completed ticket · Head / CEO':'Delete ticket · staff only';$('delete-ticket-note').textContent=deleted?.status==='deleting'?'Deletion started. Retry to finish removing the remaining case channels.':'';
+ const deleted=raw.data.deletion,completed=Boolean(raw.outcome||raw.data.reporter_verdict?.outcome||raw.data.third_verdict?.outcome); $('delete-ticket-section').hidden=(completed&&!a.leader)||deleted?.status==='deleted';$('delete-ticket-heading').textContent=completed?'Completed ticket review':'Delete ticket without a verdict';$('delete-ticket-help').textContent=completed?'The outcome is retained in the locked Discord ticket. Only a Head Steward or CEO can permanently delete it after review. The approved decision stays in the audit.':'Remove a ticket needing no investigation. This does not record NFA or send a penalty decision.';$('delete-ticket').textContent=completed?'Delete completed ticket · Head / CEO':'Delete ticket · staff only';$('delete-ticket-note').textContent=deleted?.status==='deleting'?'Deletion started. Retry to finish removing the remaining case channels.':'';
  $('case-detail').hidden=false;$('case-group').textContent=a.route.config.name;
- $('case-title').textContent=`${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${c.data.race}`;$('case-meta').textContent=c.data.lap+' · '+(v?'Reported driver: '+stateNames[raw.status]+' · Reporting driver: '+stateNames[v.status]:stateNames[c.status]);
+ $('case-title').textContent=`${appeal?'In-game penalty appeal':'Case'} #${c.number} · ${c.data.race}`;$('case-meta').textContent=c.data.lap+' · '+(v?'Reported driver: '+stateNames[raw.status]+' · '+(verdictTarget==='third'?'Third driver':'Reporting driver')+': '+stateNames[v.status]:stateNames[c.status]);
  $('case-access').textContent=a.steward?(a.leader?'Head Steward / CEO access · you can close voting and decide ties.':'Steward access · discussion and one vote per case.'):'Admin oversight · use your Discord steward access link to take part in the verdict.';
  $('report-driver').textContent=c.data.reporter_name||who(c.reporter_id);$('report-text').textContent=c.data.report.statement;links('report-links',c.data.report.links);
  $('report-heading').textContent=(appeal?'Appeal':'Report')+(c.status==='awaiting_report_evidence'?' · draft, collecting clips':' · locked');
@@ -68,20 +71,20 @@ async function loadCase(id) {
  $('review-link').hidden=!c.review_channel_id;if(c.review_channel_id)$('review-link').href=`https://discord.com/channels/${c.guild_id}/${c.review_channel_id}`;
  $('comments').replaceChildren(...c.comments.map(x=>node('p',`${who(x.author)} · ${new Date(x.at).toLocaleString()}\n${x.text}`,'steward-entry')));
  $('comment-form').hidden=!a.steward||(raw.status==='closed'&&(!v||v.status==='closed'));
- $('verdict-heading').textContent=appeal?'In-game penalty review':secondary?'Verdict vote · reporting driver':'Verdict vote · reported driver';
+ $('verdict-heading').textContent=verdictTarget==='third'?'Verdict vote · third driver':appeal?'In-game penalty review':secondary?'Verdict vote · reporting driver':'Verdict vote · reported driver';
  $('vote-state').textContent=appeal?'Only a Head Steward or CEO decides whether the in-game penalty stays or is removed. This appeal does not use a steward penalty vote.':`${c.penalty_set?c.penalty_set+' rules · ':''}${current.tally.count} steward vote(s). Any number of stewards may vote. Only a Head Steward or CEO closes voting.`;
  $('tally').replaceChildren(...Object.entries(current.tally.totals).map(([penalty,count])=>node('span',`${penalty}: ${count}`,'steward-status')));
- $('start-form').hidden=appeal||!a.steward||(c.status!=='discussion'||!['discussion','voting','tied','closed'].includes(raw.status)||(secondary&&!v&&raw.status==='closed'));$('penalty-set').value=a.route.config.default_set;
+ $('start-form').hidden=(verdictTarget==='third'&&!third?.locked)||appeal||!a.steward||(c.status!=='discussion'||!['discussion','voting','tied','closed'].includes(raw.status)||(secondary&&!v&&raw.status==='closed'));$('penalty-set').value=a.route.config.default_set;
  $('vote-form').hidden=appeal||!a.steward||c.status!=='voting';options('penalty',current.penalties);
  const own=c.votes[desk.driverId];if(own){$('penalty').value=own.penalty;$('vote-reason').value=own.reason;}else $('vote-reason').value='';
  $('votes').replaceChildren(...Object.entries(c.votes).map(([id,v])=>node('p',`${who(id)} · ${v.penalty}\n${v.reason}`,'steward-entry')));
  $('approval').hidden=!a.leader||!(appeal?c.status==='discussion':['voting','tied'].includes(c.status));$('explanation').value='';$('brief-note').textContent=desk.aiAvailable?'AI drafting is connected. Every draft needs a steward’s review and approval.':'AI summarisation is not connected yet. The draft button provides an editable template; you can write and approve the explanation now.';
  $('approval-help').textContent=appeal?'Review the driver’s explanation and clips. Select Keep or Remove and explain the decision. Any result correction must still be applied by league administration.':'Review the votes and explanation before closing. A tied vote stays pending until a Head Steward or CEO selects one of the tied outcomes.';
- $('explanation-label').textContent=appeal?'Approved appeal explanation to send to the driver':'Approved explanation to send to both drivers';
+ $('explanation-label').textContent=appeal?'Approved appeal explanation to send to the driver':'Approved explanation to send to involved drivers';
  const tied=c.status==='tied';$('tie-label').hidden=$('tie-choice').hidden=!tied&&!appeal;options('tie-choice',appeal?['In-game penalty kept','In-game penalty removed']:current.tally.winners);$('tie-label').textContent=appeal?'Keep or remove the original in-game penalty':'Deciding vote · tied outcomes only';
  $('close-vote').textContent=appeal?'Decide appeal and send driver DM':tied?'Cast deciding vote and send outcome DMs':'Close voting and send outcome DMs';
  $('decision').hidden=c.status!=='closed';$('decision-outcome').textContent=c.outcome||'';$('decision-text').textContent=c.explanation||'';
- $('delivery').textContent=c.status==='closed'?`Outcome DMs · ${appeal?'appealing':'reporting'} driver: ${c.notifications.reporter||'not attempted'}`+(appeal?'':` · reported driver: ${c.notifications.accused||'not attempted'}`):'';
+ $('delivery').textContent=c.status==='closed'?`Outcome DMs · ${appeal?'appealing':'reporting'} driver: ${c.notifications.reporter||'not attempted'}`+(appeal?'':` · reported driver: ${c.notifications.accused||'not attempted'}`)+(third?.role==='involved'?` · third driver: ${c.notifications.third||'not attempted'}`:''):'';
  $('send-pending').hidden=!a.leader||c.status!=='closed'||Boolean(deleted);
  if(deleted){$('case-meta').textContent=deleted.status==='deleted'?'Ticket deleted without a verdict':'Ticket deletion in progress';$('case-access').textContent='Staff audit · '+deleted.reason;$('open-review').disabled=true;$('comment-form').hidden=true;$('start-form').hidden=true;$('vote-form').hidden=true;$('approval').hidden=true;$('send-pending').hidden=true;$('verdict-target-section').hidden=true;}
  $('case-detail').scrollIntoView({behavior:'smooth',block:'start'});status(`Case #${c.number} loaded.`);
@@ -108,7 +111,7 @@ $('brief').onclick=()=>run(async()=>{const result=await api('brief',{id:current.
 $('close-vote').onclick=()=>run(async()=>{
  const c=current.incident;if($('explanation').value.trim().length<20)throw Error('Write or approve an explanation of at least 20 characters.');
  const appeal=c.data.kind==='penalty_appeal';
- if(!window.confirm(appeal?'Finalise this in-game penalty appeal and DM the driver your decision?':'Finalise the '+(verdictTarget==='reporter'?'reporting':'reported')+' driver verdict on case #'+c.number+'? If there is a winner, both drivers will receive this outcome and explanation.'))return;
+ if(!window.confirm(appeal?'Finalise this in-game penalty appeal and DM the driver your decision?':'Finalise the '+(verdictTarget==='third'?'third':verdictTarget==='reporter'?'reporting':'reported')+' driver verdict on case #'+c.number+'? If there is a winner, the involved drivers will receive this outcome and explanation.'))return;
  await change(appeal?'appeal_decision':c.status==='tied'?'tie_break':'close_vote',{penalty:$('tie-choice').value,explanation:$('explanation').value,revision:c.revision});
  status(current.incident.status==='tied'?'Voting is tied. Select a tied outcome and cast the deciding vote.':'Decision recorded. Check the outcome DM delivery status below.');
 });
@@ -168,4 +171,3 @@ try{
  const r=await fetch('config.json',{cache:'no-store'});if(!r.ok)throw Error('Configuration unavailable.');config=await r.json();client=window.supabase.createClient(config.supabase_url,config.supabase_publishable_key,{auth:window.F7RAuth.options()});
  const {data}=await client.auth.getSession();if(token||data.session)await run(loadDesk);
 }catch(error){status(error.message);}
-

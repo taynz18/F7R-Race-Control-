@@ -1,3 +1,4 @@
+import {registerAddDriver} from '../_shared/third-driver.js';
 import { refreshDiscordRoster, readPostConfig } from "../_shared/discord-roster.js";
 import {createService} from '../_shared/stewards.js';
 import {paceInteraction} from '../_shared/pace-interactions.js';
@@ -10,6 +11,8 @@ const encoder = new TextEncoder();
 const api = "https://discord.com/api/v10";
 const privateReply = (content) => Response.json({type: 4, data: {content, flags: 64, allowed_mentions: {parse: []}}});
 
+// Register the additive guild command on cold start; never replace the guild command list.
+if(typeof EdgeRuntime!=='undefined')EdgeRuntime.waitUntil(registerAddDriver(createService(Deno.env.get.bind(Deno.env))).then(c=>console.info('F7R add-driver command ready',c.id)).catch(e=>console.error('F7R add-driver registration failed',e.message)));
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response(null, {status: 405});
   const signature = req.headers.get("x-signature-ed25519") ?? "";
@@ -26,7 +29,7 @@ Deno.serve(async (req) => {
 
   if (interaction.data?.custom_id?.startsWith('f7r-pace-')) return await paceInteraction(interaction,createService(Deno.env.get.bind(Deno.env)),task=>EdgeRuntime.waitUntil(task));
 
-  if (interaction.data?.custom_id?.startsWith('f7r-stew-') || interaction.type===2 && interaction.data?.name==='verdict') {
+  if (interaction.data?.custom_id?.startsWith('f7r-stew-') || interaction.type===2 && ['verdict','add-driver'].includes(interaction.data?.name)) {
     return await stewardInteraction(interaction,createService(Deno.env.get.bind(Deno.env)),task=>EdgeRuntime.waitUntil(task));
   }
 
