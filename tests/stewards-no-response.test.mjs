@@ -45,6 +45,11 @@ test('Discord opens the form without waiting for case storage or role lookups',a
  const i=interaction(),s={incident:()=>{throw Error('Must not fetch case before acknowledging');},member:()=>{throw Error('Must not fetch roles before acknowledging');}};
  const response=await(await stewardInteraction(i,s,()=>{})).json();assert.equal(response.type,9);
 });
+test('leadership modal satisfies Discord field and title length limits',async()=>{
+ const response=await(await noResponseInteraction(interaction(),{},()=>{})).json(),modal=response.data;
+ assert.equal(response.type,9);assert.ok(modal.title.length>0&&modal.title.length<=45);assert.ok(modal.custom_id.length<=100);assert.ok(modal.components.length<=5);
+ for(const label of modal.components){assert.equal(label.type,18);assert.ok(label.label.length>0&&label.label.length<=45,'Discord rejects label: '+label.label);assert.equal(label.component.type,4);assert.ok(label.component.custom_id.length<=100);assert.ok(label.component.min_length<=label.component.max_length);assert.ok(label.component.max_length<=4000);}
+});
 test('Discord acknowledges submission while storage is still pending, then enforces permissions',async()=>{
  let release;const blocked=new Promise(resolve=>{release=resolve;}),tasks=[],patches=[],originalFetch=globalThis.fetch;
  const i=confirmInteraction();i.token='test-interaction';

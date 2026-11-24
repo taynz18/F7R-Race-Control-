@@ -25,7 +25,7 @@ export async function noResponseInteraction(i,s,defer){
  if(!['f7r-stew-proceed','f7r-stew-proceedconfirm'].includes(kind))return null;
  const user=i.member?.user||i.user;if(!uuidOK(id))throw Error('Invalid case.');
  // Opening a form does not change a case. Keep all network calls after the deferred submission acknowledgement.
- if(kind==='f7r-stew-proceed')return Response.json({type:9,data:{custom_id:'f7r-stew-proceedconfirm:'+id,title:'Proceed without driver response',components:[{type:18,label:'Reason / response deadline given to the driver',component:{type:4,custom_id:'reason',style:2,required:true,min_length:10,max_length:500}},{type:18,label:'Type PROCEED · preserves existing evidence',component:{type:4,custom_id:'confirm',style:1,required:true,min_length:7,max_length:7}}]}});
+ if(kind==='f7r-stew-proceed')return Response.json({type:9,data:{custom_id:'f7r-stew-proceedconfirm:'+id,title:'Proceed without driver response',components:[{type:18,label:'Reason / driver response deadline',component:{type:4,custom_id:'reason',style:2,required:true,min_length:10,max_length:500}},{type:18,label:'Type PROCEED · preserves existing evidence',component:{type:4,custom_id:'confirm',style:1,required:true,min_length:7,max_length:7}}]}});
  if(i.type!==5)throw Error('Open the leadership confirmation form again.');
  const fields=Object.fromEntries((i.data.components||[]).flatMap(x=>[x.component,...(x.components||[])].filter(Boolean)).map(x=>[x.custom_id,x.value]));
  if(fields.confirm?.trim()!=='PROCEED')throw Error('Type PROCEED to confirm.');
