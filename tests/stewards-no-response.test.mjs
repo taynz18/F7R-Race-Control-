@@ -2,21 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {noResponseInteraction,syncNoResponseButtons} from '../supabase/functions/_shared/no-response.js';
 import {addNoResponseControl,APP_ID} from '../supabase/functions/_shared/stewards.js';
+import {stewardInteraction} from '../supabase/functions/_shared/steward-interactions.js';
 const accused='111111111111111111',reporter='222222222222222222',head='333333333333333333',ticket='444444444444444444';
 const c={id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',number:1021,status:'awaiting_defence',revision:2,reporter_id:reporter,accused_id:accused,route_id:'tier1',data:{kind:'incident',report:{locked:true,statement:'Report'},report_ticket:ticket,defence_ticket:ticket}};
 const route={config:{leader_roles:['head'],steward_roles:['steward']}};
 const interaction=(kind='proceed')=>({type:3,channel_id:ticket,user:{id:head},data:{custom_id:'f7r-stew-'+kind+':'+c.id}});
 const service=(incident=c,roles=['head'])=>({incident:async()=>incident,route:async()=>route,member:async()=>({roles})});
+const confirmInteraction=()=>({...interaction('proceedconfirm'),type:5,data:{custom_id:'f7r-stew-proceedconfirm:'+c.id,components:[{component:{custom_id:'reason',value:'The response deadline has passed.'}},{component:{custom_id:'confirm',value:'PROCEED'}}]}});
 test('leadership override requires a reason and explicit PROCEED confirmation',async()=>{
- const result=await(await noResponseInteraction(interaction(),service(),()=>{})).json();assert.equal(result.type,9);assert.match(result.data.custom_id,/:2$/);assert.equal(result.data.components[0].component.min_length,10);assert.equal(result.data.components[1].component.custom_id,'confirm');
+ const result=await(await noResponseInteraction(interaction(),{incident:()=>{throw Error('Form must open without network access');}},()=>{})).json();assert.equal(result.type,9);assert.equal(result.data.custom_id,'f7r-stew-proceedconfirm:'+c.id);assert.equal(result.data.components[0].component.min_length,10);assert.equal(result.data.components[1].component.custom_id,'confirm');
 });
 test('ordinary stewards and involved leaders cannot override an unanswered defence',async()=>{
- await assert.rejects(()=>noResponseInteraction(interaction(),service(c,['steward']),()=>{}),/Only.*Head Steward/);
- const i=interaction();i.user.id=accused;await assert.rejects(()=>noResponseInteraction(i,service(),()=>{}),/not involved/);
+ await assert.rejects(()=>noResponseInteraction(confirmInteraction(),service(c,['steward']),work=>work()),/Only.*Head Steward/);
+ const i=confirmInteraction();i.user.id=accused;await assert.rejects(()=>noResponseInteraction(i,service(),work=>work()),/not involved/);
 });
 test('submitted defences and in-game appeals cannot be overridden',async()=>{
- await assert.rejects(()=>noResponseInteraction(interaction(),service({...c,status:'discussion'}),()=>{}),/not awaiting/);
- await assert.rejects(()=>noResponseInteraction(interaction(),service({...c,data:{...c.data,kind:'penalty_appeal'}}),()=>{}),/not awaiting/);
+ await assert.rejects(()=>noResponseInteraction(confirmInteraction(),service({...c,status:'discussion'}),work=>work()),/not awaiting/);
+ await assert.rejects(()=>noResponseInteraction(confirmInteraction(),service({...c,data:{...c.data,kind:'penalty_appeal'}}),work=>work()),/not awaiting/);
 });
 test('pending defence buttons gain one leadership action without losing driver controls',()=>{
  const old=[{type:1,components:[{type:2,custom_id:'f7r-stew-defend:'+c.id},{type:2,custom_id:'f7r-stew-nodefence:'+c.id}]}],added=addNoResponseControl(old,c);
@@ -38,4 +40,19 @@ test('stale confirmation or missing confirmation never advances a case',async()=
  const i=interaction('proceedconfirm');i.type=5;i.data.custom_id+=':1';i.data.components=[{component:{custom_id:'reason',value:'Deadline passed yesterday.'}},{component:{custom_id:'confirm',value:'PROCEED'}}];
  await assert.rejects(()=>noResponseInteraction(i,service(),work=>work()),/case changed/);
  i.data.components[1].component.value='';await assert.rejects(()=>noResponseInteraction(i,service(),work=>work()),/Type PROCEED/);
+});
+test('Discord opens the form without waiting for case storage or role lookups',async()=>{
+ const i=interaction(),s={incident:()=>{throw Error('Must not fetch case before acknowledging');},member:()=>{throw Error('Must not fetch roles before acknowledging');}};
+ const response=await(await stewardInteraction(i,s,()=>{})).json();assert.equal(response.type,9);
+});
+test('Discord acknowledges submission while storage is still pending, then enforces permissions',async()=>{
+ let release;const blocked=new Promise(resolve=>{release=resolve;}),tasks=[],patches=[],originalFetch=globalThis.fetch;
+ const i=confirmInteraction();i.token='test-interaction';
+ globalThis.fetch=async(url,options)=>{patches.push(JSON.parse(options.body));return Response.json({});};
+ try{
+   const s={...service(c,[]),incident:()=>blocked};
+   const response=await(await stewardInteraction(i,s,task=>tasks.push(task))).json();
+   assert.equal(response.type,5);assert.equal(response.data.flags,64);assert.equal(patches.length,0);
+   release(c);await Promise.all(tasks);assert.match(patches[0].content,/Only assigned stewards/);
+ }finally{release(c);globalThis.fetch=originalFetch;}
 });
