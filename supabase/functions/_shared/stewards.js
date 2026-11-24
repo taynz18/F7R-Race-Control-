@@ -82,6 +82,13 @@ export async function ensureMessageReading(s) {
 export function removeReportShortcuts(components) {
  return structuredClone(components||[]).map(row=>({...row,components:(row.components||[]).filter(b=>!b.custom_id?.startsWith('f7r-stew-report:'))})).filter(row=>row.components.length);
 }
+export function addNoResponseControl(components,c){
+ const copy=structuredClone(components||[]),ids=['f7r-stew-defend:'+c.id,'f7r-stew-finish-defence:'+c.id,'f7r-stew-ticket-defence:'+c.id],custom='f7r-stew-proceed:'+c.id;
+ if(!['awaiting_defence','awaiting_defence_evidence'].includes(c.status)||!copy.some(r=>r.components?.some(b=>ids.includes(b.custom_id)))||copy.some(r=>r.components?.some(b=>b.custom_id===custom)))return copy;
+ const control=button('Proceed without driver response · Head / CEO',custom,2),row=copy.find(r=>r.type===1&&r.components?.length<5);
+ if(row)row.components.push(control);else if(copy.length<5)copy.push({type:1,components:[control]});
+ return copy;
+}
 export async function syncTicketMessages(s) {
  const rows=await s.db('f7r_steward_cases?guild_id=eq.'+s.guild+'&status=neq.closed&limit=200');let updated=0;
  for(const c of rows){
@@ -91,7 +98,7 @@ export async function syncTicketMessages(s) {
        for(const m of messages){
          if(m.author?.id!==APP_ID||!m.components?.some(row=>row.components?.some(b=>b.custom_id?.startsWith('f7r-stew-'))))continue;
          const content=m.content.replace('**Mention <@'+APP_ID+'> in each clip message** so the bot can read your evidence.','The bot reads evidence automatically; you do not need to tag it.');
-         const components=removeReportShortcuts(m.components);
+         const components=addNoResponseControl(removeReportShortcuts(m.components),c);
          if(components.some(row=>row.components?.some(b=>b.custom_id==='f7r-stew-defend:'+c.id))&&!components.some(row=>row.components?.some(b=>b.custom_id==='f7r-stew-nodefence:'+c.id))&&components[0]?.components.length<5)components[0].components.push(button('Submit without defence','f7r-stew-nodefence:'+c.id));
          if(!components.some(row=>row.components?.some(b=>b.custom_id==='f7r-stew-delete:'+c.id))&&components[0]?.components.length<5)components[0].components.push(button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4));
          if(content!==m.content||JSON.stringify(components)!==JSON.stringify(m.components)){await s.discord('/channels/'+id+'/messages/'+m.id,'PATCH',{content,components,allowed_mentions:{parse:[]}});updated++;}
@@ -139,7 +146,7 @@ export async function notifyDefence(s,c) {
  // Remove the reporter before admitting the other driver; never grant access to both.
  await s.discord('/channels/'+channel+'/permissions/'+c.reporter_id,'PUT',{type:1,allow:'0',deny:'1024'});
  await s.discord('/channels/'+channel+'/permissions/'+c.accused_id,'PUT',{type:1,allow:String(1024+2048+32768+65536+16384),deny:'0'});
- await s.discord('/channels/'+channel+'/messages','POST',{content:`<@${c.accused_id}> **Defence requested · Case #${c.number}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\nThe reporting driver has submitted their evidence and left this ticket. Use Submit defence to add your account, then upload your clips or paste evidence links here. **Video evidence is mandatory.** Stewards can see the full case.`,allowed_mentions:{parse:[],users:[c.accused_id]},components:rowButtons([button('Submit defence','f7r-stew-defend:'+c.id,1),button('Submit without defence','f7r-stew-nodefence:'+c.id)])});
+ await s.discord('/channels/'+channel+'/messages','POST',{content:`<@${c.accused_id}> **Defence requested · Case #${c.number}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\nThe reporting driver has submitted their evidence and left this ticket. Use Submit defence to add your account, then upload your clips or paste evidence links here. **Video evidence is mandatory.** Stewards can see the full case.`,allowed_mentions:{parse:[],users:[c.accused_id]},components:rowButtons([button('Submit defence','f7r-stew-defend:'+c.id,1),button('Submit without defence','f7r-stew-nodefence:'+c.id),button('Proceed without driver response · Head / CEO','f7r-stew-proceed:'+c.id)])});
  const status=await s.dm(c.accused_id,{content:`**F7R case #${c.number}: defence requested**\nA report has been submitted concerning you in **${safeText(c.data.race)}**, ${safeText(c.data.lap)}. Open your private ticket: https://discord.com/channels/${s.guild}/${channel}\nSubmit your account and video evidence in that ticket. The reporting driver no longer has access.`,components:rowButtons([button('Submit defence','f7r-stew-defend:'+c.id)])});
  const latest=await s.incident(c.id);
  await s.db('f7r_steward_cases?id=eq.'+c.id,'PATCH',{data:{...latest.data,defence_ticket:channel,defence_invitation:status}});
@@ -210,7 +217,7 @@ export async function evidenceTicket(s,c,r,phase) {
  const roles=[...new Set([...(appeal?[]:r.config.steward_roles),...r.config.leader_roles])],allow=String(1024+2048+32768+65536+16384);
  const channel=existing?{id:existing}:await s.discord('/guilds/'+s.guild+'/channels','POST',{name:`case-${c.number}`,type:0,...(r.config.category_id?{parent_id:r.config.category_id}:{}),permission_overwrites:[{id:s.guild,type:0,deny:'1024',allow:'0'},...roles.map(id=>({id,type:0,allow,deny:'0'})),{id:APP_ID,type:1,allow,deny:'0'},...[...new Set([c.reporter_id,c.accused_id])].filter(id=>id!==APP_ID).map(id=>({id,type:1,allow:id===driver?allow:'0',deny:id===driver?'0':'1024'}))]});
  if(c.data[key]!==channel.id){const latest=await s.incident(c.id);await s.db('f7r_steward_cases?id=eq.'+c.id,'PATCH',{data:{...latest.data,[key]:channel.id}});}
- await s.discord('/channels/'+channel.id+'/messages','POST',{content:`<@${driver}> **${appeal?'In-game penalty appeal':phase==='report'?'Report':'Defence'} · Case #${c.number}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\n\nAttach up to five video clips directly here, or paste up to five HTTPS evidence links. The bot reads evidence automatically; you do not need to tag it. **Video evidence is mandatory.** Press Submit below when ready. This locks your statement and removes your access. Stewards retain access throughout. After you submit, the next stage continues in this same ticket.`,embeds:[{description:safeText(c.data[phase].statement)}],allowed_mentions:{parse:[],users:[driver]},components:rowButtons([button(phase==='report'?'Submit report / appeal':'Submit defence','f7r-stew-finish-'+phase+':'+c.id,1),button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4)])});
+ await s.discord('/channels/'+channel.id+'/messages','POST',{content:`<@${driver}> **${appeal?'In-game penalty appeal':phase==='report'?'Report':'Defence'} · Case #${c.number}**\n${safeText(c.data.race)} · ${safeText(c.data.lap)}\n\nAttach up to five video clips directly here, or paste up to five HTTPS evidence links. The bot reads evidence automatically; you do not need to tag it. **Video evidence is mandatory.** Press Submit below when ready. This locks your statement and removes your access. Stewards retain access throughout. After you submit, the next stage continues in this same ticket.`,embeds:[{description:safeText(c.data[phase].statement)}],allowed_mentions:{parse:[],users:[driver]},components:rowButtons([button(phase==='report'?'Submit report / appeal':'Submit defence','f7r-stew-finish-'+phase+':'+c.id,1),button('Delete ticket · staff only','f7r-stew-delete:'+c.id,4),...(phase==='defence'?[button('Proceed without driver response · Head / CEO','f7r-stew-proceed:'+c.id)]:[])])});
  return channel.id;
 }
 export async function collectEvidence(s,c,phase,driver) {

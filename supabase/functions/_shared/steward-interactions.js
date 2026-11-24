@@ -1,3 +1,4 @@
+import {noResponseInteraction} from './no-response.js';
 import {thirdInteraction} from './third-driver.js';
 import {draftExplanation,postVoteProgress,APP_ID,completeVerdict,syncTicketLock,deleteTicket,ticketDeleteAccess,verdictView,tally,idOK,evidenceLinks,penalties,accessFor,button,rowButtons,makeSession,caseAccess,notifyDefence,reviewChannel,evidenceTicket,collectEvidence,sendOutcomes} from './stewards.js';
 const reply=content=>Response.json({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
@@ -21,6 +22,7 @@ export async function stewardInteraction(i,s,waitUntil) {
    return Response.json({type:5,data:{flags:64}});
  };
  try {
+   const noResponse=await noResponseInteraction(i,s,defer);if(noResponse)return noResponse;
    const thirdResponse=await thirdInteraction(i,s,defer);if(thirdResponse)return thirdResponse;
    if(kind==='f7r-stew-delete'||kind==='f7r-stew-deleteconfirm'){
      const c=await s.incident(reference),access=await ticketDeleteAccess(s,c,user.id);
