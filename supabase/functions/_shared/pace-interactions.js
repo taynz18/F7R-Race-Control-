@@ -1,7 +1,7 @@
 import {APP_ID,idOK,button,rowButtons} from './stewards.js';
 import {lapMillis,formatLap,pacePanel,paceTicket,paceUpdate,paceReviewer,paceControls,paceAssessment,paceSummary,findPaceProof,assignPaceTier,ticketURL} from './pace.js';
 const reply=content=>Response.json({type:4,data:{content,flags:64,allowed_mentions:{parse:[]}}});
-const label=(name,component)=>({type:18,label:name,component});
+const label=(name,component)=>({type:18,label:name.slice(0,45),component});
 const input=(id,style,max)=>({type:4,custom_id:id,style,max_length:max,required:true});
 const modal=(id,title,components)=>Response.json({type:9,data:{custom_id:id,title,components}});
 function fields(i){return Object.fromEntries((i.data.components||[]).flatMap(r=>[r.component,...r.components||[]].filter(Boolean)).map(c=>[c.custom_id,c.values?.[0]??c.value]));}
@@ -51,7 +51,7 @@ export async function paceInteraction(i,s,waitUntil){
    const assessment=paceAssessment(t.snapshot,t.entries);
    if(i.type!==5)return modal(kind+':'+t.id+':'+t.revision,'Verify screenshots and assign tier',[
      label(('Final tier (suggested: '+assessment.tier.name+')').slice(0,45),{type:3,custom_id:'tier',options:t.snapshot.tiers.map(x=>({label:x.name,value:x.role_id,default:x.role_id===assessment.tier.role_id})),min_values:1,max_values:1}),
-     label('Approval reason / explanation for any override',input('reason',2,1000)),label('Type VERIFIED after checking every screenshot',input('verified',1,8))]);
+     label('Approval reason / tier override explanation',input('reason',2,1000)),label('Type VERIFIED after checking every screenshot',input('verified',1,8))]);
    return defer(async()=>{if(Number(expected)!==t.revision)throw Error('The driver submission changed. Review it again.');const v=fields(i),tier=t.snapshot.tiers.find(x=>x.role_id===v.tier);if(!tier||v.verified?.trim()!=='VERIFIED'||!v.reason?.trim())throw Error('Choose a tier, provide a reason and type VERIFIED after checking the screenshots.');
      const claimed=await paceUpdate(s,t,{status:'assigning',decision:{tier,reason:v.reason.trim(),actor:user.id,at:new Date().toISOString(),suggested:assessment.tier,gap:assessment.gap}});
      try{const result=await assignPaceTier(s,claimed);return 'Approved and assigned '+tier.name+'. Driver DM: '+result.delivery+'. The ticket is retained read-only.';}catch(e){await s.discord('/channels/'+t.channel_id+'/messages','POST',{content:'Approval is saved, but role assignment / delivery needs attention: '+e.message,components:paceControls(claimed),allowed_mentions:{parse:[]}});throw e;}
