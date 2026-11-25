@@ -33,12 +33,12 @@ export async function paceReviewer(s,t,user){
  const panel=await pacePanel(s,t.panel_id),member=await s.member(user);
  if(!panel.config.reviewer_roles.some(id=>member.roles.includes(id)))throw Error('Only the configured pace admins can review this ticket.');return panel;
 }
-export function paceControls(t){return rowButtons(t.status==='draft'?[button('Add / update qualifying time','f7r-pace-track:'+t.id,1),button('Submit all times for review','f7r-pace-submit:'+t.id,3),button('Cancel submission','f7r-pace-cancel:'+t.id,4)]:t.status==='review'?[button('Review and assign tier','f7r-pace-review:'+t.id,3),button('Request corrections','f7r-pace-return:'+t.id)]:t.status==='assigning'?[button('Retry approved role assignment','f7r-pace-retry:'+t.id,3)]:[]);}
+export function paceControls(t){return ['draft','review','assigning'].includes(t.status)?rowButtons(t.status==='draft'?[button('Add / update qualifying time','f7r-pace-track:'+t.id,1),button('Submit all times for review','f7r-pace-submit:'+t.id,3),button('Cancel submission','f7r-pace-cancel:'+t.id,4)]:t.status==='review'?[button('Review and assign tier','f7r-pace-review:'+t.id,3),button('Request corrections','f7r-pace-return:'+t.id)]:t.status==='assigning'?[button('Retry approved role assignment','f7r-pace-retry:'+t.id,3)]:[]):[];}
 export const ticketURL=(s,t)=>'https://discord.com/channels/'+s.guild+'/'+t.channel_id;
 export async function paceSummary(s,t,notify=false){
  const a=paceAssessment(t.snapshot,t.entries),lines=a.tracks.map(track=>`${track.name}: **${formatLap(track.ms)}** · ${track.gap.toFixed(3)}% from benchmark\n[View screenshot](https://discord.com/channels/${s.guild}/${t.channel_id}/${t.entries[track.id].proof.message_id})`);
  const payload={content:notify?t.snapshot.reviewer_roles.map(id=>'<@&'+id+'>').join(' '):'',embeds:[{title:'Pace submission #'+t.number+' · '+t.status,description:'Driver: <@'+t.driver_id+'>\n\n'+lines.join('\n\n')+'\n\n**Average gap: '+a.gap.toFixed(3)+'%**\nSuggested tier: **'+a.tier.name+'**\n'+(t.status==='approved'?'Approved tier: **'+t.decision.tier.name+'**':'An admin must verify every screenshot before assigning a tier.'),color:0x27c9ad}],components:paceControls(t),allowed_mentions:{parse:[],...(notify?{roles:t.snapshot.reviewer_roles}:{})}};
- await s.discord('/channels/'+t.channel_id+'/messages','POST',payload);return a;
+ const post=await s.discord('/channels/'+t.channel_id+'/messages'+(t.status==='approved'&&t.decision.summary_message_id?'/'+t.decision.summary_message_id:''),t.status==='approved'&&t.decision.summary_message_id?'PATCH':'POST',{...payload,...(t.status==='approved'?{nonce:t.id.replaceAll('-','').slice(0,20)+'p',enforce_nonce:true}:{})});return {...a,message_id:post?.id};
 }
 export async function validatePaceRoles(s,config){
  const [roles,bot]=await Promise.all([s.discord('/guilds/'+s.guild+'/roles'),s.member(APP_ID)]);
@@ -48,16 +48,28 @@ export async function validatePaceRoles(s,config){
  if([...config.reviewer_roles,...config.driver_roles].some(id=>id===s.guild||!roles.some(r=>r.id===id)))throw Error('Choose existing reviewer and driver roles.');
 }
 export async function assignPaceTier(s,t){
- if(t.status!=='assigning'||!t.decision?.tier)throw Error('Approve the screenshots and tier first.');
+ if(!['assigning','approved'].includes(t.status)||!t.decision?.tier)throw Error('Approve the screenshots and tier first.');
+ if(t.status==='approved')return finishPaceApproval(s,t);
  await validatePaceRoles(s,t.snapshot);const selected=t.decision.tier,member=await s.member(t.driver_id);
  // Add the selected tier first. Only explicitly configured tier/trial roles are removed.
  await s.discord('/guilds/'+s.guild+'/members/'+t.driver_id+'/roles/'+selected.role_id,'PUT');
  for(const role of [...t.snapshot.tiers.map(x=>x.role_id),...t.snapshot.remove_roles])if(role!==selected.role_id&&member.roles.includes(role))await s.discord('/guilds/'+s.guild+'/members/'+t.driver_id+'/roles/'+role,'DELETE');
  const check=await s.member(t.driver_id);if(!check.roles.includes(selected.role_id)||[...t.snapshot.tiers.map(x=>x.role_id),...t.snapshot.remove_roles].some(id=>id!==selected.role_id&&check.roles.includes(id)))throw Error('Role assignment is incomplete. Use Retry approved role assignment; the approved tier is saved.');
  t=await paceUpdate(s,t,{status:'approved'});
+ return finishPaceApproval(s,t);
+}
+export async function finishPaceApproval(s,t){
+ if(t.status!=='approved'||!t.decision?.tier)throw Error('A saved approved tier is required.');
+ if(t.decision.completed_at)return {ticket:t,delivery:t.decision.delivery};
  await s.discord('/channels/'+t.channel_id+'/permissions/'+t.driver_id,'PUT',{type:1,allow:'66560',deny:'34816'});
- await paceSummary(s,t);
- const delivery=await s.dm(t.driver_id,{content:'Your F7R pace submission #'+t.number+' has been approved.\nAssigned tier: **'+selected.name+'**\n'+t.decision.reason+'\n'+ticketURL(s,t)});
+ if(!t.decision.summary_message_id){const result=await paceSummary(s,t);t=await paceUpdate(s,t,{decision:{...t.decision,summary_message_id:result.message_id}});}
+ let delivery=t.decision.delivery;
+ if(!delivery){
+   t=await paceUpdate(s,t,{decision:{...t.decision,delivery:'sending'}});
+   delivery=await s.dm(t.driver_id,{content:'Your F7R pace submission #'+t.number+' has been approved.\nAssigned tier: **'+t.decision.tier.name+'**\n'+t.decision.reason+'\n'+ticketURL(s,t)});
+   t=await paceUpdate(s,t,{decision:{...t.decision,delivery}});
+ }
+ if(delivery!=='sending')t=await paceUpdate(s,t,{decision:{...t.decision,completed_at:new Date().toISOString()}});
  return {ticket:t,delivery};
 }
 export async function findPaceProof(s,t,driver,trackId){

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {lapMillis,formatLap,validatePace,paceAssessment,paceUpdate,paceReviewer,validatePaceRoles,assignPaceTier,findPaceProof} from '../supabase/functions/_shared/pace.js';
+import {lapMillis,formatLap,validatePace,paceAssessment,paceUpdate,paceReviewer,validatePaceRoles,assignPaceTier,findPaceProof,paceControls} from '../supabase/functions/_shared/pace.js';
 import {paceInteraction} from '../supabase/functions/_shared/pace-interactions.js';
 import {chartDrivers,assessmentKey} from '../dashboard/pace-chart.js';
 import {APP_ID} from '../supabase/functions/_shared/stewards.js';
@@ -20,6 +20,25 @@ test('one screenshot cannot prove two different tracks',async()=>{const s={disco
 test('role validation rejects privileged, managed and above-bot tier roles',async()=>{for(const bad of [{permissions:'8'},{managed:true},{position:11}]){const roles=[{id:APP_ID,position:10,permissions:'268435456'},{id:role1,position:1,permissions:'0',...bad},{id:role2,position:2,permissions:'0'},{id:review,position:3,permissions:'0'},{id:trial,position:4,permissions:'0'}];await assert.rejects(()=>validatePaceRoles({guild,discord:async()=>roles,member:async()=>({roles:[APP_ID]})},snapshot),/ordinary tier/);}});
 test('role assignment touches only configured tier and trial roles after approval',async()=>{const calls=[],roles=[{id:APP_ID,position:10,permissions:'268435456'},...[role1,role2,review,trial].map(id=>({id,position:1,permissions:'0'}))];let assigned=false;const s={guild,member:async id=>id===APP_ID?{roles:[APP_ID]}:{roles:assigned?[role1,'unrelated']:[role2,trial,'unrelated']},discord:async(path,method,body)=>{if(!method)return roles;calls.push({path,method,body});if(path.endsWith('/roles/'+role1))assigned=true;return {id:'msg'};},db:async(path,method,body)=>[{...approved,...body}],dm:async()=> 'sent'};const approved={...ticket,status:'assigning',decision:{tier:snapshot.tiers[0],reason:'All screenshots checked'}};await assignPaceTier(s,approved);const roleCalls=calls.filter(x=>x.path.includes('/roles/'));assert.deepEqual(roleCalls.map(x=>[x.method,x.path.split('/').at(-1)]),[['PUT',role1],['DELETE',role2],['DELETE',trial]]);assert.ok(!calls.some(x=>x.path.endsWith('/roles/unrelated')));});
 test('draft and unverified submissions cannot assign roles',async()=>{await assert.rejects(()=>assignPaceTier({},ticket),/Approve/);});
+
+test('approved pace summaries never contain an empty Discord button row',()=>{
+ for(const status of ['approved','cancelled'])assert.deepEqual(paceControls({...ticket,status}),[]);
+ for(const status of ['draft','review','assigning'])assert.ok(paceControls({...ticket,status}).every(r=>r.components.length>=1&&r.components.length<=5));
+});
+
+test('a saved approval can finish after a summary failure without changing roles or sending duplicate DMs',async()=>{
+ let current={...ticket,status:'approved',revision:8,decision:{tier:snapshot.tiers[0],actor:admin,reason:'Screenshots checked'}},fail=true,sent=0;const originalEntries=structuredClone(current.entries),calls=[];
+ const s={guild,db:async(path,method,body)=>{assert.equal(method,'PATCH');assert.ok(path.endsWith('revision=eq.'+current.revision));current={...current,...body};return [current];},discord:async(path,method,body)=>{calls.push({path,method,body});assert.ok(!path.includes('/roles/'),'Recovery must not change approved roles');if(path.endsWith('/messages')){assert.deepEqual(body.components,[]);if(fail)throw Error('Discord rejected summary');return {id:'summary-message'};}return {};},dm:async()=>{sent++;return 'sent';}};
+ await assert.rejects(()=>assignPaceTier(s,current),/rejected summary/);assert.equal(current.status,'approved');assert.equal(sent,0);
+ fail=false;let result=await assignPaceTier(s,current);assert.equal(result.delivery,'sent');assert.equal(current.decision.summary_message_id,'summary-message');assert.ok(current.decision.completed_at);assert.deepEqual(current.entries,originalEntries);
+ const before=calls.length;result=await assignPaceTier(s,current);assert.equal(result.delivery,'sent');assert.equal(sent,1);assert.equal(calls.length,before);
+});
+
+test('a DM already claimed as sending is not sent again during approval recovery',async()=>{
+ const approved={...ticket,status:'approved',decision:{tier:snapshot.tiers[0],summary_message_id:'posted',delivery:'sending'}};
+ const s={discord:async()=>({}),dm:async()=>{throw Error('Duplicate DM');},db:async()=>{throw Error('Should not change ambiguous delivery');}};
+ assert.equal((await assignPaceTier(s,approved)).delivery,'sending');
+});
 
 test('pace review, corrections and track forms comply with Discord modal limits without changing submissions',async()=>{
  const writes=[];const s={guild,db:async(path,method)=>{if(method)writes.push({path,method});return path.startsWith('f7r_pace_panels')?[{config:snapshot}]:[{...ticket,status:currentStatus}];},member:async()=>({roles:[review]})};
