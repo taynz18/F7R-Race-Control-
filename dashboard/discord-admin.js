@@ -144,7 +144,7 @@ async function discordAction(action, details = {}) {
         const brandLogo = team.logo || attendanceBrandLogos.get(team.name.toLowerCase());
         if (brandLogo) {
           const logo = document.createElement('img');
-          logo.src = 'assets/teams/' + brandLogo + '.png';
+          logo.src = 'assets/teams/' + brandLogo + '.png' + (brandLogo === 'honda' ? '?v=user-logo1' : '');
           logo.width = logo.height = 26;
           logo.alt = '';
           item.append(logo);
@@ -246,7 +246,7 @@ async function discordAction(action, details = {}) {
         const brandLogo = group.logo || attendanceBrandLogos.get(group.name.toLowerCase());
         if (brandLogo) {
           const logo = document.createElement('img');
-          logo.src = 'assets/teams/' + brandLogo + '.png';
+          logo.src = 'assets/teams/' + brandLogo + '.png' + (brandLogo === 'honda' ? '?v=user-logo1' : '');
           logo.width = logo.height = 26;
           logo.alt = '';
           heading.append(logo);
