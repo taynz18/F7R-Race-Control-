@@ -66,7 +66,7 @@ function attendanceColour(name) {
   return attendanceColours.find(([team]) => label === team.toLowerCase() ||
     label.startsWith(team.toLowerCase() + ' ') || label.startsWith(team.toLowerCase() + '-'))?.[1];
 }
-const attendanceBrandLogos = new Map([['bmw', 'bmw'], ['porsche', 'porsche'], ['mercedes', 'mercedes']]);
+const attendanceBrandLogos = new Map([['honda','honda'], ['gt3 · honda nsx gt3','honda'],['bmw', 'bmw'], ['porsche', 'porsche'], ['mercedes', 'mercedes']]);
 let attendanceDraft;
 let emojiDraft;
 let activeRoster;
