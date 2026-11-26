@@ -1,3 +1,4 @@
+import {seatInteraction} from '../_shared/seat-interactions.js';
 import {registerAddDriver} from '../_shared/third-driver.js';
 import { refreshDiscordRoster, readPostConfig } from "../_shared/discord-roster.js";
 import {createService} from '../_shared/stewards.js';
@@ -26,6 +27,8 @@ Deno.serve(async (req) => {
   const interaction = JSON.parse(raw);
   if (interaction.type === 1) return Response.json({type: 1});
   if (interaction.application_id !== appId) return new Response(null, {status: 401});
+
+  if (interaction.data?.custom_id?.startsWith('f7r-seat-')) return await seatInteraction(interaction,createService(Deno.env.get.bind(Deno.env)),task=>EdgeRuntime.waitUntil(task));
 
   if (interaction.data?.custom_id?.startsWith('f7r-pace-')) return await paceInteraction(interaction,createService(Deno.env.get.bind(Deno.env)),task=>EdgeRuntime.waitUntil(task));
 
@@ -123,4 +126,3 @@ Deno.serve(async (req) => {
   })().catch(()=>console.error("Discord check-in response failed.")));
   return Response.json({type:5,data:{flags:64}});
 });
-
