@@ -59,6 +59,7 @@ jobs:
         run: |
           mkdir -p public/assets
           cp -R dashboard public/dashboard
+          rm -f public/dashboard/dotd.js public/dashboard/dotd.css
           cp -R assets/teams public/assets/teams
           cp -R assets/liveries public/assets/liveries
           cp -R assets/tyres public/assets/tyres
