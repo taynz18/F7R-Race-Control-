@@ -1,3 +1,4 @@
+import { attendanceLogo } from './attendance-branding.js';
 import { CIRCUITS } from './circuits.js';
 import { TEAMS } from './teams.js';
 const $ = id => document.getElementById(id);
@@ -66,7 +67,6 @@ function attendanceColour(name) {
   return attendanceColours.find(([team]) => label === team.toLowerCase() ||
     label.startsWith(team.toLowerCase() + ' ') || label.startsWith(team.toLowerCase() + '-'))?.[1];
 }
-const attendanceBrandLogos = new Map([['honda','honda'], ['gt3 · honda nsx gt3','honda'],['bmw', 'bmw'], ['porsche', 'porsche'], ['mercedes', 'mercedes']]);
 let attendanceDraft;
 let emojiDraft;
 let activeRoster;
@@ -141,10 +141,10 @@ async function discordAction(action, details = {}) {
         const item = document.createElement('li');
         const colour = attendanceColour(team.name);
         if (colour) item.style.setProperty('--team-colour', colour);
-        const brandLogo = team.logo || attendanceBrandLogos.get(team.name.toLowerCase());
+        const brandLogo = attendanceLogo(team);
         if (brandLogo) {
           const logo = document.createElement('img');
-          logo.src = 'assets/teams/' + brandLogo + '.png' + (brandLogo === 'honda' ? '?v=user-logo1' : '');
+          logo.src = brandLogo;
           logo.width = logo.height = 26;
           logo.alt = '';
           item.append(logo);
@@ -243,10 +243,10 @@ async function discordAction(action, details = {}) {
         const teamColour = attendanceColour(group.name);
         if (teamColour) card.style.setProperty('--team-colour', teamColour);
         const heading = document.createElement('h4');
-        const brandLogo = group.logo || attendanceBrandLogos.get(group.name.toLowerCase());
+        const brandLogo = attendanceLogo(group);
         if (brandLogo) {
           const logo = document.createElement('img');
-          logo.src = 'assets/teams/' + brandLogo + '.png' + (brandLogo === 'honda' ? '?v=user-logo1' : '');
+          logo.src = brandLogo;
           logo.width = logo.height = 26;
           logo.alt = '';
           heading.append(logo);
